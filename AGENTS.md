@@ -1,0 +1,172 @@
+# AGENTS.md
+
+This file is the contract for any AI agent working on this codebase.
+Read it fully before touching any code.
+
+---
+
+## Project overview
+
+A Tauri v2 desktop app for runners that:
+- Syncs activities automatically via Strava API
+- Parses and stores activity metrics in SQLite
+- Maintains a structured athlete context (profile, training load, insights)
+- Routes chat to Ollama (local LLM)
+- Saves chat insights back into the context for future sessions
+
+This app is local only. It does not use cloud sync.
+
+---
+
+## Non-negotiable workflow
+
+Every task follows this exact sequence. No exceptions.
+
+1. READ: Load the story file for the feature you are working on.
+2. UPDATE: Set story status to `in-progress`.
+3. BUILD: Implement the feature exactly as specified.
+4. TEST: Run `cargo test` for Rust and `npx tsc --noEmit` for TypeScript. Run `npm run tauri dev` to verify.
+5. UPDATE: Set story status to `done` (or `failed` with notes).
+6. COMMIT: git commit with message format: `feat|fix|docs(SXX): short description`.
+7. RELEASE: Create and push a semver tag (e.g. `v1.8.2`). This triggers the release pipeline.
+
+If a story file does not exist for what you are about to build, stop and create one first.
+
+### Release versioning
+
+Tags follow `vMAJOR.MINOR.PATCH` semver:
+
+- **PATCH** bump: bug fix story (e.g. `fix:`)
+- **MINOR** bump: new feature story (e.g. `feat:`)
+- **MAJOR** bump: breaking change (rare; discuss first)
+
+Always check the latest tag before creating a new one:
+
+```bash
+git tag --sort=-v:refname | head -5
+```
+
+Use the next semver after the highest `vX.Y.Z` tag. Do not create `v0.XX` style tags for individual stories. Every release tag must be a proper `vMAJOR.MINOR.PATCH` that advances the sequence.
+
+---
+
+## Repository structure
+
+```
+/
+├── AGENTS.md               ← you are here
+├── stories/                ← one .md file per feature
+│   ├── _template.md        ← copy this when creating new stories
+│   ├── S01-strava-oauth.md
+│   ├── S02-activity-sync.md
+│   └── ...
+├── src/                    ← React frontend (TypeScript)
+│   ├── components/         ← Chat, Dashboard, Context, Settings, Onboarding, TrainingPlan
+│   ├── styles/             ← global.css, markdown.css
+│   ├── App.tsx             ← Main shell with sidebar navigation
+│   └── main.tsx
+├── src-tauri/              ← Rust backend
+│   ├── src/
+│   │   ├── lib.rs          ← Tauri commands + app setup
+│   │   ├── models.rs       ← All data types
+│   │   ├── storage/        ← SQLite layer
+│   │   ├── strava/         ← Strava API client + OAuth
+│   │   ├── llm/            ← Ollama HTTP client
+│   │   ├── context/        ← Context engine + prompt assembler
+│   │   ├── plan/           ← Training plan generator
+│   │   └── fit/            ← FIT file parser
+│   ├── Cargo.toml
+│   └── tauri.conf.json
+├── package.json
+└── tsconfig.json
+```
+
+---
+
+## Story file format
+
+Every story lives in `/stories/SXX-short-name.md`.
+Use the template at `/stories/_template.md`.
+
+### Status values
+
+| Status | Meaning |
+|---|---|
+| `draft` | Written, not started |
+| `in-progress` | Agent is actively working on it |
+| `done` | Implemented, tested, passing |
+| `failed` | Blocked or tests not passing. Add notes. |
+| `skipped` | Deliberately deferred |
+
+### Updating status
+
+At the top of the story file there is a `status:` field in the frontmatter.
+Update it by editing that line. Do not change anything else in the frontmatter unless the story itself has changed scope.
+
+---
+
+## Testing rules
+
+- Every story must have corresponding tests before it is marked `done`.
+- Rust unit tests live next to the code they test (`_test.rs` suffix or `#[cfg(test)]` modules).
+- TypeScript checks use `npx tsc --noEmit`.
+- Integration tests live in the `tests/` directory.
+- Run Rust tests with `cargo test`.
+- Do not mark a story `done` if any test fails.
+- If a test is skipped intentionally, leave a comment explaining why.
+
+---
+
+## Context engine — special rules
+
+The context engine (`src-tauri/src/context/`) is the most sensitive part of the codebase.
+Changes here affect every LLM interaction.
+
+- Never modify the prompt template without updating the relevant story.
+- The assembled context must always fit within the configured token budget.
+- Older training summaries must be compressed before recent ones.
+- Pinned insights from chat are never compressed or dropped.
+
+---
+
+## LLM interface
+
+All LLM interaction goes through `src-tauri/src/llm/mod.rs`.
+Currently, the app uses Ollama only.
+To add a new backend, implement the same function signatures and add a story.
+
+---
+
+## Strava sync rules
+
+- OAuth tokens are stored encrypted in SQLite (AES-256-GCM), never in plaintext.
+- Activity deduplication: check `strava_id` before inserting.
+- Credentials are injected via `option_env!()` at build time or runtime environment variables.
+
+---
+
+## Frontend rules
+
+- React components use `invoke()` from `@tauri-apps/api/core` for IPC.
+- Events use `listen()` from `@tauri-apps/api/event`.
+- Icons come from `lucide-react`.
+- Use inline styles with CSS variables from `global.css`.
+- The app uses a dark theme.
+
+---
+
+## What agents must NOT do
+
+- Do not commit secrets, API keys, or tokens.
+- Do not skip writing tests to save time.
+- Do not mark a story `done` without running `cargo test` and `npx tsc --noEmit`.
+- Do not use `as any` or `@ts-ignore` in TypeScript.
+- Do not use `unsafe` in Rust without justification.
+- Do not use `unwrap()` in production paths. Use `map_err` or `?` instead.
+- Do not modify another story's status unless you are working on it.
+
+---
+
+## When you are blocked
+
+Update the story status to `failed`. Add a `## Blocker` section at the bottom of the story file describing the issue and stop. Do not guess or work around it silently.
