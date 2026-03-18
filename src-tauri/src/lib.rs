@@ -205,8 +205,18 @@ async fn get_ollama_models(endpoint: String) -> Result<Vec<String>, String> {
 }
 
 #[tauri::command]
-fn import_fit_file(_file_path: String) -> Result<(), String> {
-    Err("FIT file import not yet implemented".to_string())
+fn import_fit_file(
+    state: tauri::State<'_, AppState>,
+    file_path: String,
+) -> Result<u32, String> {
+    let activities = fit::import_fit_file(&file_path)?;
+    let mut imported = 0u32;
+    for activity in activities {
+        if state.db.insert_activity(&activity).is_ok() {
+            imported += 1;
+        }
+    }
+    Ok(imported)
 }
 
 #[tauri::command]
