@@ -130,7 +130,7 @@ export default function PlanCalendar({ onPlanGenerated }: { onPlanGenerated: () 
       <button
         className={calendarView === "calendar" ? "btn-primary" : "btn-secondary"}
         onClick={() => { setCalendarView("calendar"); }}
-        style={{ display: "flex", alignItems: "center", gap: 4, padding: "6px 10px" }}
+        style={{ display: "flex", alignItems: "center", gap: 4, padding: "8px 12px" }}
         title="Calendar view"
       >
         <Calendar size={14} />
@@ -138,7 +138,7 @@ export default function PlanCalendar({ onPlanGenerated }: { onPlanGenerated: () 
       <button
         className={calendarView === "week" ? "btn-primary" : "btn-secondary"}
         onClick={() => { setCalendarView("week"); }}
-        style={{ display: "flex", alignItems: "center", gap: 4, padding: "6px 10px" }}
+        style={{ display: "flex", alignItems: "center", gap: 4, padding: "8px 12px" }}
         title="Weekly view"
       >
         <List size={14} />

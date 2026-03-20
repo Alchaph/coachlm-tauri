@@ -44,7 +44,7 @@ input, textarea, select, button {
 input, textarea, select {
   background: var(--bg-tertiary);
   border: 1px solid var(--border);
-  border-radius: 0;
+  border-radius: 4px;
   padding: 8px 12px;
   color: var(--text-primary);
   outline: none;
@@ -62,7 +62,7 @@ input::placeholder, textarea::placeholder {
 button {
   cursor: pointer;
   border: none;
-  border-radius: 0;
+  border-radius: 4px;
   padding: 8px 16px;
   font-weight: 500;
   transition: background 0.2s, opacity 0.2s;
@@ -117,7 +117,7 @@ button:disabled {
 }
 ::-webkit-scrollbar-thumb {
   background: #475569;
-  border-radius: 0;
+  border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;
@@ -137,7 +137,7 @@ label {
 .card {
   background: var(--bg-secondary);
   border: 1px solid var(--border);
-  border-radius: 0;
+  border-radius: 4px;
   padding: 16px;
 }
 
@@ -169,7 +169,7 @@ a:hover {
   align-items: center;
   gap: 8px;
   padding: 12px 20px;
-  border-radius: 0;
+  border-radius: 4px;
   font-size: 13px;
   font-weight: 500;
   color: white;

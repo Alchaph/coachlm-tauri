@@ -308,16 +308,26 @@ export default function Chat({ onStatusChange }: ChatProps) {
             background: "var(--bg-secondary)",
           }}
         >
-          {!sidebarOpen && (
-             <button
-               className="btn-ghost"
-               onClick={() => { setSidebarOpen(true); }}
-               title="Open sidebar"
-             >
-               <PanelLeftOpen size={18} />
-             </button>
-           )}
-           <div style={{ flex: 1 }} />
+           {!sidebarOpen && (
+              <button
+                className="btn-ghost"
+                onClick={() => { setSidebarOpen(true); }}
+                title="Open sidebar"
+              >
+                <PanelLeftOpen size={18} />
+              </button>
+            )}
+            <span style={{
+              fontSize: 14,
+              fontWeight: 600,
+              color: "var(--text-primary)",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}>
+              {currentSessionId ? getSessionLabel(sessions.find((s) => s.id === currentSessionId) ?? { id: "", created_at: "" }) : ""}
+            </span>
+            <div style={{ flex: 1 }} />
          </div>
 
         <div
@@ -346,7 +356,7 @@ export default function Chat({ onStatusChange }: ChatProps) {
                 style={{
                   maxWidth: "80%",
                   padding: "10px 14px",
-                  borderRadius: 0,
+                  borderRadius: 6,
                   background: msg.role === "user" ? "var(--accent-dim)" : "var(--bg-secondary)",
                   border: msg.role === "user" ? "none" : "1px solid var(--border)",
                 }}
@@ -385,9 +395,9 @@ export default function Chat({ onStatusChange }: ChatProps) {
              <div style={{ display: "flex", alignItems: "flex-start", marginBottom: 16 }}>
                <div
                  style={{
-                   padding: "10px 14px",
-                   borderRadius: 0,
-                   background: "var(--bg-secondary)",
+                  padding: "10px 14px",
+                    borderRadius: 6,
+                    background: "var(--bg-secondary)",
                    border: "1px solid var(--border)",
                    color: "var(--text-muted)",
                  }}
@@ -398,7 +408,7 @@ export default function Chat({ onStatusChange }: ChatProps) {
           )}
 
            {error && (
-             <div className="error-state" style={{ textAlign: "left", padding: "8px 14px", borderRadius: 0, background: "rgba(239,68,68,0.1)", border: "1px solid var(--danger)" }}>
+              <div className="error-state" style={{ textAlign: "left", padding: "8px 14px", borderRadius: 6, background: "rgba(239,68,68,0.1)", border: "1px solid var(--danger)" }}>
                {error}
              </div>
            )}

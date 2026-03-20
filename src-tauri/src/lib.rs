@@ -136,7 +136,7 @@ fn delete_pinned_insight(state: tauri::State<'_, AppState>, id: i64) -> Result<(
     state.db.delete_pinned_insight(id).map_err(|e| e.to_string())
 }
 
-fn generate_session_title(content: &str) -> String {
+fn generate_session_title_fallback(content: &str) -> String {
     let trimmed = content.trim();
     if trimmed.len() <= 50 {
         return trimmed.to_string();
@@ -148,6 +148,28 @@ fn generate_session_title(content: &str) -> String {
             || format!("{truncated}..."),
             |pos| format!("{}...", &truncated[..pos]),
         )
+}
+
+async fn generate_session_title(settings: &models::SettingsData, content: &str) -> String {
+    let messages = vec![models::OllamaMessage {
+        role: "system".to_string(),
+        content: "You are a concise title generator. Given a user message, produce a short title (3-6 words) that summarizes the topic. Reply with ONLY the title, no quotes, no punctuation at the end, no explanation.".to_string(),
+    }, models::OllamaMessage {
+        role: "user".to_string(),
+        content: content.to_string(),
+    }];
+
+    match llm::chat(settings, messages).await {
+        Ok(title) => {
+            let cleaned = title.trim().trim_matches('"').trim().to_string();
+            if cleaned.is_empty() || cleaned.len() > 80 {
+                generate_session_title_fallback(content)
+            } else {
+                cleaned
+            }
+        }
+        Err(_) => generate_session_title_fallback(content),
+    }
 }
 
 #[tauri::command]
@@ -172,21 +194,22 @@ async fn send_message(
         .insert_chat_message(&session_id, "user", &content)
         .map_err(|e| e.to_string())?;
 
-    let sessions = state.db.get_chat_sessions().map_err(|e| e.to_string())?;
-    let current = sessions.iter().find(|s| s.id == session_id);
-    if current.is_some_and(|s| s.title.is_none()) {
-        let title = generate_session_title(&content);
-        state
-            .db
-            .update_chat_session_title(&session_id, &title)
-            .map_err(|e| e.to_string())?;
-    }
-
     let settings = state
         .db
         .get_settings()
         .map_err(|e| e.to_string())?
         .ok_or("Settings not configured. Complete the setup wizard first.")?;
+
+    let sessions = state.db.get_chat_sessions().map_err(|e| e.to_string())?;
+    let current = sessions.iter().find(|s| s.id == session_id);
+    let needs_title = current.is_some_and(|s| s.title.is_none());
+    if needs_title {
+        let title = generate_session_title(&settings, &content).await;
+        state
+            .db
+            .update_chat_session_title(&session_id, &title)
+            .map_err(|e| e.to_string())?;
+    }
 
     let llm_ctx = context::build_context(&state.db);
     let history = state.db.get_chat_messages(&session_id).map_err(|e| e.to_string())?;
