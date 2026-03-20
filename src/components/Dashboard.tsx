@@ -50,16 +50,21 @@ export default function Dashboard() {
       unlisteners.push(await listen<{ current: number; total: number }>("strava:sync:progress", (e) => {
         setSyncProgress(`Syncing: ${String(e.payload.current)} activities`);
       }));
-      unlisteners.push(await listen<{ new_count: number; total_count: number }>("strava:sync:complete", (e) => {
-        setSyncing(false);
-        setSyncProgress(`Done! ${String(e.payload.new_count)} new activities (${String(e.payload.total_count)} total)`);
-        void loadData();
-        setTimeout(() => { setSyncProgress(null); }, 3000);
-      }));
-      unlisteners.push(await listen<{ message: string }>("strava:sync:error", (e) => {
-        setSyncing(false);
-        setError(e.payload.message);
-      }));
+       unlisteners.push(await listen<{ new_count: number; total_count: number }>("strava:sync:complete", (e) => {
+         setSyncing(false);
+         setSyncProgress(`Done! ${String(e.payload.new_count)} new activities (${String(e.payload.total_count)} total)`);
+         void loadData();
+         setTimeout(() => { setSyncProgress(null); }, 3000);
+       }));
+       unlisteners.push(await listen<string>("strava:sync:context-ready", () => {
+         setSyncProgress("Context updated");
+         void loadData();
+         setTimeout(() => { setSyncProgress(null); }, 3000);
+       }));
+       unlisteners.push(await listen<{ message: string }>("strava:sync:error", (e) => {
+         setSyncing(false);
+         setError(e.payload.message);
+       }));
     })();
 
     return () => { unlisteners.forEach((u) => { u(); }); };
