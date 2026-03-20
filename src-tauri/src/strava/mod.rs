@@ -151,8 +151,31 @@ async fn get_valid_token(db: &Database) -> Result<String, String> {
     Ok(new_access.to_string())
 }
 
+fn parse_activity(act: &serde_json::Value) -> ActivityData {
+    ActivityData {
+        activity_id: uuid::Uuid::new_v4().to_string(),
+        strava_id: act["id"].as_i64().map(|id| id.to_string()),
+        name: act["name"].as_str().map(String::from),
+        activity_type: act["type"].as_str().map(String::from),
+        start_date: act["start_date"].as_str().map(String::from),
+        distance: act["distance"].as_f64(),
+        moving_time: act["moving_time"].as_i64(),
+        average_speed: act["average_speed"].as_f64(),
+        average_heartrate: act["average_heartrate"].as_f64(),
+        max_heartrate: act["max_heartrate"].as_f64(),
+        average_cadence: act["average_cadence"].as_f64(),
+        gear_id: act["gear_id"].as_str().map(String::from),
+    }
+}
+
+fn emit_sync_error(app_handle: &tauri::AppHandle, msg: &str) {
+    app_handle.emit("strava:sync:error", serde_json::json!({ "message": msg })).ok();
+}
+
 pub async fn sync_activities(db: Arc<Database>, app_handle: tauri::AppHandle) -> Result<(), String> {
-    let token = get_valid_token(&db).await?;
+    let token = get_valid_token(&db).await.inspect_err(|e| {
+        emit_sync_error(&app_handle, e);
+    })?;
     let client = reqwest::Client::new();
 
     app_handle.emit("strava:sync:start", ()).ok();
@@ -168,7 +191,11 @@ pub async fn sync_activities(db: Arc<Database>, app_handle: tauri::AppHandle) ->
             .bearer_auth(&token)
             .send()
             .await
-            .map_err(|e| format!("Failed to fetch activities: {e}"))?;
+            .map_err(|e| {
+                let msg = format!("Failed to fetch activities: {e}");
+                emit_sync_error(&app_handle, &msg);
+                msg
+            })?;
 
         if response.status() == 429 {
             let retry_after: u64 = response
@@ -182,29 +209,22 @@ pub async fn sync_activities(db: Arc<Database>, app_handle: tauri::AppHandle) ->
         }
 
         if !response.status().is_success() {
-        return Err(format!("Strava API error: {}", response.status()));
+            let msg = format!("Strava API error: {}", response.status());
+            emit_sync_error(&app_handle, &msg);
+            return Err(msg);
         }
 
-        let activities: Vec<serde_json::Value> = response.json().await.map_err(|e| e.to_string())?;
+        let activities: Vec<serde_json::Value> = response.json().await.map_err(|e| {
+            let msg = format!("Failed to parse activities: {e}");
+            emit_sync_error(&app_handle, &msg);
+            msg
+        })?;
         if activities.is_empty() {
             break;
         }
 
         for act in &activities {
-            let activity = ActivityData {
-                activity_id: uuid::Uuid::new_v4().to_string(),
-                strava_id: act["id"].as_i64().map(|id| id.to_string()),
-                name: act["name"].as_str().map(String::from),
-                activity_type: act["type"].as_str().map(String::from),
-                start_date: act["start_date"].as_str().map(String::from),
-                distance: act["distance"].as_f64(),
-                moving_time: act["moving_time"].as_i64(),
-                average_speed: act["average_speed"].as_f64(),
-                average_heartrate: act["average_heartrate"].as_f64(),
-                max_heartrate: act["max_heartrate"].as_f64(),
-                average_cadence: act["average_cadence"].as_f64(),
-                gear_id: act["gear_id"].as_str().map(String::from),
-            };
+            let activity = parse_activity(act);
 
             match db.insert_activity(&activity) {
                 Ok(true) => new_count += 1,
@@ -227,7 +247,11 @@ pub async fn sync_activities(db: Arc<Database>, app_handle: tauri::AppHandle) ->
         page += 1;
     }
 
-    let stats = db.get_activity_stats().map_err(|e| e.to_string())?;
+    let stats = db.get_activity_stats().map_err(|e| {
+        let msg = e.to_string();
+        emit_sync_error(&app_handle, &msg);
+        msg
+    })?;
     app_handle
         .emit("strava:sync:complete", serde_json::json!({
             "new_count": new_count,
@@ -235,14 +259,37 @@ pub async fn sync_activities(db: Arc<Database>, app_handle: tauri::AppHandle) ->
         }))
         .ok();
 
+    if let Err(e) = fetch_athlete_zones(&db).await {
+        log::warn!("Failed to fetch athlete zones: {e}");
+    }
+    if let Ok(athlete_id) = get_athlete_id(&token).await {
+        if let Err(e) = fetch_athlete_stats(&db, &athlete_id).await {
+            log::warn!("Failed to fetch athlete stats: {e}");
+        }
+    }
+
     let context_preview = crate::context::build_context(&db);
     app_handle.emit("strava:sync:context-ready", context_preview).ok();
 
     Ok(())
 }
 
-/// Planned for future use: fetches athlete heart rate zones from Strava API.
-#[allow(dead_code)]
+async fn get_athlete_id(token: &str) -> Result<String, String> {
+    let client = reqwest::Client::new();
+    let url = format!("{STRAVA_API_BASE}/athlete");
+    let response = client
+        .get(&url)
+        .bearer_auth(token)
+        .send()
+        .await
+        .map_err(|e| format!("Failed to fetch athlete: {e}"))?;
+    let data: serde_json::Value = response.json().await.map_err(|e| e.to_string())?;
+    data["id"]
+        .as_i64()
+        .map(|id| id.to_string())
+        .ok_or_else(|| "Missing athlete ID in response".to_string())
+}
+
 pub async fn fetch_athlete_zones(db: &Database) -> Result<(), String> {
     let token = get_valid_token(db).await?;
     let client = reqwest::Client::new();
@@ -255,8 +302,6 @@ pub async fn fetch_athlete_zones(db: &Database) -> Result<(), String> {
     Ok(())
 }
 
-/// Planned for future use: fetches athlete training stats from Strava API.
-#[allow(dead_code)]
 pub async fn fetch_athlete_stats(db: &Database, athlete_id: &str) -> Result<(), String> {
     let token = get_valid_token(db).await?;
     let client = reqwest::Client::new();
