@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { Trash2, Eye, Save } from "lucide-react";
+import { Trash2, Eye, Save, Check, X } from "lucide-react";
 
 interface ProfileData {
   age: number | null;
@@ -23,6 +23,11 @@ interface Insight {
   created_at: string;
 }
 
+interface Toast {
+  message: string;
+  type: "success" | "error";
+}
+
 export default function Context() {
   const [profile, setProfile] = useState<ProfileData>({
     age: null, max_hr: null, resting_hr: null, threshold_pace_secs: null,
@@ -34,12 +39,17 @@ export default function Context() {
   const [contextPreview, setContextPreview] = useState<string | null>(null);
   const [showPreview, setShowPreview] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
+  const [toast, setToast] = useState<Toast | null>(null);
   const [tab, setTab] = useState<"profile" | "insights">("profile");
   const [paceMinutes, setPaceMinutes] = useState("");
   const [paceSeconds, setPaceSeconds] = useState("");
 
-  useEffect(() => { loadData(); }, []);
+  useEffect(() => { void loadData(); }, []);
+
+  const showToast = (message: string, type: "success" | "error") => {
+    setToast({ message, type });
+    setTimeout(() => { setToast(null); }, 3000);
+  };
 
   const loadData = async () => {
     try {
@@ -67,9 +77,10 @@ export default function Context() {
       await invoke("save_profile_data", {
         data: { ...profile, threshold_pace_secs: paceSecs },
       });
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
-    } catch { /* empty */ } finally {
+      showToast("Profile saved", "success");
+    } catch {
+      showToast("Failed to save profile", "error");
+    } finally {
       setSaving(false);
     }
   };
@@ -95,9 +106,9 @@ export default function Context() {
       <input
         id={htmlFor}
         type="number"
-        value={profile[field] !== null && profile[field] !== undefined ? String(profile[field]) : ""}
+        value={profile[field] !== null ? String(profile[field]) : ""}
         onChange={(e) =>
-          setProfile({ ...profile, [field]: e.target.value ? parseInt(e.target.value) : null })
+          { setProfile({ ...profile, [field]: e.target.value ? parseInt(e.target.value) : null }); }
         }
         min={min}
         max={max}
@@ -111,7 +122,7 @@ export default function Context() {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
         <h1 style={{ fontSize: 20, fontWeight: 700 }}>Context</h1>
         <div style={{ display: "flex", gap: 8 }}>
-          <button className="btn-secondary" onClick={loadPreview} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          <button className="btn-secondary" onClick={() => void loadPreview()} style={{ display: "flex", alignItems: "center", gap: 4 }}>
             <Eye size={16} /> Preview Prompt
           </button>
         </div>
@@ -120,13 +131,13 @@ export default function Context() {
       <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
         <button
           className={tab === "profile" ? "btn-primary" : "btn-secondary"}
-          onClick={() => setTab("profile")}
+          onClick={() => { setTab("profile"); }}
         >
           Athlete Profile
         </button>
         <button
           className={tab === "insights" ? "btn-primary" : "btn-secondary"}
-          onClick={() => setTab("insights")}
+          onClick={() => { setTab("insights"); }}
         >
           Pinned Insights ({insights.length})
         </button>
@@ -148,7 +159,7 @@ export default function Context() {
                 id="profile-pace"
                 type="number"
                 value={paceMinutes}
-                onChange={(e) => setPaceMinutes(e.target.value)}
+                onChange={(e) => { setPaceMinutes(e.target.value); }}
                 placeholder="min"
                 min={2}
                 max={15}
@@ -159,7 +170,7 @@ export default function Context() {
                 id="profile-pace-sec"
                 type="number"
                 value={paceSeconds}
-                onChange={(e) => setPaceSeconds(e.target.value)}
+                onChange={(e) => { setPaceSeconds(e.target.value); }}
                 placeholder="sec"
                 min={0}
                 max={59}
@@ -175,7 +186,7 @@ export default function Context() {
               type="number"
               value={profile.weekly_mileage_target ?? ""}
               onChange={(e) =>
-                setProfile({ ...profile, weekly_mileage_target: e.target.value ? parseFloat(e.target.value) : null })
+                { setProfile({ ...profile, weekly_mileage_target: e.target.value ? parseFloat(e.target.value) : null }); }
               }
               style={{ width: "100%" }}
             />
@@ -186,7 +197,7 @@ export default function Context() {
             <select
               id="profile-exp"
               value={profile.experience_level ?? ""}
-              onChange={(e) => setProfile({ ...profile, experience_level: e.target.value || null })}
+              onChange={(e) => { setProfile({ ...profile, experience_level: e.target.value || null }); }}
               style={{ width: "100%" }}
             >
               <option value="">—</option>
@@ -202,7 +213,7 @@ export default function Context() {
             <select
               id="profile-terrain"
               value={profile.preferred_terrain ?? ""}
-              onChange={(e) => setProfile({ ...profile, preferred_terrain: e.target.value || null })}
+              onChange={(e) => { setProfile({ ...profile, preferred_terrain: e.target.value || null }); }}
               style={{ width: "100%" }}
             >
               <option value="">—</option>
@@ -218,7 +229,7 @@ export default function Context() {
             <textarea
               id="profile-goals"
               value={profile.race_goals ?? ""}
-              onChange={(e) => setProfile({ ...profile, race_goals: e.target.value || null })}
+              onChange={(e) => { setProfile({ ...profile, race_goals: e.target.value || null }); }}
               rows={2}
               style={{ width: "100%", resize: "vertical" }}
             />
@@ -229,15 +240,15 @@ export default function Context() {
             <textarea
               id="profile-injuries"
               value={profile.injury_history ?? ""}
-              onChange={(e) => setProfile({ ...profile, injury_history: e.target.value || null })}
+              onChange={(e) => { setProfile({ ...profile, injury_history: e.target.value || null }); }}
               rows={2}
               style={{ width: "100%", resize: "vertical" }}
             />
           </div>
 
-          <button className="btn-primary" onClick={saveProfile} disabled={saving} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <button className="btn-primary" onClick={() => void saveProfile()} disabled={saving} style={{ display: "flex", alignItems: "center", gap: 6 }}>
             <Save size={16} />
-            {saved ? "Saved!" : saving ? "Saving..." : "Save Profile"}
+            Save Profile
           </button>
         </div>
       )}
@@ -261,7 +272,7 @@ export default function Context() {
                       {new Date(insight.created_at).toLocaleDateString()}
                     </p>
                   </div>
-                  <button className="btn-ghost" onClick={() => deleteInsight(insight.id)} title="Delete insight">
+                  <button className="btn-ghost" onClick={() => void deleteInsight(insight.id)} title="Delete insight">
                     <Trash2 size={14} />
                   </button>
                 </div>
@@ -277,21 +288,28 @@ export default function Context() {
             position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)",
             display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100,
           }}
-          onClick={() => setShowPreview(false)}
+          onClick={() => { setShowPreview(false); }}
         >
           <div
             className="card"
-            onClick={(e) => e.stopPropagation()}
+            onClick={(e) => { e.stopPropagation(); }}
             style={{ maxWidth: 700, maxHeight: "80vh", overflow: "auto", width: "90%", padding: 20 }}
           >
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
               <h2 style={{ fontSize: 16, fontWeight: 600 }}>Context Preview</h2>
-              <button className="btn-ghost" onClick={() => setShowPreview(false)}>✕</button>
+              <button className="btn-ghost" onClick={() => { setShowPreview(false); }}>✕</button>
             </div>
             <pre style={{ fontSize: 12, whiteSpace: "pre-wrap", fontFamily: "monospace", lineHeight: 1.6, color: "var(--text-secondary)" }}>
               {contextPreview}
             </pre>
           </div>
+        </div>
+      )}
+
+      {toast && (
+        <div className={`toast toast-${toast.type}`}>
+          {toast.type === "success" ? <Check size={16} /> : <X size={16} />}
+          {toast.message}
         </div>
       )}
     </div>

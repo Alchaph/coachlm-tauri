@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { save, open } from "@tauri-apps/plugin-dialog";
-import { Save, RefreshCw, Plug, Unplug, Download, Upload } from "lucide-react";
+import { Save, RefreshCw, Plug, Unplug, Download, Upload, Check, X } from "lucide-react";
 
 interface SettingsData {
   active_llm: string;
@@ -15,6 +15,11 @@ interface StravaAuthStatus {
   expires_at: number | null;
 }
 
+interface Toast {
+  message: string;
+  type: "success" | "error";
+}
+
 export default function SettingsPage() {
   const [settings, setSettings] = useState<SettingsData>({
     active_llm: "local",
@@ -25,12 +30,12 @@ export default function SettingsPage() {
   const [models, setModels] = useState<string[]>([]);
   const [fetchingModels, setFetchingModels] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
+  const [toast, setToast] = useState<Toast | null>(null);
   const [stravaAuth, setStravaAuth] = useState<StravaAuthStatus>({ connected: false, expires_at: null });
   const [stravaAvailable, setStravaAvailable] = useState(false);
 
   useEffect(() => {
-    loadData();
+    void loadData();
   }, []);
 
   const loadData = async () => {
@@ -40,25 +45,29 @@ export default function SettingsPage() {
         invoke<StravaAuthStatus>("get_strava_auth_status"),
         invoke<boolean>("get_strava_credentials_available"),
       ]);
-      if (s) {
-        setSettings({
-          ...s,
-          active_llm: s.active_llm || "local",
-          ollama_endpoint: s.ollama_endpoint || "http://localhost:11434",
-        });
-      }
-      if (auth) setStravaAuth(auth);
+      setSettings({
+        ...s,
+        active_llm: s.active_llm || "local",
+        ollama_endpoint: s.ollama_endpoint || "http://localhost:11434",
+      });
+      setStravaAuth(auth);
       setStravaAvailable(available);
     } catch { /* empty */ }
+  };
+
+  const showToast = (message: string, type: "success" | "error") => {
+    setToast({ message, type });
+    setTimeout(() => { setToast(null); }, 3000);
   };
 
   const saveSettings = async () => {
     setSaving(true);
     try {
       await invoke("save_settings", { data: settings });
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
-    } catch { /* empty */ } finally {
+      showToast("Settings saved", "success");
+    } catch {
+      showToast("Failed to save settings", "error");
+    } finally {
       setSaving(false);
     }
   };
@@ -67,7 +76,7 @@ export default function SettingsPage() {
     setFetchingModels(true);
     try {
       const fetchedModels = await invoke<string[]>("get_ollama_models", { endpoint: settings.ollama_endpoint });
-      setModels(fetchedModels || []);
+      setModels(fetchedModels);
     } catch { /* empty */ } finally {
       setFetchingModels(false);
     }
@@ -79,7 +88,7 @@ export default function SettingsPage() {
       setTimeout(async () => {
         try {
           const auth = await invoke<StravaAuthStatus>("get_strava_auth_status");
-          if (auth) setStravaAuth(auth);
+          setStravaAuth(auth);
         } catch { /* empty */ }
       }, 2000);
     } catch { /* empty */ }
@@ -89,7 +98,7 @@ export default function SettingsPage() {
     try {
       await invoke("disconnect_strava");
       const auth = await invoke<StravaAuthStatus>("get_strava_auth_status");
-      if (auth) setStravaAuth(auth);
+      setStravaAuth(auth);
     } catch { /* empty */ }
   };
 
@@ -121,9 +130,9 @@ export default function SettingsPage() {
     <div style={{ padding: 24, overflow: "auto", height: "100%" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
         <h1 style={{ fontSize: 20, fontWeight: 700 }}>Settings</h1>
-        <button className="btn-primary" onClick={saveSettings} disabled={saving} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        <button className="btn-primary" onClick={() => void saveSettings()} disabled={saving} style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <Save size={16} />
-          {saved ? "Saved!" : saving ? "Saving..." : "Save Settings"}
+          Save Settings
         </button>
       </div>
 
@@ -139,11 +148,11 @@ export default function SettingsPage() {
                 id="ollama-endpoint"
                 type="text"
                 value={settings.ollama_endpoint}
-                onChange={(e) => setSettings({ ...settings, ollama_endpoint: e.target.value })}
+                onChange={(e) => { setSettings({ ...settings, ollama_endpoint: e.target.value }); }}
                 style={{ flex: 1 }}
                 placeholder="http://localhost:11434"
               />
-              <button className="btn-secondary" onClick={fetchModels} disabled={fetchingModels} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <button className="btn-secondary" onClick={() => void fetchModels()} disabled={fetchingModels} style={{ display: "flex", alignItems: "center", gap: 6 }}>
                 <RefreshCw size={16} className={fetchingModels ? "spin" : ""} />
                 Fetch Models
               </button>
@@ -156,7 +165,7 @@ export default function SettingsPage() {
               id="ollama-model"
               type="text"
               value={settings.ollama_model}
-              onChange={(e) => setSettings({ ...settings, ollama_model: e.target.value })}
+              onChange={(e) => { setSettings({ ...settings, ollama_model: e.target.value }); }}
               style={{ width: "100%" }}
               placeholder="e.g. llama3"
             />
@@ -166,7 +175,7 @@ export default function SettingsPage() {
                 {models.map((model) => (
                   <button
                     key={model}
-                    onClick={() => setSettings({ ...settings, ollama_model: model })}
+                    onClick={() => { setSettings({ ...settings, ollama_model: model }); }}
                     style={{
                       padding: "4px 12px",
                       borderRadius: 16,
@@ -189,7 +198,7 @@ export default function SettingsPage() {
             <textarea
               id="custom-prompt"
               value={settings.custom_system_prompt}
-              onChange={(e) => setSettings({ ...settings, custom_system_prompt: e.target.value })}
+              onChange={(e) => { setSettings({ ...settings, custom_system_prompt: e.target.value }); }}
               rows={4}
               style={{ width: "100%", resize: "vertical" }}
               placeholder="Add custom instructions for the coach..."
@@ -226,11 +235,11 @@ export default function SettingsPage() {
               </div>
               
               {stravaAuth.connected ? (
-                <button className="btn-danger" onClick={disconnectStrava} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <button className="btn-danger" onClick={() => void disconnectStrava()} style={{ display: "flex", alignItems: "center", gap: 6 }}>
                   <Unplug size={16} /> Disconnect
                 </button>
               ) : (
-                <button className="btn-primary" onClick={connectStrava} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <button className="btn-primary" onClick={() => void connectStrava()} style={{ display: "flex", alignItems: "center", gap: 6 }}>
                   <Plug size={16} /> Connect Strava
                 </button>
               )}
@@ -245,16 +254,23 @@ export default function SettingsPage() {
           </p>
           
           <div style={{ display: "flex", gap: 12 }}>
-            <button className="btn-secondary" onClick={exportContext} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <button className="btn-secondary" onClick={() => void exportContext()} style={{ display: "flex", alignItems: "center", gap: 6 }}>
               <Download size={16} /> Export Context
             </button>
-            <button className="btn-secondary" onClick={importContext} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <button className="btn-secondary" onClick={() => void importContext()} style={{ display: "flex", alignItems: "center", gap: 6 }}>
               <Upload size={16} /> Import Context
             </button>
           </div>
         </div>
 
       </div>
+
+      {toast && (
+        <div className={`toast toast-${toast.type}`}>
+          {toast.type === "success" ? <Check size={16} /> : <X size={16} />}
+          {toast.message}
+        </div>
+      )}
     </div>
   );
 }

@@ -19,7 +19,7 @@ export default function Onboarding({ onComplete }: { onComplete: () => void }) {
         setStravaAvailable(available);
       } catch { /* empty */ }
     };
-    checkStrava();
+    void checkStrava();
   }, []);
 
   const handleConnectStrava = async () => {
@@ -96,7 +96,7 @@ export default function Onboarding({ onComplete }: { onComplete: () => void }) {
               </ul>
             </div>
             <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 24 }}>
-              <button className="btn-primary" onClick={() => setStep(2)} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <button className="btn-primary" onClick={() => { setStep(2); }} style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 Get Started <ChevronRight size={16} />
               </button>
             </div>
@@ -120,18 +120,18 @@ export default function Onboarding({ onComplete }: { onComplete: () => void }) {
                   <Check size={20} /> Strava Connected
                 </div>
               ) : (
-                <button className="btn-primary" onClick={handleConnectStrava} style={{ width: "100%", padding: 12, fontSize: 16 }}>
+                <button className="btn-primary" onClick={() => void handleConnectStrava()} style={{ width: "100%", padding: 12, fontSize: 16 }}>
                   Connect Strava
                 </button>
               )}
             </div>
 
             <div style={{ display: "flex", justifyContent: "space-between", marginTop: 24 }}>
-              <button className="btn-ghost" onClick={() => setStep(1)} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <button className="btn-ghost" onClick={() => { setStep(1); }} style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <ChevronLeft size={16} /> Back
               </button>
-              <button className="btn-secondary" onClick={() => setStep(3)} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                {stravaConnected ? "Next" : "Skip"} <ChevronRight size={16} />
+              <button className="btn-secondary" onClick={() => { setStep(3); }} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                Next <ChevronRight size={16} />
               </button>
             </div>
           </div>
@@ -152,11 +152,11 @@ export default function Onboarding({ onComplete }: { onComplete: () => void }) {
                     id="ollama-endpoint"
                     type="text"
                     value={ollamaEndpoint}
-                    onChange={(e) => setOllamaEndpoint(e.target.value)}
+                    onChange={(e) => { setOllamaEndpoint(e.target.value); }}
                     style={{ flex: 1 }}
                   />
-                  <button className="btn-secondary" onClick={fetchModels} disabled={fetchingModels}>
-                    {fetchingModels ? "Fetching..." : "Fetch Models"}
+                  <button className="btn-secondary" onClick={() => void fetchModels()} disabled={fetchingModels}>
+                    Fetch Models
                   </button>
                 </div>
               </div>
@@ -169,7 +169,7 @@ export default function Onboarding({ onComplete }: { onComplete: () => void }) {
                       <button
                         key={m}
                         className={ollamaModel === m ? "btn-primary" : "btn-secondary"}
-                        onClick={() => setOllamaModel(m)}
+                        onClick={() => { setOllamaModel(m); }}
                         style={{ padding: "4px 12px", fontSize: 13, borderRadius: 16 }}
                       >
                         {m}
@@ -185,7 +185,7 @@ export default function Onboarding({ onComplete }: { onComplete: () => void }) {
                   id="ollama-model"
                   type="text"
                   value={ollamaModel}
-                  onChange={(e) => setOllamaModel(e.target.value)}
+                  onChange={(e) => { setOllamaModel(e.target.value); }}
                   placeholder="e.g. llama3"
                   style={{ width: "100%" }}
                 />
@@ -193,7 +193,7 @@ export default function Onboarding({ onComplete }: { onComplete: () => void }) {
             </div>
 
             <div style={{ display: "flex", justifyContent: "space-between", marginTop: 24 }}>
-              <button className="btn-ghost" onClick={() => setStep(2)} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <button className="btn-ghost" onClick={() => { setStep(2); }} style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <ChevronLeft size={16} /> Back
               </button>
               <div style={{ display: "flex", gap: 8 }}>
@@ -204,7 +204,7 @@ export default function Onboarding({ onComplete }: { onComplete: () => void }) {
                 }}>
                   Use defaults
                 </button>
-                <button className="btn-primary" onClick={() => setStep(4)} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <button className="btn-primary" onClick={() => { setStep(4); }} style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   Next <ChevronRight size={16} />
                 </button>
               </div>
@@ -245,11 +245,11 @@ export default function Onboarding({ onComplete }: { onComplete: () => void }) {
             </div>
 
             <div style={{ display: "flex", justifyContent: "space-between", marginTop: 24 }}>
-              <button className="btn-ghost" onClick={() => setStep(3)} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <button className="btn-ghost" onClick={() => { setStep(3); }} style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <ChevronLeft size={16} /> Back
               </button>
-              <button className="btn-primary" onClick={handleComplete} disabled={saving} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                {saving ? "Saving..." : "Go to Context"} <ChevronRight size={16} />
+              <button className="btn-primary" onClick={() => void handleComplete()} disabled={saving} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                Go to Context <ChevronRight size={16} />
               </button>
             </div>
           </div>

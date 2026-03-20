@@ -39,22 +39,22 @@ export default function Dashboard() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    loadData();
+    void loadData();
     const unlisteners: (() => void)[] = [];
 
-    (async () => {
+    void (async () => {
       unlisteners.push(await listen("strava:sync:start", () => {
         setSyncing(true);
         setSyncProgress("Starting sync...");
       }));
       unlisteners.push(await listen<{ current: number; total: number }>("strava:sync:progress", (e) => {
-        setSyncProgress(`Syncing: ${e.payload.current} activities`);
+        setSyncProgress(`Syncing: ${String(e.payload.current)} activities`);
       }));
       unlisteners.push(await listen<{ new_count: number; total_count: number }>("strava:sync:complete", (e) => {
         setSyncing(false);
-        setSyncProgress(`Done! ${e.payload.new_count} new activities (${e.payload.total_count} total)`);
-        loadData();
-        setTimeout(() => setSyncProgress(null), 3000);
+        setSyncProgress(`Done! ${String(e.payload.new_count)} new activities (${String(e.payload.total_count)} total)`);
+        void loadData();
+        setTimeout(() => { setSyncProgress(null); }, 3000);
       }));
       unlisteners.push(await listen<{ message: string }>("strava:sync:error", (e) => {
         setSyncing(false);
@@ -62,7 +62,7 @@ export default function Dashboard() {
       }));
     })();
 
-    return () => { unlisteners.forEach((u) => u()); };
+    return () => { unlisteners.forEach((u) => { u(); }); };
   }, []);
 
   const loadData = async () => {
@@ -96,15 +96,15 @@ export default function Dashboard() {
     const paceSecsPerKm = time / (distance / 1000);
     const mins = Math.floor(paceSecsPerKm / 60);
     const secs = Math.floor(paceSecsPerKm % 60);
-    return `${mins}:${secs.toString().padStart(2, "0")}/km`;
+    return `${String(mins)}:${secs.toString().padStart(2, "0")}/km`;
   };
 
   const formatDuration = (seconds: number | null): string => {
     if (!seconds) return "—";
     const h = Math.floor(seconds / 3600);
     const m = Math.floor((seconds % 3600) / 60);
-    if (h > 0) return `${h}h ${m}m`;
-    return `${m}m`;
+    if (h > 0) return `${String(h)}h ${String(m)}m`;
+    return `${String(m)}m`;
   };
 
   const formatDistance = (meters: number | null): string => {
@@ -117,9 +117,9 @@ export default function Dashboard() {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
         <h1 style={{ fontSize: 20, fontWeight: 700 }}>Dashboard</h1>
         {authStatus.connected && (
-          <button className="btn-primary" onClick={handleSync} disabled={syncing} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <button className="btn-primary" onClick={() => void handleSync()} disabled={syncing} style={{ display: "flex", alignItems: "center", gap: 6 }}>
             <RefreshCw size={16} className={syncing ? "spin" : ""} />
-            {syncing ? "Syncing..." : "Sync Activities"}
+            Sync Activities
           </button>
         )}
       </div>
@@ -184,9 +184,9 @@ export default function Dashboard() {
                   <td style={{ padding: "10px 14px", fontSize: 13, textAlign: "right" }}>{formatDistance(a.distance)}</td>
                   <td style={{ padding: "10px 14px", fontSize: 13, textAlign: "right" }}>{formatDuration(a.moving_time)}</td>
                   <td style={{ padding: "10px 14px", fontSize: 13, textAlign: "right" }}>{formatPace(a.distance, a.moving_time)}</td>
-                  <td style={{ padding: "10px 14px", fontSize: 13, textAlign: "right" }}>
-                    {a.average_heartrate ? `${Math.round(a.average_heartrate)}` : "—"}
-                  </td>
+                   <td style={{ padding: "10px 14px", fontSize: 13, textAlign: "right" }}>
+                     {a.average_heartrate ? String(Math.round(a.average_heartrate)) : "—"}
+                   </td>
                 </tr>
               ))}
             </tbody>
