@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Send, Pin, Plus, X, Dumbbell, MessageSquare } from "lucide-react";
+import { Send, Pin, Plus, X, Dumbbell, MessageSquare, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 
 interface Message {
   id: number;
@@ -18,15 +18,19 @@ interface Session {
   created_at: string;
 }
 
-export default function Chat() {
+interface ChatProps {
+  onStatusChange?: (status: "idle" | "thinking" | "replied") => void;
+}
+
+export default function Chat({ onStatusChange }: ChatProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const tabsRef = useRef<HTMLDivElement>(null);
   const shouldAutoScroll = useRef(true);
 
   const scrollToBottom = useCallback(() => {
@@ -79,7 +83,6 @@ export default function Chat() {
       setCurrentSessionId(session.id);
       setMessages([]);
       setSessions((prev) => [session, ...prev]);
-      scrollTabIntoView();
     } catch (e) {
       setError(String(e));
     }
@@ -103,14 +106,6 @@ export default function Chat() {
     }
   };
 
-  const scrollTabIntoView = () => {
-    requestAnimationFrame(() => {
-      if (tabsRef.current) {
-        tabsRef.current.scrollLeft = 0;
-      }
-    });
-  };
-
   const sendMessage = async () => {
     if (!input.trim() || loading) return;
     const content = input.trim();
@@ -118,6 +113,7 @@ export default function Chat() {
     setError(null);
     setLoading(true);
     shouldAutoScroll.current = true;
+    onStatusChange?.("thinking");
 
     let activeSessionId = currentSessionId;
 
@@ -130,6 +126,7 @@ export default function Chat() {
       } catch (e) {
         setError(String(e));
         setLoading(false);
+        onStatusChange?.("idle");
         return;
       }
     }
@@ -157,9 +154,11 @@ export default function Chat() {
           created_at: new Date().toISOString(),
         },
       ]);
+      onStatusChange?.("replied");
       await refreshSessions();
     } catch (e) {
       setError(String(e));
+      onStatusChange?.("idle");
     } finally {
       setLoading(false);
     }
@@ -191,45 +190,45 @@ export default function Chat() {
     }
   };
 
-  const getTabLabel = (session: Session): string => {
+  const getSessionLabel = (session: Session): string => {
     if (session.title) return session.title;
     return "New Chat";
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-      <div
-        style={{
-          padding: "8px 16px",
-          borderBottom: "1px solid var(--border)",
-          display: "flex",
-          alignItems: "center",
-          gap: 8,
-          background: "var(--bg-secondary)",
-        }}
-      >
-        <button className="btn-ghost" onClick={() => { void createNewSession(); }} title="New chat">
-          <Plus size={18} />
-        </button>
-        <div style={{ flex: 1 }} />
-        <button className="btn-ghost" onClick={() => { sendPlanRequest(); }} title="Generate Training Plan" style={{ display: "flex", alignItems: "center", gap: 4 }}>
-          <Dumbbell size={16} />
-          <span style={{ fontSize: 12 }}>Generate Plan</span>
-        </button>
-      </div>
-
-      {sessions.length > 0 && (
-        <div className="chat-tabs" ref={tabsRef}>
+    <div style={{ display: "flex", height: "100%" }}>
+      <div className={`chat-sidebar${sidebarOpen ? "" : " chat-sidebar-collapsed"}`}>
+        <div className="chat-sidebar-header">
+          <button
+            className="btn-ghost"
+            onClick={() => { setSidebarOpen(false); }}
+            title="Close sidebar"
+            style={{ padding: "4px" }}
+          >
+            <PanelLeftClose size={16} />
+          </button>
+          <span style={{ flex: 1 }}>History</span>
+          <button
+            className="btn-ghost"
+            onClick={() => { void createNewSession(); }}
+            title="New chat"
+            style={{ padding: "4px" }}
+          >
+            <Plus size={16} />
+          </button>
+        </div>
+        <div className="chat-sidebar-list">
           {sessions.map((s) => (
             <button
               key={s.id}
-              className={`chat-tab${s.id === currentSessionId ? " chat-tab-active" : ""}`}
+              className={`chat-session-item${s.id === currentSessionId ? " chat-session-item-active" : ""}`}
               onClick={() => { void loadSession(s.id); }}
-              title={getTabLabel(s)}
+              title={getSessionLabel(s)}
             >
-              <span className="chat-tab-label">{getTabLabel(s)}</span>
+              <MessageSquare size={14} style={{ flexShrink: 0 }} />
+              <span className="chat-session-label">{getSessionLabel(s)}</span>
               <span
-                className="chat-tab-close"
+                className="chat-session-close"
                 role="button"
                 tabIndex={0}
                 onClick={(e) => { e.stopPropagation(); void closeSession(s.id); }}
@@ -240,120 +239,148 @@ export default function Chat() {
             </button>
           ))}
         </div>
-      )}
-
-      <div
-        style={{ flex: 1, overflow: "auto", padding: "16px" }}
-        onScroll={handleScroll}
-      >
-        {messages.length === 0 && !loading && (
-          <div className="empty-state">
-            <MessageSquare size={48} style={{ margin: "0 auto 16px", opacity: 0.3 }} />
-            <p>Start a conversation with your AI running coach.</p>
-            <p style={{ fontSize: 12, marginTop: 8 }}>Ask about training, pacing, race prep, or anything running-related.</p>
-          </div>
-        )}
-
-        {messages.map((msg) => (
-          <div
-            key={msg.id}
-            style={{
-              marginBottom: 16,
-              display: "flex",
-              flexDirection: "column",
-              alignItems: msg.role === "user" ? "flex-end" : "flex-start",
-            }}
-          >
-            <div
-              style={{
-                maxWidth: "80%",
-                padding: "10px 14px",
-                borderRadius: msg.role === "user" ? "12px 12px 2px 12px" : "12px 12px 12px 2px",
-                background: msg.role === "user" ? "var(--accent-dim)" : "var(--bg-secondary)",
-                border: msg.role === "user" ? "none" : "1px solid var(--border)",
-              }}
-            >
-              {msg.role === "assistant" ? (
-                <div className="markdown-content">
-                  <ReactMarkdown
-                    remarkPlugins={[remarkGfm]}
-                    components={{
-                      a: ({ ...props }) => (
-                        <a {...props} target="_blank" rel="noopener noreferrer" />
-                      ),
-                    }}
-                  >
-                    {msg.content}
-                  </ReactMarkdown>
-                </div>
-              ) : (
-                <span>{msg.content}</span>
-              )}
-            </div>
-            {msg.role === "assistant" && (
-              <button
-                className="btn-ghost"
-                onClick={() => { void pinMessage(msg.content); }}
-                style={{ marginTop: 4, fontSize: 11, display: "flex", alignItems: "center", gap: 4 }}
-                title="Save as coaching insight"
-              >
-                <Pin size={12} /> Pin
-              </button>
-            )}
-          </div>
-        ))}
-
-        {loading && (
-          <div style={{ display: "flex", alignItems: "flex-start", marginBottom: 16 }}>
-            <div
-              style={{
-                padding: "10px 14px",
-                borderRadius: "12px 12px 12px 2px",
-                background: "var(--bg-secondary)",
-                border: "1px solid var(--border)",
-                color: "var(--text-muted)",
-              }}
-            >
-              Thinking...
-            </div>
-          </div>
-        )}
-
-        {error && (
-          <div className="error-state" style={{ textAlign: "left", padding: "8px 14px", borderRadius: 8, background: "rgba(239,68,68,0.1)", border: "1px solid var(--danger)" }}>
-            {error}
-          </div>
-        )}
-
-        <div ref={messagesEndRef} />
       </div>
 
-      <div
-        style={{
-          padding: "12px 16px",
-          borderTop: "1px solid var(--border)",
-          background: "var(--bg-secondary)",
-          display: "flex",
-          gap: 8,
-        }}
-      >
-        <input
-          value={input}
-          onChange={(e) => { setInput(e.target.value); }}
-          onKeyDown={handleKeyDown}
-          placeholder="Ask your coach..."
-          disabled={loading}
-          style={{ flex: 1 }}
-          id="chat-input"
-        />
-        <button
-          className="btn-primary"
-          onClick={() => { void sendMessage(); }}
-          disabled={loading || !input.trim()}
-          style={{ display: "flex", alignItems: "center", gap: 4 }}
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
+        <div
+          style={{
+            padding: "8px 16px",
+            borderBottom: "1px solid var(--border)",
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            background: "var(--bg-secondary)",
+          }}
         >
-          <Send size={16} />
-        </button>
+          {!sidebarOpen && (
+            <button
+              className="btn-ghost"
+              onClick={() => { setSidebarOpen(true); }}
+              title="Open sidebar"
+            >
+              <PanelLeftOpen size={18} />
+            </button>
+          )}
+          <div style={{ flex: 1 }} />
+          <button className="btn-ghost" onClick={() => { sendPlanRequest(); }} title="Generate Training Plan" style={{ display: "flex", alignItems: "center", gap: 4 }}>
+            <Dumbbell size={16} />
+            <span style={{ fontSize: 12 }}>Generate Plan</span>
+          </button>
+        </div>
+
+        <div
+          style={{ flex: 1, overflow: "auto", padding: "16px" }}
+          onScroll={handleScroll}
+        >
+          {messages.length === 0 && !loading && (
+            <div className="empty-state">
+              <MessageSquare size={48} style={{ margin: "0 auto 16px", opacity: 0.3 }} />
+              <p>Start a conversation with your AI running coach.</p>
+              <p style={{ fontSize: 12, marginTop: 8 }}>Ask about training, pacing, race prep, or anything running-related.</p>
+            </div>
+          )}
+
+          {messages.map((msg) => (
+            <div
+              key={msg.id}
+              style={{
+                marginBottom: 16,
+                display: "flex",
+                flexDirection: "column",
+                alignItems: msg.role === "user" ? "flex-end" : "flex-start",
+              }}
+            >
+              <div
+                style={{
+                  maxWidth: "80%",
+                  padding: "10px 14px",
+                  borderRadius: msg.role === "user" ? "12px 12px 2px 12px" : "12px 12px 12px 2px",
+                  background: msg.role === "user" ? "var(--accent-dim)" : "var(--bg-secondary)",
+                  border: msg.role === "user" ? "none" : "1px solid var(--border)",
+                }}
+              >
+                {msg.role === "assistant" ? (
+                  <div className="markdown-content">
+                    <ReactMarkdown
+                      remarkPlugins={[remarkGfm]}
+                      components={{
+                        a: ({ ...props }) => (
+                          <a {...props} target="_blank" rel="noopener noreferrer" />
+                        ),
+                      }}
+                    >
+                      {msg.content}
+                    </ReactMarkdown>
+                  </div>
+                ) : (
+                  <span>{msg.content}</span>
+                )}
+              </div>
+              {msg.role === "assistant" && (
+                <button
+                  className="btn-ghost"
+                  onClick={() => { void pinMessage(msg.content); }}
+                  style={{ marginTop: 4, fontSize: 11, display: "flex", alignItems: "center", gap: 4 }}
+                  title="Save as coaching insight"
+                >
+                  <Pin size={12} /> Pin
+                </button>
+              )}
+            </div>
+          ))}
+
+          {loading && (
+            <div style={{ display: "flex", alignItems: "flex-start", marginBottom: 16 }}>
+              <div
+                style={{
+                  padding: "10px 14px",
+                  borderRadius: "12px 12px 12px 2px",
+                  background: "var(--bg-secondary)",
+                  border: "1px solid var(--border)",
+                  color: "var(--text-muted)",
+                }}
+              >
+                Thinking...
+              </div>
+            </div>
+          )}
+
+          {error && (
+            <div className="error-state" style={{ textAlign: "left", padding: "8px 14px", borderRadius: 8, background: "rgba(239,68,68,0.1)", border: "1px solid var(--danger)" }}>
+              {error}
+            </div>
+          )}
+
+          <div ref={messagesEndRef} />
+        </div>
+
+        <div
+          style={{
+            padding: "12px 16px",
+            borderTop: "1px solid var(--border)",
+            background: "var(--bg-secondary)",
+            display: "flex",
+            gap: 8,
+          }}
+        >
+          <input
+            value={input}
+            onChange={(e) => { setInput(e.target.value); }}
+            onKeyDown={handleKeyDown}
+            placeholder="Ask your coach..."
+            disabled={loading}
+            style={{ flex: 1 }}
+            id="chat-input"
+          />
+          <button
+            className="btn-primary"
+            onClick={() => { void sendMessage(); }}
+            disabled={loading || !input.trim()}
+            style={{ display: "flex", alignItems: "center", gap: 4 }}
+          >
+            <Send size={16} />
+          </button>
+        </div>
       </div>
     </div>
   );

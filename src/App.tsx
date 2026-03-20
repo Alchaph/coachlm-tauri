@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { MessageSquare, LayoutDashboard, Brain, Calendar, Settings as SettingsIcon } from "lucide-react";
 import Chat from "./components/Chat";
@@ -11,6 +11,7 @@ import "./styles/global.css";
 import "./styles/markdown.css";
 
 type Tab = "chat" | "dashboard" | "context" | "plan" | "settings";
+type ChatStatus = "idle" | "thinking" | "replied";
 
 interface NavItem {
   id: Tab;
@@ -22,6 +23,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>("chat");
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [chatStatus, setChatStatus] = useState<ChatStatus>("idle");
 
   useEffect(() => {
     void (async () => {
@@ -34,6 +36,16 @@ export default function App() {
         setLoading(false);
       }
     })();
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === "chat") {
+      setChatStatus("idle");
+    }
+  }, [activeTab]);
+
+  const handleChatStatusChange = useCallback((status: ChatStatus) => {
+    setChatStatus(status);
   }, []);
 
   const handleOnboardingComplete = () => {
@@ -60,6 +72,8 @@ export default function App() {
     { id: "plan", label: "Plans", icon: <Calendar size={20} /> },
     { id: "settings", label: "Settings", icon: <SettingsIcon size={20} /> },
   ];
+
+  const showBanner = activeTab !== "chat" && chatStatus !== "idle";
 
   return (
     <div style={{ display: "flex", height: "100vh", overflow: "hidden" }}>
@@ -114,7 +128,29 @@ export default function App() {
       </nav>
 
       <main style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
-        {activeTab === "chat" && <Chat />}
+        {showBanner && (
+          <button
+            className={`chat-banner ${chatStatus === "thinking" ? "chat-banner-thinking" : "chat-banner-replied"}`}
+            onClick={() => { setActiveTab("chat"); }}
+            type="button"
+          >
+            <MessageSquare size={14} />
+            <span style={{ flex: 1 }}>
+              {chatStatus === "thinking" ? "Coach is thinking..." : "Coach has replied"}
+            </span>
+            <span style={{ fontSize: 12, opacity: 0.7 }}>Go to Chat</span>
+          </button>
+        )}
+        <div
+          style={{
+            flex: 1,
+            overflow: "hidden",
+            display: activeTab === "chat" ? "flex" : "none",
+            flexDirection: "column",
+          }}
+        >
+          <Chat onStatusChange={handleChatStatusChange} />
+        </div>
         {activeTab === "dashboard" && <Dashboard />}
         {activeTab === "context" && <Context />}
         {activeTab === "plan" && <TrainingPlanPage />}
