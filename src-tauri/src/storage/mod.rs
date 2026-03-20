@@ -31,17 +31,18 @@ impl Database {
         Ok(db)
     }
 
-    pub fn encrypt(&self, plaintext: &str) -> String {
+    pub fn encrypt(&self, plaintext: &str) -> Result<String, String> {
         use rand::RngCore;
-        let cipher = Aes256Gcm::new_from_slice(&self.encryption_key).unwrap();
+        let cipher = Aes256Gcm::new_from_slice(&self.encryption_key).map_err(|e| e.to_string())?;
         let mut nonce_bytes = [0u8; 12];
         rand::thread_rng().fill_bytes(&mut nonce_bytes);
         let nonce = Nonce::from_slice(&nonce_bytes);
-        let ciphertext = cipher.encrypt(nonce, plaintext.as_bytes()).unwrap();
-        // Store as: base64(nonce + ciphertext)
+        let ciphertext = cipher
+            .encrypt(nonce, plaintext.as_bytes())
+            .map_err(|e| e.to_string())?;
         let mut combined = nonce_bytes.to_vec();
         combined.extend_from_slice(&ciphertext);
-        BASE64.encode(&combined)
+        Ok(BASE64.encode(&combined))
     }
 
     pub fn decrypt(&self, encrypted: &str) -> Result<String, String> {
@@ -59,10 +60,16 @@ impl Database {
     }
 
     pub fn conn(&self) -> std::sync::MutexGuard<'_, Connection> {
+        // Mutex poisoning only occurs if another thread panicked while holding the lock,
+        // which is an unrecoverable state for the whole app.
+        #[allow(clippy::unwrap_used)]
         self.conn.lock().unwrap()
     }
 
+    #[allow(clippy::too_many_lines)]
     fn run_migrations(&self) -> SqlResult<()> {
+        // Mutex poisoning is unrecoverable at startup — same justification as conn().
+        #[allow(clippy::unwrap_used)]
         let conn = self.conn.lock().unwrap();
         conn.execute_batch(
             "
@@ -249,8 +256,12 @@ impl Database {
         expires_at: i64,
     ) -> SqlResult<()> {
         let conn = self.conn();
-        let enc_access = self.encrypt(access_token);
-        let enc_refresh = self.encrypt(refresh_token);
+        let enc_access = self.encrypt(access_token).map_err(|e| {
+            rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::other(e)))
+        })?;
+        let enc_refresh = self.encrypt(refresh_token).map_err(|e| {
+            rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::other(e)))
+        })?;
         conn.execute(
             "INSERT OR REPLACE INTO oauth_tokens (id, access_token, refresh_token, token_expires_at)
              VALUES (1, ?1, ?2, ?3)",

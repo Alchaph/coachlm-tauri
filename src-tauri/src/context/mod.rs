@@ -1,5 +1,6 @@
-use crate::models::*;
+use crate::models::{ActivityData, PlanWeekWithSessions, ProfileData, TrainingPlan};
 use crate::storage::Database;
+use std::fmt::Write;
 
 const DEFAULT_TOKEN_BUDGET: usize = 4000;
 const CHARS_PER_TOKEN: usize = 4;
@@ -60,7 +61,7 @@ pub fn build_context(db: &Database) -> String {
                 } else {
                     insight.content.clone()
                 };
-                insight_block.push_str(&format!("\n- {} [{}]", content, date));
+                let _ = write!(insight_block, "\n- {content} [{date}]");
             }
             blocks.push((insight_block, true));
         }
@@ -80,11 +81,11 @@ pub fn build_context(db: &Database) -> String {
     }
 
     if let Ok(Some(stats_json)) = db.get_athlete_stats() {
-        blocks.push((format!("\n\n## Training Load Stats\n{}", stats_json), false));
+        blocks.push((format!("\n\n## Training Load Stats\n{stats_json}"), false));
     }
 
     if let Ok(Some(zones_json)) = db.get_athlete_zones() {
-        blocks.push((format!("\n\n## Heart Rate Zones\n{}", zones_json), false));
+        blocks.push((format!("\n\n## Heart Rate Zones\n{zones_json}"), false));
     }
 
     if let Ok(gear) = db.get_all_gear() {
@@ -92,11 +93,11 @@ pub fn build_context(db: &Database) -> String {
             let mut gear_block = String::from("\n\n## Gear");
             for g in &gear {
                 let dist_km = g.distance.unwrap_or(0.0) / 1000.0;
-                gear_block.push_str(&format!(
-                    "\n- {}: {:.0} km",
+                let _ = write!(
+                    gear_block,
+                    "\n- {}: {dist_km:.0} km",
                     g.name.as_deref().unwrap_or("Unknown"),
-                    dist_km
-                ));
+                );
             }
             blocks.push((gear_block, false));
         }
@@ -107,18 +108,15 @@ pub fn build_context(db: &Database) -> String {
         blocks.push((training_summary, false));
     }
 
-    assemble_within_budget(blocks, budget_chars)
+    assemble_within_budget(&blocks, budget_chars)
 }
 
-fn assemble_within_budget(blocks: Vec<(String, bool)>, budget_chars: usize) -> String {
+fn assemble_within_budget(blocks: &[(String, bool)], budget_chars: usize) -> String {
     let mut result = String::new();
     let mut remaining = budget_chars;
 
-    for (block, is_pinned) in &blocks {
-        if *is_pinned {
-            result.push_str(block);
-            remaining = remaining.saturating_sub(block.len());
-        } else if block.len() <= remaining {
+    for (block, is_pinned) in blocks {
+        if *is_pinned || block.len() <= remaining {
             result.push_str(block);
             remaining = remaining.saturating_sub(block.len());
         } else if remaining > 100 {
@@ -134,36 +132,36 @@ fn format_profile_block(p: &ProfileData) -> String {
     let mut parts = vec!["\n\n## Athlete Profile".to_string()];
 
     if let Some(age) = p.age {
-        parts.push(format!("- Age: {}", age));
+        parts.push(format!("- Age: {age}"));
     }
     if let Some(hr) = p.max_hr {
-        parts.push(format!("- Max HR: {} bpm", hr));
+        parts.push(format!("- Max HR: {hr} bpm"));
     }
     if let Some(rhr) = p.resting_hr {
-        parts.push(format!("- Resting HR: {} bpm", rhr));
+        parts.push(format!("- Resting HR: {rhr} bpm"));
     }
     if let Some(tp) = p.threshold_pace_secs {
         let mins = tp / 60;
         let secs = tp % 60;
-        parts.push(format!("- Threshold pace: {}:{:02}/km", mins, secs));
+        parts.push(format!("- Threshold pace: {mins}:{secs:02}/km"));
     }
     if let Some(wm) = p.weekly_mileage_target {
-        parts.push(format!("- Weekly mileage target: {:.0} km", wm));
+        parts.push(format!("- Weekly mileage target: {wm:.0} km"));
     }
     if let Some(ref exp) = p.experience_level {
-        parts.push(format!("- Experience: {}", exp));
+        parts.push(format!("- Experience: {exp}"));
     }
     if let Some(days) = p.training_days_per_week {
-        parts.push(format!("- Training days/week: {}", days));
+        parts.push(format!("- Training days/week: {days}"));
     }
     if let Some(ref terrain) = p.preferred_terrain {
-        parts.push(format!("- Preferred terrain: {}", terrain));
+        parts.push(format!("- Preferred terrain: {terrain}"));
     }
     if let Some(ref goals) = p.race_goals {
-        parts.push(format!("- Race goals: {}", goals));
+        parts.push(format!("- Race goals: {goals}"));
     }
     if let Some(ref injuries) = p.injury_history {
-        parts.push(format!("- Injury history: {}", injuries));
+        parts.push(format!("- Injury history: {injuries}"));
     }
 
     parts.join("\n")
@@ -183,23 +181,25 @@ fn format_plan_block(plan: &TrainingPlan, weeks: &[PlanWeekWithSessions]) -> Str
         .collect();
 
     for wws in current_and_next {
-        block.push_str(&format!(
+        let _ = write!(
+            block,
             "\n### Week {} ({})",
             wws.week.week_number, wws.week.week_start
-        ));
+        );
         for s in &wws.sessions {
             let dur = s
                 .duration_min
-                .map(|d| format!(" {}min", d))
+                .map(|d| format!(" {d}min"))
                 .unwrap_or_default();
             let dist = s
                 .distance_km
-                .map(|d| format!(" {:.1}km", d))
+                .map(|d| format!(" {d:.1}km"))
                 .unwrap_or_default();
-            block.push_str(&format!(
-                "\n- Day {}: {} {}{}",
-                s.day_of_week, s.session_type, dur, dist
-            ));
+            let _ = write!(
+                block,
+                "\n- Day {}: {} {dur}{dist}",
+                s.day_of_week, s.session_type,
+            );
         }
     }
 
@@ -211,15 +211,15 @@ fn format_plan_block(plan: &TrainingPlan, weeks: &[PlanWeekWithSessions]) -> Str
     block
 }
 
+#[allow(clippy::too_many_lines)]
 fn build_training_summary(db: &Database) -> String {
     let now = chrono::Utc::now();
     let four_weeks_ago = (now - chrono::Duration::days(28))
         .format("%Y-%m-%dT00:00:00+00:00")
         .to_string();
 
-    let activities = match db.get_activities_since(&four_weeks_ago) {
-        Ok(a) => a,
-        Err(_) => return String::new(),
+    let Ok(activities) = db.get_activities_since(&four_weeks_ago) else {
+        return String::new();
     };
 
     if activities.is_empty() {
@@ -249,7 +249,7 @@ fn build_training_summary(db: &Database) -> String {
             .filter(|a| {
                 a.start_date
                     .as_deref()
-                    .map_or(false, |d| d >= week_start.as_str() && d < week_end.as_str())
+                    .is_some_and(|d| d >= week_start.as_str() && d < week_end.as_str())
             })
             .collect();
 
@@ -259,34 +259,35 @@ fn build_training_summary(db: &Database) -> String {
 
         match week_idx {
             0 => {
-                summary.push_str(&format!("\n### This Week ({} runs)", week_activities.len()));
+                let _ = write!(summary, "\n### This Week ({} runs)", week_activities.len());
                 for a in &week_activities {
                     let dist = a.distance.unwrap_or(0.0) / 1000.0;
+                    #[allow(clippy::cast_precision_loss)]
                     let time_min = a.moving_time.unwrap_or(0) as f64 / 60.0;
                     let hr = a
                         .average_heartrate
-                        .map(|h| format!(" HR:{:.0}", h))
+                        .map(|h| format!(" HR:{h:.0}"))
                         .unwrap_or_default();
                     let pace = if dist > 0.0 {
+                        #[allow(clippy::cast_precision_loss)]
                         let pace_s_km = (a.moving_time.unwrap_or(0) as f64) / dist;
+                        #[allow(clippy::cast_possible_truncation)]
                         let pm = (pace_s_km / 60.0).floor() as i64;
+                        #[allow(clippy::cast_possible_truncation)]
                         let ps = (pace_s_km % 60.0) as i64;
-                        format!(" {}:{:02}/km", pm, ps)
+                        format!(" {pm}:{ps:02}/km")
                     } else {
                         String::new()
                     };
-                    summary.push_str(&format!(
-                        "\n- {}: {:.1}km {:.0}min{}{}",
+                    let _ = write!(
+                        summary,
+                        "\n- {}: {dist:.1}km {time_min:.0}min{pace}{hr}",
                         a.name.as_deref().unwrap_or("Run"),
-                        dist,
-                        time_min,
-                        pace,
-                        hr
-                    ));
+                    );
                 }
             }
             1 => {
-                summary.push_str(&format!("\n### Last Week ({} runs)", week_activities.len()));
+                let _ = write!(summary, "\n### Last Week ({} runs)", week_activities.len());
                 let total_dist: f64 = week_activities
                     .iter()
                     .map(|a| a.distance.unwrap_or(0.0))
@@ -296,11 +297,11 @@ fn build_training_summary(db: &Database) -> String {
                     .iter()
                     .map(|a| a.moving_time.unwrap_or(0))
                     .sum();
-                summary.push_str(&format!(
-                    "\n- Total: {:.1}km, {}min",
-                    total_dist,
+                let _ = write!(
+                    summary,
+                    "\n- Total: {total_dist:.1}km, {}min",
                     total_time / 60
-                ));
+                );
             }
             2 => {
                 let total_dist: f64 = week_activities
@@ -308,11 +309,11 @@ fn build_training_summary(db: &Database) -> String {
                     .map(|a| a.distance.unwrap_or(0.0))
                     .sum::<f64>()
                     / 1000.0;
-                summary.push_str(&format!(
-                    "\n### 2 Weeks Ago: {} runs, {:.1}km",
+                let _ = write!(
+                    summary,
+                    "\n### 2 Weeks Ago: {} runs, {total_dist:.1}km",
                     week_activities.len(),
-                    total_dist
-                ));
+                );
             }
             3 => {
                 let total_dist: f64 = week_activities
@@ -320,11 +321,11 @@ fn build_training_summary(db: &Database) -> String {
                     .map(|a| a.distance.unwrap_or(0.0))
                     .sum::<f64>()
                     / 1000.0;
-                summary.push_str(&format!(
-                    "\n### 3 Weeks Ago: {} runs, {:.1}km",
+                let _ = write!(
+                    summary,
+                    "\n### 3 Weeks Ago: {} runs, {total_dist:.1}km",
                     week_activities.len(),
-                    total_dist
-                ));
+                );
             }
             _ => {}
         }

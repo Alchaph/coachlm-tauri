@@ -6,7 +6,10 @@ mod plan;
 mod storage;
 mod strava;
 
-use models::*;
+use models::{
+    ActivityData, AuthStatus, ExportData, InsightData, MessageData, OllamaMessage, PlanWeekWithSessions,
+    ProfileData, Race, SessionData, SessionStatus, SettingsData, SettingsMeta, StatsData, TrainingPlan,
+};
 use std::sync::Arc;
 use storage::Database;
 use tauri::Manager;
@@ -17,16 +20,19 @@ pub struct AppState {
 }
 
 #[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
 fn get_settings(state: tauri::State<'_, AppState>) -> Result<Option<SettingsData>, String> {
     state.db.get_settings().map_err(|e| e.to_string())
 }
 
 #[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
 fn save_settings(state: tauri::State<'_, AppState>, data: SettingsData) -> Result<(), String> {
     state.db.save_settings(&data).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
 fn is_first_run(state: tauri::State<'_, AppState>) -> bool {
     state.db.is_first_run()
 }
@@ -45,11 +51,13 @@ async fn start_strava_auth(
 }
 
 #[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
 fn get_strava_auth_status(state: tauri::State<'_, AppState>) -> Result<AuthStatus, String> {
     strava::get_auth_status(&state.db)
 }
 
 #[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
 fn disconnect_strava(state: tauri::State<'_, AppState>) -> Result<(), String> {
     state.db.delete_oauth_tokens().map_err(|e| e.to_string())
 }
@@ -63,6 +71,7 @@ async fn sync_strava_activities(
 }
 
 #[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
 fn get_recent_activities(
     state: tauri::State<'_, AppState>,
     limit: u32,
@@ -71,16 +80,19 @@ fn get_recent_activities(
 }
 
 #[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
 fn get_activity_stats(state: tauri::State<'_, AppState>) -> Result<StatsData, String> {
     state.db.get_activity_stats().map_err(|e| e.to_string())
 }
 
 #[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
 fn get_profile_data(state: tauri::State<'_, AppState>) -> Result<Option<ProfileData>, String> {
     state.db.get_profile().map_err(|e| e.to_string())
 }
 
 #[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
 fn save_profile_data(
     state: tauri::State<'_, AppState>,
     data: ProfileData,
@@ -89,16 +101,22 @@ fn save_profile_data(
 }
 
 #[tauri::command]
-fn get_context_preview(state: tauri::State<'_, AppState>) -> Result<String, String> {
-    Ok(context::build_context(&state.db))
+#[allow(clippy::needless_pass_by_value)]
+fn get_context_preview(state: tauri::State<'_, AppState>) -> String {
+    context::build_context(&state.db)
 }
 
 #[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
 fn save_pinned_insight(
     state: tauri::State<'_, AppState>,
     content: String,
 ) -> Result<(), String> {
-    let session_id = state.current_session_id.lock().unwrap().clone();
+    let session_id = state
+        .current_session_id
+        .lock()
+        .map_err(|e| e.to_string())?
+        .clone();
     state
         .db
         .save_pinned_insight(&content, session_id.as_deref())
@@ -106,11 +124,13 @@ fn save_pinned_insight(
 }
 
 #[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
 fn get_pinned_insights(state: tauri::State<'_, AppState>) -> Result<Vec<InsightData>, String> {
     state.db.get_pinned_insights().map_err(|e| e.to_string())
 }
 
 #[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
 fn delete_pinned_insight(state: tauri::State<'_, AppState>, id: i64) -> Result<(), String> {
     state.db.delete_pinned_insight(id).map_err(|e| e.to_string())
 }
@@ -121,12 +141,15 @@ async fn send_message(
     content: String,
 ) -> Result<String, String> {
     let session_id = {
-        let mut sid = state.current_session_id.lock().unwrap();
+        let mut sid = state
+            .current_session_id
+            .lock()
+            .map_err(|e| e.to_string())?;
         if sid.is_none() {
             let session = state.db.create_chat_session().map_err(|e| e.to_string())?;
             *sid = Some(session.id.clone());
         }
-        sid.clone().unwrap()
+        sid.clone().ok_or("Session ID missing after creation")?
     };
 
     state
@@ -140,12 +163,12 @@ async fn send_message(
         .map_err(|e| e.to_string())?
         .ok_or("Settings not configured. Complete the setup wizard first.")?;
 
-    let context = context::build_context(&state.db);
+    let llm_ctx = context::build_context(&state.db);
     let history = state.db.get_chat_messages(&session_id).map_err(|e| e.to_string())?;
 
     let mut messages = vec![OllamaMessage {
         role: "system".to_string(),
-        content: context,
+        content: llm_ctx,
     }];
 
     for msg in &history {
@@ -171,11 +194,13 @@ async fn send_message(
 }
 
 #[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
 fn get_chat_sessions(state: tauri::State<'_, AppState>) -> Result<Vec<SessionData>, String> {
     state.db.get_chat_sessions().map_err(|e| e.to_string())
 }
 
 #[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
 fn get_chat_messages(
     state: tauri::State<'_, AppState>,
     session_id: String,
@@ -184,14 +209,19 @@ fn get_chat_messages(
 }
 
 #[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
 fn create_chat_session(state: tauri::State<'_, AppState>) -> Result<SessionData, String> {
     let session = state.db.create_chat_session().map_err(|e| e.to_string())?;
-    let mut sid = state.current_session_id.lock().unwrap();
+    let mut sid = state
+        .current_session_id
+        .lock()
+        .map_err(|e| e.to_string())?;
     *sid = Some(session.id.clone());
     Ok(session)
 }
 
 #[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
 fn delete_chat_session(
     state: tauri::State<'_, AppState>,
     session_id: String,
@@ -205,6 +235,7 @@ async fn get_ollama_models(endpoint: String) -> Result<Vec<String>, String> {
 }
 
 #[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
 fn import_fit_file(
     state: tauri::State<'_, AppState>,
     file_path: String,
@@ -220,6 +251,7 @@ fn import_fit_file(
 }
 
 #[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
 fn export_context(
     state: tauri::State<'_, AppState>,
     file_path: String,
@@ -236,7 +268,7 @@ fn export_context(
         training_summaries: activities,
         pinned_insights: insights,
         settings_meta: SettingsMeta {
-            active_llm: settings.map(|s| s.active_llm).unwrap_or_else(|| "local".to_string()),
+            active_llm: settings.map_or_else(|| "local".to_string(), |s| s.active_llm),
         },
     };
 
@@ -246,13 +278,14 @@ fn export_context(
 }
 
 #[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
 fn import_context(
     state: tauri::State<'_, AppState>,
     file_path: String,
     replace_all: bool,
 ) -> Result<(), String> {
     let content = std::fs::read_to_string(&file_path).map_err(|e| e.to_string())?;
-    let data: ExportData = serde_json::from_str(&content).map_err(|e| format!("Invalid file: {}", e))?;
+    let data: ExportData = serde_json::from_str(&content).map_err(|e| format!("Invalid file: {e}"))?;
 
     if data.schema_version != 1 {
         return Err(format!("Unsupported schema version: {}", data.schema_version));
@@ -283,6 +316,7 @@ fn import_context(
 }
 
 #[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
 fn create_race(state: tauri::State<'_, AppState>, race: Race) -> Result<Race, String> {
     let mut r = race;
     if r.id.is_empty() {
@@ -296,21 +330,25 @@ fn create_race(state: tauri::State<'_, AppState>, race: Race) -> Result<Race, St
 }
 
 #[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
 fn update_race(state: tauri::State<'_, AppState>, race: Race) -> Result<(), String> {
     state.db.update_race(&race).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
 fn delete_race(state: tauri::State<'_, AppState>, id: String) -> Result<(), String> {
     state.db.delete_race(&id).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
 fn list_races(state: tauri::State<'_, AppState>) -> Result<Vec<Race>, String> {
     state.db.list_races().map_err(|e| e.to_string())
 }
 
 #[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
 fn set_active_race(state: tauri::State<'_, AppState>, id: String) -> Result<(), String> {
     state.db.set_active_race(&id).map_err(|e| e.to_string())
 }
@@ -324,11 +362,13 @@ async fn generate_plan_cmd(
 }
 
 #[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
 fn get_active_plan(state: tauri::State<'_, AppState>) -> Result<Option<TrainingPlan>, String> {
     state.db.get_active_plan().map_err(|e| e.to_string())
 }
 
 #[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
 fn get_plan_weeks(
     state: tauri::State<'_, AppState>,
     plan_id: String,
@@ -337,6 +377,7 @@ fn get_plan_weeks(
 }
 
 #[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
 fn update_session_status(
     state: tauri::State<'_, AppState>,
     session_id: String,
@@ -362,9 +403,10 @@ pub fn run() {
             let app_data_dir = app
                 .path()
                 .app_data_dir()
-                .expect("Failed to resolve app data directory");
+                .map_err(|e| format!("Failed to resolve app data directory: {e}"))?;
 
-            let db = Database::new(&app_data_dir).expect("Failed to initialize database");
+            let db = Database::new(&app_data_dir)
+                .map_err(|e| format!("Failed to initialize database: {e}"))?;
             let state = AppState {
                 db: Arc::new(db),
                 current_session_id: std::sync::Mutex::new(None),
@@ -409,5 +451,5 @@ pub fn run() {
             update_session_status,
         ])
         .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .unwrap_or_else(|e| eprintln!("Error while running tauri application: {e}"));
 }

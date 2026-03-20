@@ -1,4 +1,4 @@
-use crate::models::*;
+use crate::models::{OllamaChatRequest, OllamaChatResponse, OllamaMessage, OllamaTagsResponse};
 
 pub async fn chat_with_ollama(
     endpoint: &str,
@@ -23,7 +23,7 @@ pub async fn chat_with_ollama(
             if e.is_connect() {
                 "Ollama is not running. Start it with 'ollama serve' and try again.".to_string()
             } else {
-                format!("Failed to reach Ollama: {}", e)
+                format!("Failed to reach Ollama: {e}")
             }
         })?;
 
@@ -49,7 +49,7 @@ pub async fn get_ollama_models(endpoint: &str) -> Result<Vec<String>, String> {
             if e.is_connect() {
                 "Ollama is not running. Start it with 'ollama serve' and try again.".to_string()
             } else {
-                format!("Failed to reach Ollama: {}", e)
+                format!("Failed to reach Ollama: {e}")
             }
         })?;
 

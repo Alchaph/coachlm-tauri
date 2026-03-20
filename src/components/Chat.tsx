@@ -37,18 +37,17 @@ export default function Chat() {
   useEffect(() => { scrollToBottom(); }, [messages, scrollToBottom]);
 
   useEffect(() => {
-    loadSessions();
-  }, []);
-
-  const loadSessions = async () => {
-    try {
-      const s = await invoke<Session[]>("get_chat_sessions");
-      setSessions(s);
-      if (s.length > 0 && !currentSessionId) {
-        await loadSession(s[0].id);
-      }
-    } catch { /* empty */ }
-  };
+    const loadSessions = async () => {
+      try {
+        const s = await invoke<Session[]>("get_chat_sessions");
+        setSessions(s);
+        if (s.length > 0 && !currentSessionId) {
+          await loadSession(s[0].id);
+        }
+      } catch { /* empty */ }
+    };
+    void loadSessions();
+  }, [currentSessionId]);
 
   const loadSession = async (sessionId: string) => {
     try {
@@ -145,7 +144,7 @@ export default function Chat() {
     }
   };
 
-  const sendPlanRequest = async () => {
+  const sendPlanRequest = () => {
     const planPrompt = "Generate a training plan based on my profile and current fitness level.";
     setInput(planPrompt);
   };
@@ -159,7 +158,7 @@ export default function Chat() {
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      sendMessage();
+      void sendMessage();
     }
   };
 
@@ -178,7 +177,7 @@ export default function Chat() {
         >
           <div style={{ padding: "12px", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <span style={{ fontWeight: 600, fontSize: 13 }}>Chat History</span>
-            <button className="btn-ghost" onClick={createNewSession} title="New chat">
+            <button className="btn-ghost" onClick={() => { void createNewSession(); }} title="New chat">
               <Plus size={16} />
             </button>
           </div>
@@ -186,7 +185,7 @@ export default function Chat() {
             {sessions.map((s) => (
               <div
                 key={s.id}
-                onClick={() => loadSession(s.id)}
+                onClick={() => { void loadSession(s.id); }}
                 style={{
                   padding: "8px 10px",
                   borderRadius: 6,
@@ -204,7 +203,7 @@ export default function Chat() {
                 </span>
                 <button
                   className="btn-ghost"
-                  onClick={(e) => { e.stopPropagation(); deleteSession(s.id); }}
+                  onClick={(e) => { e.stopPropagation(); void deleteSession(s.id); }}
                   style={{ padding: 2 }}
                 >
                   <Trash2 size={14} />
@@ -226,14 +225,14 @@ export default function Chat() {
             background: "var(--bg-secondary)",
           }}
         >
-          <button className="btn-ghost" onClick={() => setShowHistory(!showHistory)} title="Chat history">
+          <button className="btn-ghost" onClick={() => { setShowHistory(!showHistory); }} title="Chat history">
             <History size={18} />
           </button>
-          <button className="btn-ghost" onClick={createNewSession} title="New chat">
+          <button className="btn-ghost" onClick={() => { void createNewSession(); }} title="New chat">
             <Plus size={18} />
           </button>
           <div style={{ flex: 1 }} />
-          <button className="btn-ghost" onClick={sendPlanRequest} title="Generate Training Plan" style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          <button className="btn-ghost" onClick={() => { sendPlanRequest(); }} title="Generate Training Plan" style={{ display: "flex", alignItems: "center", gap: 4 }}>
             <Dumbbell size={16} />
             <span style={{ fontSize: 12 }}>Generate Plan</span>
           </button>
@@ -290,7 +289,7 @@ export default function Chat() {
               {msg.role === "assistant" && (
                 <button
                   className="btn-ghost"
-                  onClick={() => pinMessage(msg.content)}
+                  onClick={() => { void pinMessage(msg.content); }}
                   style={{ marginTop: 4, fontSize: 11, display: "flex", alignItems: "center", gap: 4 }}
                   title="Save as coaching insight"
                 >
@@ -336,7 +335,7 @@ export default function Chat() {
         >
           <input
             value={input}
-            onChange={(e) => setInput(e.target.value)}
+            onChange={(e) => { setInput(e.target.value); }}
             onKeyDown={handleKeyDown}
             placeholder="Ask your coach..."
             disabled={loading}
@@ -345,7 +344,7 @@ export default function Chat() {
           />
           <button
             className="btn-primary"
-            onClick={sendMessage}
+            onClick={() => { void sendMessage(); }}
             disabled={loading || !input.trim()}
             style={{ display: "flex", alignItems: "center", gap: 4 }}
           >

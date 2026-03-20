@@ -26,7 +26,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    (async () => {
+    void (async () => {
       try {
         const firstRun = await invoke<boolean>("is_first_run");
         setShowOnboarding(firstRun);
@@ -94,7 +94,7 @@ export default function App() {
           .map((item) => (
             <button
               key={item.id}
-              onClick={() => setActiveTab(item.id)}
+              onClick={() => { setActiveTab(item.id); }}
               style={{
                 display: "flex",
                 alignItems: "center",

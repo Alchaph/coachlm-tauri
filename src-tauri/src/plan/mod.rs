@@ -1,5 +1,6 @@
-use crate::models::*;
+use crate::models::{OllamaMessage, PlanSession, PlanWeek, ProfileData, Race, TrainingPlan};
 use crate::storage::Database;
+use std::fmt::Write;
 use std::sync::Arc;
 
 pub async fn generate_plan(
@@ -22,7 +23,8 @@ pub async fn generate_plan(
 
     let now = chrono::Utc::now();
     let race_date = chrono::NaiveDate::parse_from_str(&race.race_date, "%Y-%m-%d")
-        .map_err(|e| format!("Invalid race date: {}", e))?;
+        .map_err(|e| format!("Invalid race date: {e}"))?;
+    #[allow(clippy::cast_precision_loss, clippy::cast_possible_truncation)]
     let weeks_to_race = ((race_date - now.date_naive()).num_days() as f64 / 7.0).ceil() as i64;
 
     if weeks_to_race <= 0 {
@@ -31,9 +33,9 @@ pub async fn generate_plan(
 
     let prompt = build_plan_prompt(&profile, race, weeks_to_race);
 
-    let context = crate::context::build_context(&db);
+    let llm_context = crate::context::build_context(&db);
     let messages = vec![
-        OllamaMessage { role: "system".to_string(), content: context },
+        OllamaMessage { role: "system".to_string(), content: llm_context },
         OllamaMessage { role: "user".to_string(), content: prompt },
     ];
 
@@ -60,12 +62,12 @@ pub async fn generate_plan(
 
                 for (week_num, sessions) in parsed {
                     let week_id = uuid::Uuid::new_v4().to_string();
-                    let week_start = (now + chrono::Duration::weeks(week_num as i64 - 1))
+                    let week_start = (now + chrono::Duration::weeks(i64::from(week_num) - 1))
                         .format("%Y-%m-%d").to_string();
                     let week = PlanWeek {
                         id: week_id.clone(),
                         plan_id: plan_id.clone(),
-                        week_number: week_num as i64,
+                        week_number: i64::from(week_num),
                         week_start,
                     };
                     db.save_plan_week(&week).map_err(|e| e.to_string())?;
@@ -73,7 +75,7 @@ pub async fn generate_plan(
                     for session in sessions {
                         let mut s = session;
                         s.id = uuid::Uuid::new_v4().to_string();
-                        s.week_id = week_id.clone();
+                        s.week_id.clone_from(&week_id);
                         db.save_plan_session(&s).map_err(|e| e.to_string())?;
                     }
                 }
@@ -82,12 +84,11 @@ pub async fn generate_plan(
             }
             Err(e) => {
                 last_error = e;
-                continue;
             }
         }
     }
 
-    Err(format!("Failed to generate plan after 3 attempts: {}", last_error))
+    Err(format!("Failed to generate plan after 3 attempts: {last_error}"))
 }
 
 fn build_plan_prompt(profile: &ProfileData, race: &Race, weeks: i64) -> String {
@@ -95,16 +96,16 @@ fn build_plan_prompt(profile: &ProfileData, race: &Race, weeks: i64) -> String {
         "Generate a {} training plan for a {} race ({:.1}km).\n",
         weeks, race.name, race.distance_km
     );
-    prompt.push_str(&format!("Race date: {}, Terrain: {}\n", race.race_date, race.terrain));
+    let _ = writeln!(prompt, "Race date: {}, Terrain: {}", race.race_date, race.terrain);
 
     if let Some(ref exp) = profile.experience_level {
-        prompt.push_str(&format!("Experience: {}\n", exp));
+        let _ = writeln!(prompt, "Experience: {exp}");
     }
     if let Some(days) = profile.training_days_per_week {
-        prompt.push_str(&format!("Available training days: {}/week\n", days));
+        let _ = writeln!(prompt, "Available training days: {days}/week");
     }
     if let Some(tp) = profile.threshold_pace_secs {
-        prompt.push_str(&format!("Threshold pace: {}:{:02}/km\n", tp / 60, tp % 60));
+        let _ = writeln!(prompt, "Threshold pace: {}:{:02}/km", tp / 60, tp % 60);
     }
 
     prompt.push_str("\nRespond with a JSON array of weeks. Each week has sessions:\n");
@@ -127,10 +128,11 @@ fn parse_plan_response(
     let json_str = &response[json_start..json_end];
 
     let weeks: Vec<serde_json::Value> = serde_json::from_str(json_str)
-        .map_err(|e| format!("Invalid JSON: {}", e))?;
+        .map_err(|e| format!("Invalid JSON: {e}"))?;
 
     let mut result = Vec::new();
     for week_val in &weeks {
+        #[allow(clippy::cast_possible_truncation)]
         let week_num = week_val["week"].as_u64().ok_or("Missing week number")? as u32;
         let sessions_val = week_val["sessions"].as_array().ok_or("Missing sessions array")?;
 

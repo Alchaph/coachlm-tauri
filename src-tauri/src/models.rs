@@ -86,6 +86,7 @@ pub struct AuthStatus {
     pub expires_at: Option<i64>,
 }
 
+#[allow(clippy::struct_field_names)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Race {
     pub id: String,

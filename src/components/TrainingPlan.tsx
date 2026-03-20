@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Plus, Trash2, Trophy, Calendar, Check, X, RefreshCw, ChevronLeft } from "lucide-react";
 
@@ -71,35 +71,33 @@ export default function TrainingPlan({ onPlanChange }: { onPlanChange: (hasPlan:
   const [actualDuration, setActualDuration] = useState("");
   const [actualDistance, setActualDistance] = useState("");
 
-  useEffect(() => {
-    loadRaces();
-  }, []);
-
-  const loadRaces = async () => {
-    try {
-      const loadedRaces = await invoke<Race[]>("list_races");
-      setRaces(loadedRaces);
-      
-      const activeRace = loadedRaces.find(r => r.is_active);
-      if (activeRace) {
+   const loadRaces = useCallback(async () => {
+     try {
+       const loadedRaces = await invoke<Race[]>("list_races");
+       setRaces(loadedRaces);
+       
+       const activeRace = loadedRaces.find(r => r.is_active);
+       if (activeRace) {
         try {
           const loadedPlan = await invoke<TrainingPlan>("get_active_plan");
-          if (loadedPlan) {
-            setPlan(loadedPlan);
-            await loadPlanWeeks(loadedPlan.id);
-            setView("calendar");
-            onPlanChange(true);
-          }
-        } catch {
-          onPlanChange(false);
-        }
-      } else {
-        onPlanChange(false);
-      }
-    } catch (e) {
-      setError(String(e));
-    }
-  };
+          setPlan(loadedPlan);
+          await loadPlanWeeks(loadedPlan.id);
+          setView("calendar");
+          onPlanChange(true);
+         } catch {
+           onPlanChange(false);
+         }
+       } else {
+         onPlanChange(false);
+       }
+     } catch (e) {
+       setError(String(e));
+     }
+   }, [onPlanChange]);
+
+   useEffect(() => {
+     void loadRaces();
+   }, [loadRaces]);
 
   const loadPlanWeeks = async (planId: string) => {
     try {
@@ -147,30 +145,30 @@ export default function TrainingPlan({ onPlanChange }: { onPlanChange: (hasPlan:
           created_at: ""
         }
       });
-      setShowAddRace(false);
-      setRaceName("");
-      setRaceDate("");
-      setRaceGoalTime("");
-      setRaceElevation("");
-      loadRaces();
+       setShowAddRace(false);
+       setRaceName("");
+       setRaceDate("");
+       setRaceGoalTime("");
+       setRaceElevation("");
+       void loadRaces();
     } catch (e) {
       setError(String(e));
     }
   };
 
-  const handleSetActiveRace = async (id: string) => {
-    try {
-      await invoke("set_active_race", { id });
-      loadRaces();
+   const handleSetActiveRace = async (id: string) => {
+     try {
+       await invoke("set_active_race", { id });
+       void loadRaces();
     } catch (e) {
       setError(String(e));
     }
   };
 
-  const handleDeleteRace = async (id: string) => {
-    try {
-      await invoke("delete_race", { id });
-      loadRaces();
+   const handleDeleteRace = async (id: string) => {
+     try {
+       await invoke("delete_race", { id });
+       void loadRaces();
     } catch (e) {
       setError(String(e));
     }
@@ -229,19 +227,19 @@ export default function TrainingPlan({ onPlanChange }: { onPlanChange: (hasPlan:
     }
   };
 
-  const formatPace = (low: number | null, high: number | null) => {
-    if (!low && !high) return "";
-    const format = (p: number) => `${Math.floor(p)}:${Math.round((p % 1) * 60).toString().padStart(2, "0")}`;
-    if (low && high) return `${format(low)} - ${format(high)}/km`;
-    if (low) return `${format(low)}/km`;
-    return `${format(high!)}/km`;
+   const formatPace = (low: number | null, high: number | null) => {
+     if (!low && !high) return "";
+     const format = (p: number) => `${String(Math.floor(p))}:${Math.round((p % 1) * 60).toString().padStart(2, "0")}`;
+     if (low && high) return `${format(low)} - ${format(high)}/km`;
+     if (low) return `${format(low)}/km`;
+     return `${format(high ?? 0)}/km`;
   };
 
   const renderRaceManagement = () => (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
         <h1 style={{ fontSize: 20, fontWeight: 700 }}>Race Goals</h1>
-        <button className="btn-primary" onClick={() => setShowAddRace(true)} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        <button className="btn-primary" onClick={() => { setShowAddRace(true); }} style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <Plus size={16} /> Add Race
         </button>
       </div>
@@ -254,29 +252,29 @@ export default function TrainingPlan({ onPlanChange }: { onPlanChange: (hasPlan:
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
             <div>
               <label htmlFor="raceName">Race Name</label>
-              <input id="raceName" type="text" value={raceName} onChange={e => setRaceName(e.target.value)} style={{ width: "100%" }} placeholder="e.g. Berlin Marathon" />
+              <input id="raceName" type="text" value={raceName} onChange={e => { setRaceName(e.target.value); }} style={{ width: "100%" }} placeholder="e.g. Berlin Marathon" />
             </div>
             <div>
               <label htmlFor="raceDate">Date</label>
-              <input id="raceDate" type="date" value={raceDate} onChange={e => setRaceDate(e.target.value)} style={{ width: "100%" }} />
+              <input id="raceDate" type="date" value={raceDate} onChange={e => { setRaceDate(e.target.value); }} style={{ width: "100%" }} />
             </div>
             <div style={{ gridColumn: "1 / -1" }}>
               <label>Distance</label>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
                 {[5, 10, 21.1, 42.2, 50].map(d => (
-                  <button key={d} className={raceDistance === d ? "btn-primary" : "btn-secondary"} onClick={() => setRaceDistance(d)}>
-                    {d === 21.1 ? "Half" : d === 42.2 ? "Marathon" : d === 50 ? "Ultra" : `${d}K`}
+                   <button key={d} className={raceDistance === d ? "btn-primary" : "btn-secondary"} onClick={() => { setRaceDistance(d); }}>
+                     {d === 21.1 ? "Half" : d === 42.2 ? "Marathon" : d === 50 ? "Ultra" : `${String(d)}K`}
                   </button>
                 ))}
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <input id="customDistance" type="number" value={raceDistance} onChange={e => setRaceDistance(parseFloat(e.target.value))} style={{ width: 100 }} step="0.1" />
+                <input id="customDistance" type="number" value={raceDistance} onChange={e => { setRaceDistance(parseFloat(e.target.value)); }} style={{ width: 100 }} step="0.1" />
                 <span style={{ color: "var(--text-secondary)" }}>km</span>
               </div>
             </div>
             <div>
               <label htmlFor="raceTerrain">Terrain</label>
-              <select id="raceTerrain" value={raceTerrain} onChange={e => setRaceTerrain(e.target.value)} style={{ width: "100%" }}>
+              <select id="raceTerrain" value={raceTerrain} onChange={e => { setRaceTerrain(e.target.value); }} style={{ width: "100%" }}>
                 <option value="road">Road</option>
                 <option value="trail">Trail</option>
                 <option value="track">Track</option>
@@ -284,26 +282,26 @@ export default function TrainingPlan({ onPlanChange }: { onPlanChange: (hasPlan:
             </div>
             <div>
               <label htmlFor="raceElevation">Elevation Gain (m)</label>
-              <input id="raceElevation" type="number" value={raceElevation} onChange={e => setRaceElevation(e.target.value)} style={{ width: "100%" }} placeholder="Optional" />
+              <input id="raceElevation" type="number" value={raceElevation} onChange={e => { setRaceElevation(e.target.value); }} style={{ width: "100%" }} placeholder="Optional" />
             </div>
             <div>
               <label htmlFor="raceGoalTime">Goal Time</label>
-              <input id="raceGoalTime" type="text" value={raceGoalTime} onChange={e => setRaceGoalTime(e.target.value)} style={{ width: "100%" }} placeholder="h:mm:ss (Optional)" />
+              <input id="raceGoalTime" type="text" value={raceGoalTime} onChange={e => { setRaceGoalTime(e.target.value); }} style={{ width: "100%" }} placeholder="h:mm:ss (Optional)" />
             </div>
             <div>
               <label>Priority</label>
               <div style={{ display: "flex", gap: 8 }}>
                 {["A", "B", "C"].map(p => (
-                  <button key={p} className={racePriority === p ? "btn-primary" : "btn-secondary"} onClick={() => setRacePriority(p)} style={{ flex: 1 }}>
+                  <button key={p} className={racePriority === p ? "btn-primary" : "btn-secondary"} onClick={() => { setRacePriority(p); }} style={{ flex: 1 }}>
                     {p}
                   </button>
                 ))}
               </div>
             </div>
           </div>
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-            <button className="btn-ghost" onClick={() => setShowAddRace(false)}>Cancel</button>
-            <button className="btn-primary" onClick={handleAddRace}>Save Race</button>
+           <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+             <button className="btn-ghost" onClick={() => { setShowAddRace(false); }}>Cancel</button>
+             <button className="btn-primary" onClick={() => { void handleAddRace(); }}>Save Race</button>
           </div>
         </div>
       )}
@@ -330,18 +328,18 @@ export default function TrainingPlan({ onPlanChange }: { onPlanChange: (hasPlan:
                     <span>{race.distance_km} km • {race.terrain}</span>
                   </div>
                 </div>
-                <div style={{ display: "flex", gap: 8 }}>
-                  {!race.is_active && (
-                    <button className="btn-secondary" onClick={() => handleSetActiveRace(race.id)}>Set Active</button>
-                  )}
-                  <button className="btn-ghost" onClick={() => handleDeleteRace(race.id)} style={{ color: "var(--danger)" }}>
+                 <div style={{ display: "flex", gap: 8 }}>
+                   {!race.is_active && (
+                     <button className="btn-secondary" onClick={() => { void handleSetActiveRace(race.id); }}>Set Active</button>
+                   )}
+                   <button className="btn-ghost" onClick={() => { void handleDeleteRace(race.id); }} style={{ color: "var(--danger)" }}>
                     <Trash2 size={16} />
                   </button>
                 </div>
               </div>
-              {race.is_active && (
-                <div style={{ marginTop: 16, paddingTop: 16, borderTop: "1px solid var(--border)" }}>
-                  <button className="btn-primary" onClick={() => handleGeneratePlan(race.id)} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+               {race.is_active && (
+                 <div style={{ marginTop: 16, paddingTop: 16, borderTop: "1px solid var(--border)" }}>
+                   <button className="btn-primary" onClick={() => { void handleGeneratePlan(race.id); }} style={{ display: "flex", alignItems: "center", gap: 6 }}>
                     <Calendar size={16} /> Generate Training Plan
                   </button>
                 </div>
@@ -370,14 +368,14 @@ export default function TrainingPlan({ onPlanChange }: { onPlanChange: (hasPlan:
       <div>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
           <div>
-            <button className="btn-ghost" onClick={() => setView("races")} style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 8, padding: 0 }}>
+            <button className="btn-ghost" onClick={() => { setView("races"); }} style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 8, padding: 0 }}>
               <ChevronLeft size={16} /> Manage Races
             </button>
             <h1 style={{ fontSize: 20, fontWeight: 700 }}>Training Plan</h1>
             {activeRace && <div style={{ fontSize: 13, color: "var(--text-secondary)" }}>{activeRace.name} • {getWeeksToRace(activeRace.race_date)} weeks to go</div>}
           </div>
-          {activeRace && (
-            <button className="btn-secondary" onClick={() => handleGeneratePlan(activeRace.id)} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+           {activeRace && (
+             <button className="btn-secondary" onClick={() => { void handleGeneratePlan(activeRace.id); }} style={{ display: "flex", alignItems: "center", gap: 6 }}>
               <RefreshCw size={16} /> Regenerate
             </button>
           )}
@@ -394,10 +392,10 @@ export default function TrainingPlan({ onPlanChange }: { onPlanChange: (hasPlan:
               ))}
             </div>
             
-            {planWeeks.map((pw) => {
-              const isPast = new Date(pw.week.week_start).getTime() < new Date().getTime() - 7 * 24 * 60 * 60 * 1000;
-              const plannedKm = pw.sessions.reduce((sum, s) => sum + (s.distance_km || 0), 0);
-              const actualKm = pw.sessions.reduce((sum, s) => sum + (s.actual_distance_km || 0), 0);
+             {planWeeks.map((pw) => {
+               const isPast = new Date(pw.week.week_start).getTime() < new Date().getTime() - 7 * 24 * 60 * 60 * 1000;
+               const plannedKm = pw.sessions.reduce((sum, s) => sum + (s.distance_km ?? 0), 0);
+               const actualKm = pw.sessions.reduce((sum, s) => sum + (s.actual_distance_km ?? 0), 0);
               
               return (
                 <div key={pw.week.id} style={{ display: "grid", gridTemplateColumns: "60px repeat(7, 1fr)", borderBottom: "1px solid var(--border)", opacity: isPast ? 0.6 : 1 }}>
@@ -417,11 +415,11 @@ export default function TrainingPlan({ onPlanChange }: { onPlanChange: (hasPlan:
                     return (
                       <div key={day} style={{ padding: 8, borderRight: "1px solid var(--border)" }}>
                         <div 
-                          onClick={() => {
-                            setSelectedSession(session);
-                            setSessionNotes(session.notes || "");
-                            setActualDuration(session.actual_duration_min?.toString() || "");
-                            setActualDistance(session.actual_distance_km?.toString() || "");
+                           onClick={() => {
+                             setSelectedSession(session);
+                             setSessionNotes(session.notes ?? "");
+                             setActualDuration(session.actual_duration_min?.toString() ?? "");
+                             setActualDistance(session.actual_distance_km?.toString() ?? "");
                           }}
                           style={{ 
                             background: isCompleted ? `${color}20` : isSkipped ? "var(--bg-tertiary)" : `${color}15`,
@@ -459,7 +457,7 @@ export default function TrainingPlan({ onPlanChange }: { onPlanChange: (hasPlan:
                 <h2 style={{ fontSize: 18, fontWeight: 600, color: getSessionColor(selectedSession.session_type), textTransform: "capitalize" }}>
                   {selectedSession.session_type.replace("_", " ")}
                 </h2>
-                <button className="btn-ghost" onClick={() => setSelectedSession(null)}><X size={20} /></button>
+                <button className="btn-ghost" onClick={() => { setSelectedSession(null); }}><X size={20} /></button>
               </div>
               
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 20, background: "var(--bg-tertiary)", padding: 12, borderRadius: 6 }}>
@@ -481,7 +479,7 @@ export default function TrainingPlan({ onPlanChange }: { onPlanChange: (hasPlan:
                     <div style={{ fontWeight: 500 }}>Z{selectedSession.hr_zone}</div>
                   </div>
                 )}
-                {(selectedSession.pace_min_low || selectedSession.pace_min_high) && (
+                 {(selectedSession.pace_min_low ?? selectedSession.pace_min_high) && (
                   <div>
                     <div style={{ fontSize: 11, color: "var(--text-muted)" }}>Target Pace</div>
                     <div style={{ fontWeight: 500 }}>{formatPace(selectedSession.pace_min_low, selectedSession.pace_min_high)}</div>
@@ -503,22 +501,22 @@ export default function TrainingPlan({ onPlanChange }: { onPlanChange: (hasPlan:
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
                   <div>
                     <label htmlFor="actualDistance">Actual Distance (km)</label>
-                    <input id="actualDistance" type="number" value={actualDistance} onChange={e => setActualDistance(e.target.value)} style={{ width: "100%" }} step="0.1" />
+                    <input id="actualDistance" type="number" value={actualDistance} onChange={e => { setActualDistance(e.target.value); }} style={{ width: "100%" }} step="0.1" />
                   </div>
                   <div>
                     <label htmlFor="actualDuration">Actual Duration (min)</label>
-                    <input id="actualDuration" type="number" value={actualDuration} onChange={e => setActualDuration(e.target.value)} style={{ width: "100%" }} />
+                    <input id="actualDuration" type="number" value={actualDuration} onChange={e => { setActualDuration(e.target.value); }} style={{ width: "100%" }} />
                   </div>
                 </div>
                 <div>
                   <label htmlFor="sessionNotes">Your Notes</label>
-                  <textarea id="sessionNotes" value={sessionNotes} onChange={e => setSessionNotes(e.target.value)} style={{ width: "100%", height: 80, resize: "vertical" }} />
+                  <textarea id="sessionNotes" value={sessionNotes} onChange={e => { setSessionNotes(e.target.value); }} style={{ width: "100%", height: 80, resize: "vertical" }} />
                 </div>
               </div>
 
-              <div style={{ display: "flex", gap: 8 }}>
-                <button className="btn-secondary" onClick={() => handleUpdateSession("skipped")} style={{ flex: 1 }}>Mark Skipped</button>
-                <button className="btn-primary" onClick={() => handleUpdateSession("completed")} style={{ flex: 2, background: "var(--success)" }}>Mark Completed</button>
+               <div style={{ display: "flex", gap: 8 }}>
+                 <button className="btn-secondary" onClick={() => { void handleUpdateSession("skipped"); }} style={{ flex: 1 }}>Mark Skipped</button>
+                 <button className="btn-primary" onClick={() => { void handleUpdateSession("completed"); }} style={{ flex: 2, background: "var(--success)" }}>Mark Completed</button>
               </div>
             </div>
           </div>

@@ -8,14 +8,14 @@ use std::fs::File;
 /// Parse a FIT file and extract session-level activity summaries.
 ///
 /// Each FIT file may contain one or more Session records. Each session
-/// becomes an ActivityData entry. If no session records exist, an error
+/// becomes an `ActivityData` entry. If no session records exist, an error
 /// is returned.
 pub fn import_fit_file(file_path: &str) -> Result<Vec<ActivityData>, String> {
-    let mut file = File::open(file_path).map_err(|e| format!("Failed to open FIT file: {}", e))?;
+    let mut file = File::open(file_path).map_err(|e| format!("Failed to open FIT file: {e}"))?;
 
     let opts = HashSet::new();
     let records = from_reader_with_options(&mut file, &opts)
-        .map_err(|e| format!("Failed to parse FIT file: {}", e))?;
+        .map_err(|e| format!("Failed to parse FIT file: {e}"))?;
 
     let mut activities: Vec<ActivityData> = Vec::new();
 
@@ -45,7 +45,9 @@ pub fn import_fit_file(file_path: &str) -> Result<Vec<ActivityData>, String> {
                     activity.distance = try_as_f64(field.value());
                 }
                 "total_timer_time" => {
-                    activity.moving_time = try_as_f64(field.value()).map(|t| t as i64);
+                    #[allow(clippy::cast_possible_truncation)]
+                    let moving_time = try_as_f64(field.value()).map(|t| t as i64);
+                    activity.moving_time = moving_time;
                 }
                 "avg_heart_rate" => {
                     activity.average_heartrate = try_as_f64(field.value());
@@ -88,7 +90,7 @@ pub fn import_fit_file(file_path: &str) -> Result<Vec<ActivityData>, String> {
             activity.name = activity
                 .activity_type
                 .as_ref()
-                .map(|t| format!("Imported {} activity", t));
+                .map(|t| format!("Imported {t} activity"));
         }
 
         activities.push(activity);
@@ -108,10 +110,10 @@ fn try_as_f64(value: &Value) -> Option<f64> {
         Value::Float32(f) => Some(f64::from(*f)),
         Value::UInt8(n) => Some(f64::from(*n)),
         Value::UInt16(n) => Some(f64::from(*n)),
-        Value::UInt32(n) => Some(*n as f64),
+        Value::UInt32(n) => Some(f64::from(*n)),
         Value::SInt8(n) => Some(f64::from(*n)),
         Value::SInt16(n) => Some(f64::from(*n)),
-        Value::SInt32(n) => Some(*n as f64),
+        Value::SInt32(n) => Some(f64::from(*n)),
         _ => None,
     }
 }
