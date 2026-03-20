@@ -135,6 +135,20 @@ fn delete_pinned_insight(state: tauri::State<'_, AppState>, id: i64) -> Result<(
     state.db.delete_pinned_insight(id).map_err(|e| e.to_string())
 }
 
+fn generate_session_title(content: &str) -> String {
+    let trimmed = content.trim();
+    if trimmed.len() <= 50 {
+        return trimmed.to_string();
+    }
+    let truncated = &trimmed[..50];
+    truncated
+        .rfind(' ')
+        .map_or_else(
+            || format!("{truncated}..."),
+            |pos| format!("{}...", &truncated[..pos]),
+        )
+}
+
 #[tauri::command]
 async fn send_message(
     state: tauri::State<'_, AppState>,
@@ -156,6 +170,16 @@ async fn send_message(
         .db
         .insert_chat_message(&session_id, "user", &content)
         .map_err(|e| e.to_string())?;
+
+    let sessions = state.db.get_chat_sessions().map_err(|e| e.to_string())?;
+    let current = sessions.iter().find(|s| s.id == session_id);
+    if current.is_some_and(|s| s.title.is_none()) {
+        let title = generate_session_title(&content);
+        state
+            .db
+            .update_chat_session_title(&session_id, &title)
+            .map_err(|e| e.to_string())?;
+    }
 
     let settings = state
         .db
@@ -227,6 +251,19 @@ fn delete_chat_session(
     session_id: String,
 ) -> Result<(), String> {
     state.db.delete_chat_session(&session_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
+fn rename_chat_session(
+    state: tauri::State<'_, AppState>,
+    session_id: String,
+    title: String,
+) -> Result<(), String> {
+    state
+        .db
+        .update_chat_session_title(&session_id, &title)
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -405,6 +442,34 @@ fn update_session_status(
         .map_err(|e| e.to_string())
 }
 
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
+fn get_athlete_summary(state: tauri::State<'_, AppState>) -> Result<Option<serde_json::Value>, String> {
+    let raw = state.db.get_athlete_stats().map_err(|e| e.to_string())?;
+    match raw {
+        Some(json_str) => {
+            let val: serde_json::Value =
+                serde_json::from_str(&json_str).map_err(|e| e.to_string())?;
+            Ok(Some(val))
+        }
+        None => Ok(None),
+    }
+}
+
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
+fn get_athlete_zones_data(state: tauri::State<'_, AppState>) -> Result<Option<serde_json::Value>, String> {
+    let raw = state.db.get_athlete_zones().map_err(|e| e.to_string())?;
+    match raw {
+        Some(json_str) => {
+            let val: serde_json::Value =
+                serde_json::from_str(&json_str).map_err(|e| e.to_string())?;
+            Ok(Some(val))
+        }
+        None => Ok(None),
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -447,6 +512,7 @@ pub fn run() {
             get_chat_messages,
             create_chat_session,
             delete_chat_session,
+            rename_chat_session,
             get_ollama_models,
             import_fit_file,
             export_context,
@@ -460,6 +526,8 @@ pub fn run() {
             get_active_plan,
             get_plan_weeks,
             update_session_status,
+            get_athlete_summary,
+            get_athlete_zones_data,
         ])
         .run(tauri::generate_context!())
         .unwrap_or_else(|e| eprintln!("Error while running tauri application: {e}"));

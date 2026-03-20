@@ -210,6 +210,15 @@ impl Database {
             );
         ",
         )?;
+
+        // Add title column to existing chat_sessions tables (safe to run if column already exists)
+        let has_title_col: bool = conn
+            .prepare("SELECT title FROM chat_sessions LIMIT 0")
+            .is_ok();
+        if !has_title_col {
+            conn.execute_batch("ALTER TABLE chat_sessions ADD COLUMN title TEXT")?;
+        }
+
         Ok(())
     }
 
@@ -521,18 +530,20 @@ impl Database {
         )?;
         Ok(super::models::SessionData {
             id,
+            title: None,
             created_at: now,
         })
     }
 
     pub fn get_chat_sessions(&self) -> SqlResult<Vec<super::models::SessionData>> {
         let conn = self.conn();
-        let mut stmt =
-            conn.prepare("SELECT id, created_at FROM chat_sessions ORDER BY created_at DESC")?;
+        let mut stmt = conn
+            .prepare("SELECT id, title, created_at FROM chat_sessions ORDER BY created_at DESC")?;
         let rows = stmt.query_map([], |row| {
             Ok(super::models::SessionData {
                 id: row.get(0)?,
-                created_at: row.get(1)?,
+                title: row.get(1)?,
+                created_at: row.get(2)?,
             })
         })?;
         rows.collect()
@@ -547,6 +558,15 @@ impl Database {
         conn.execute(
             "DELETE FROM chat_sessions WHERE id = ?1",
             params![session_id],
+        )?;
+        Ok(())
+    }
+
+    pub fn update_chat_session_title(&self, session_id: &str, title: &str) -> SqlResult<()> {
+        let conn = self.conn();
+        conn.execute(
+            "UPDATE chat_sessions SET title = ?1 WHERE id = ?2",
+            params![title, session_id],
         )?;
         Ok(())
     }
