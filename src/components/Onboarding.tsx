@@ -2,6 +2,11 @@ import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Check, ChevronRight, ChevronLeft, Zap, Globe, Settings } from "lucide-react";
 
+interface Toast {
+  message: string;
+  type: "success" | "error";
+}
+
 export default function Onboarding({ onComplete }: { onComplete: () => void }) {
   const [step, setStep] = useState(1);
   const [stravaAvailable, setStravaAvailable] = useState(false);
@@ -11,13 +16,23 @@ export default function Onboarding({ onComplete }: { onComplete: () => void }) {
   const [models, setModels] = useState<string[]>([]);
   const [fetchingModels, setFetchingModels] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [toast, setToast] = useState<Toast | null>(null);
+
+  const showToast = (message: string, type: "success" | "error") => {
+    setToast({ message, type });
+    setTimeout(() => {
+      setToast(null);
+    }, 3000);
+  };
 
   useEffect(() => {
     const checkStrava = async () => {
       try {
         const available = await invoke<boolean>("get_strava_credentials_available");
         setStravaAvailable(available);
-      } catch { /* empty */ }
+      } catch {
+        showToast("Failed to check Strava status", "error");
+      }
     };
     void checkStrava();
   }, []);
@@ -26,7 +41,9 @@ export default function Onboarding({ onComplete }: { onComplete: () => void }) {
     try {
       await invoke("start_strava_auth");
       setStravaConnected(true);
-    } catch { /* empty */ }
+    } catch {
+      showToast("Failed to connect Strava", "error");
+    }
   };
 
   const fetchModels = async () => {
@@ -37,7 +54,9 @@ export default function Onboarding({ onComplete }: { onComplete: () => void }) {
       if (fetchedModels.length > 0 && !ollamaModel) {
         setOllamaModel(fetchedModels[0]);
       }
-    } catch { /* empty */ } finally {
+    } catch {
+      showToast("Failed to fetch models", "error");
+    } finally {
       setFetchingModels(false);
     }
   };
@@ -54,7 +73,9 @@ export default function Onboarding({ onComplete }: { onComplete: () => void }) {
         }
       });
       onComplete();
-    } catch { /* empty */ } finally {
+    } catch {
+      showToast("Failed to save settings", "error");
+    } finally {
       setSaving(false);
     }
   };
@@ -255,6 +276,11 @@ export default function Onboarding({ onComplete }: { onComplete: () => void }) {
           </div>
         )}
       </div>
+      {toast && (
+        <div className={`toast toast-${toast.type}`}>
+          {toast.message}
+        </div>
+      )}
     </div>
   );
 }

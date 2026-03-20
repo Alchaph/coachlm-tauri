@@ -65,7 +65,9 @@ export default function Context() {
         }
       }
       setInsights(ins);
-    } catch { /* empty */ }
+    } catch {
+      showToast("Failed to load context data", "error");
+    }
   };
 
   const saveProfile = async () => {
@@ -89,7 +91,9 @@ export default function Context() {
     try {
       await invoke("delete_pinned_insight", { id });
       setInsights((prev) => prev.filter((i) => i.id !== id));
-    } catch { /* empty */ }
+    } catch {
+      showToast("Failed to delete insight", "error");
+    }
   };
 
   const loadPreview = async () => {
@@ -97,7 +101,9 @@ export default function Context() {
       const preview = await invoke<string>("get_context_preview");
       setContextPreview(preview);
       setShowPreview(true);
-    } catch { /* empty */ }
+    } catch {
+      showToast("Failed to load preview", "error");
+    }
   };
 
   const numberField = (label: string, field: keyof ProfileData, htmlFor: string, min?: number, max?: number) => (

@@ -36,18 +36,18 @@ export default function Chat() {
 
   useEffect(() => { scrollToBottom(); }, [messages, scrollToBottom]);
 
-  useEffect(() => {
-    const loadSessions = async () => {
-      try {
-        const s = await invoke<Session[]>("get_chat_sessions");
-        setSessions(s);
-        if (s.length > 0 && !currentSessionId) {
-          await loadSession(s[0].id);
-        }
-      } catch { /* empty */ }
-    };
-    void loadSessions();
-  }, [currentSessionId]);
+   useEffect(() => {
+     const loadSessions = async () => {
+       try {
+         const s = await invoke<Session[]>("get_chat_sessions");
+         setSessions(s);
+         if (s.length > 0 && !currentSessionId) {
+           await loadSession(s[0].id);
+         }
+       } catch (e: unknown) { setError(String(e)); }
+     };
+     void loadSessions();
+   }, [currentSessionId]);
 
   const loadSession = async (sessionId: string) => {
     try {
