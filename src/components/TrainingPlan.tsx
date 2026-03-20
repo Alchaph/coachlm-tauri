@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { Plus, Trash2, Trophy, Calendar, Check, X, RefreshCw, ChevronLeft } from "lucide-react";
+import { Plus, Trash2, Trophy, Calendar, Check, X, RefreshCw, ChevronLeft, Pencil } from "lucide-react";
 
 interface Race {
   id: string;
@@ -58,6 +58,7 @@ export default function TrainingPlan({ onPlanChange }: { onPlanChange: (hasPlan:
   const [error, setError] = useState<string | null>(null);
   
   const [showAddRace, setShowAddRace] = useState(false);
+  const [editingRaceId, setEditingRaceId] = useState<string | null>(null);
   const [raceName, setRaceName] = useState("");
   const [raceDistance, setRaceDistance] = useState<number>(21.1);
   const [raceDate, setRaceDate] = useState("");
@@ -108,16 +109,49 @@ export default function TrainingPlan({ onPlanChange }: { onPlanChange: (hasPlan:
     }
   };
 
-  const handleAddRace = async () => {
+  const resetRaceForm = () => {
+    setShowAddRace(false);
+    setEditingRaceId(null);
+    setRaceName("");
+    setRaceDistance(21.1);
+    setRaceDate("");
+    setRaceTerrain("road");
+    setRaceElevation("");
+    setRaceGoalTime("");
+    setRacePriority("A");
+  };
+
+  const formatGoalTime = (seconds: number): string => {
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = seconds % 60;
+    return `${String(h)}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  };
+
+  const startEditRace = (race: Race) => {
+    setEditingRaceId(race.id);
+    setShowAddRace(true);
+    setRaceName(race.name);
+    setRaceDistance(race.distance_km);
+    setRaceDate(race.race_date);
+    setRaceTerrain(race.terrain);
+    setRaceElevation(race.elevation_m !== null ? String(race.elevation_m) : "");
+    setRaceGoalTime(race.goal_time_s !== null ? formatGoalTime(race.goal_time_s) : "");
+    setRacePriority(race.priority);
+  };
+
+  const handleSaveRace = async () => {
     if (!raceName || !raceDate) {
       setError("Name and Date are required");
       return;
     }
 
-    const dateObj = new Date(raceDate);
-    if (dateObj < new Date()) {
-      setError("Race date must be in the future");
-      return;
+    if (!editingRaceId) {
+      const dateObj = new Date(raceDate);
+      if (dateObj < new Date()) {
+        setError("Race date must be in the future");
+        return;
+      }
     }
 
     let goalTimeS: number | null = null;
@@ -131,26 +165,40 @@ export default function TrainingPlan({ onPlanChange }: { onPlanChange: (hasPlan:
     }
 
     try {
-      await invoke("create_race", {
-        race: {
-          id: "",
-          name: raceName,
-          distance_km: raceDistance,
-          race_date: raceDate,
-          terrain: raceTerrain,
-          elevation_m: raceElevation ? parseInt(raceElevation) : null,
-          goal_time_s: goalTimeS,
-          priority: racePriority,
-          is_active: false,
-          created_at: ""
-        }
-      });
-       setShowAddRace(false);
-       setRaceName("");
-       setRaceDate("");
-       setRaceGoalTime("");
-       setRaceElevation("");
-       void loadRaces();
+      if (editingRaceId) {
+        const existingRace = races.find(r => r.id === editingRaceId);
+        await invoke("update_race", {
+          race: {
+            id: editingRaceId,
+            name: raceName,
+            distance_km: raceDistance,
+            race_date: raceDate,
+            terrain: raceTerrain,
+            elevation_m: raceElevation ? parseInt(raceElevation) : null,
+            goal_time_s: goalTimeS,
+            priority: racePriority,
+            is_active: existingRace?.is_active ?? false,
+            created_at: existingRace?.created_at ?? ""
+          }
+        });
+      } else {
+        await invoke("create_race", {
+          race: {
+            id: "",
+            name: raceName,
+            distance_km: raceDistance,
+            race_date: raceDate,
+            terrain: raceTerrain,
+            elevation_m: raceElevation ? parseInt(raceElevation) : null,
+            goal_time_s: goalTimeS,
+            priority: racePriority,
+            is_active: false,
+            created_at: ""
+          }
+        });
+      }
+      resetRaceForm();
+      void loadRaces();
     } catch (e) {
       setError(String(e));
     }
@@ -239,7 +287,7 @@ export default function TrainingPlan({ onPlanChange }: { onPlanChange: (hasPlan:
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
         <h1 style={{ fontSize: 20, fontWeight: 700 }}>Race Goals</h1>
-        <button className="btn-primary" onClick={() => { setShowAddRace(true); }} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        <button className="btn-primary" onClick={() => { resetRaceForm(); setShowAddRace(true); }} style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <Plus size={16} /> Add Race
         </button>
       </div>
@@ -248,7 +296,7 @@ export default function TrainingPlan({ onPlanChange }: { onPlanChange: (hasPlan:
 
       {showAddRace && (
         <div className="card" style={{ marginBottom: 24 }}>
-          <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 16 }}>New Race Goal</h2>
+          <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 16 }}>{editingRaceId ? "Edit Race Goal" : "New Race Goal"}</h2>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
             <div>
               <label htmlFor="raceName">Race Name</label>
@@ -300,8 +348,8 @@ export default function TrainingPlan({ onPlanChange }: { onPlanChange: (hasPlan:
             </div>
           </div>
            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-             <button className="btn-ghost" onClick={() => { setShowAddRace(false); }}>Cancel</button>
-             <button className="btn-primary" onClick={() => { void handleAddRace(); }}>Save Race</button>
+             <button className="btn-ghost" onClick={() => { resetRaceForm(); }}>Cancel</button>
+             <button className="btn-primary" onClick={() => { void handleSaveRace(); }}>{editingRaceId ? "Update Race" : "Save Race"}</button>
           </div>
         </div>
       )}
@@ -332,9 +380,12 @@ export default function TrainingPlan({ onPlanChange }: { onPlanChange: (hasPlan:
                    {!race.is_active && (
                      <button className="btn-secondary" onClick={() => { void handleSetActiveRace(race.id); }}>Set Active</button>
                    )}
+                   <button className="btn-ghost" onClick={() => { startEditRace(race); }} title="Edit race">
+                    <Pencil size={16} />
+                   </button>
                    <button className="btn-ghost" onClick={() => { void handleDeleteRace(race.id); }} style={{ color: "var(--danger)" }}>
                     <Trash2 size={16} />
-                  </button>
+                   </button>
                 </div>
               </div>
                {race.is_active && (

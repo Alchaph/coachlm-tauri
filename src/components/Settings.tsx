@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { save, open } from "@tauri-apps/plugin-dialog";
-import { Save, RefreshCw, Plug, Unplug, Download, Upload, Check, X } from "lucide-react";
+import { Save, RefreshCw, Plug, Unplug, Download, Upload, FileUp, Check, X } from "lucide-react";
 
 interface SettingsData {
   active_llm: string;
@@ -36,6 +37,15 @@ export default function SettingsPage() {
 
   useEffect(() => {
     void loadData();
+
+    let unlisten: (() => void) | undefined;
+    void (async () => {
+      unlisten = await listen("strava:auth:complete", () => {
+        void loadData();
+      });
+    })();
+
+    return () => { unlisten?.(); };
   }, []);
 
   const loadData = async () => {
@@ -52,7 +62,9 @@ export default function SettingsPage() {
       });
       setStravaAuth(auth);
       setStravaAvailable(available);
-    } catch { /* empty */ }
+    } catch {
+      showToast("Failed to load settings", "error");
+    }
   };
 
   const showToast = (message: string, type: "success" | "error") => {
@@ -77,7 +89,9 @@ export default function SettingsPage() {
     try {
       const fetchedModels = await invoke<string[]>("get_ollama_models", { endpoint: settings.ollama_endpoint });
       setModels(fetchedModels);
-    } catch { /* empty */ } finally {
+    } catch {
+      showToast("Failed to fetch models", "error");
+    } finally {
       setFetchingModels(false);
     }
   };
@@ -85,13 +99,9 @@ export default function SettingsPage() {
   const connectStrava = async () => {
     try {
       await invoke("start_strava_auth");
-      setTimeout(async () => {
-        try {
-          const auth = await invoke<StravaAuthStatus>("get_strava_auth_status");
-          setStravaAuth(auth);
-        } catch { /* empty */ }
-      }, 2000);
-    } catch { /* empty */ }
+    } catch {
+      showToast("Failed to connect Strava", "error");
+    }
   };
 
   const disconnectStrava = async () => {
@@ -99,7 +109,10 @@ export default function SettingsPage() {
       await invoke("disconnect_strava");
       const auth = await invoke<StravaAuthStatus>("get_strava_auth_status");
       setStravaAuth(auth);
-    } catch { /* empty */ }
+      showToast("Strava disconnected", "success");
+    } catch {
+      showToast("Failed to disconnect Strava", "error");
+    }
   };
 
   const exportContext = async () => {
@@ -111,8 +124,11 @@ export default function SettingsPage() {
       });
       if (filePath) {
         await invoke("export_context", { filePath });
+        showToast("Context exported", "success");
       }
-    } catch { /* empty */ }
+    } catch {
+      showToast("Failed to export context", "error");
+    }
   };
 
   const importContext = async () => {
@@ -122,8 +138,25 @@ export default function SettingsPage() {
       });
       if (filePath && !Array.isArray(filePath)) {
         await invoke("import_context", { filePath, replaceAll: false });
+        showToast("Context imported", "success");
       }
-    } catch { /* empty */ }
+    } catch {
+      showToast("Failed to import context", "error");
+    }
+  };
+
+  const importFitFile = async () => {
+    try {
+      const filePath = await open({
+        filters: [{ name: "FIT File", extensions: ["fit"] }]
+      });
+      if (filePath && !Array.isArray(filePath)) {
+        const count = await invoke<number>("import_fit_file", { filePath });
+        showToast(`Imported ${String(count)} activities from FIT file`, "success");
+      }
+    } catch {
+      showToast("Failed to import FIT file", "error");
+    }
   };
 
   return (
@@ -253,12 +286,15 @@ export default function SettingsPage() {
             Export or import your athlete profile, pinned insights, and settings.
           </p>
           
-          <div style={{ display: "flex", gap: 12 }}>
+          <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
             <button className="btn-secondary" onClick={() => void exportContext()} style={{ display: "flex", alignItems: "center", gap: 6 }}>
               <Download size={16} /> Export Context
             </button>
             <button className="btn-secondary" onClick={() => void importContext()} style={{ display: "flex", alignItems: "center", gap: 6 }}>
               <Upload size={16} /> Import Context
+            </button>
+            <button className="btn-secondary" onClick={() => void importFitFile()} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <FileUp size={16} /> Import FIT File
             </button>
           </div>
         </div>
