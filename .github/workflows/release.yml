@@ -121,8 +121,8 @@ jobs:
           STRAVA_CLIENT_ID: ${{ secrets.STRAVA_CLIENT_ID }}
           STRAVA_CLIENT_SECRET: ${{ secrets.STRAVA_CLIENT_SECRET }}
         with:
-          tagName: v__VERSION__
-          releaseName: 'CoachLM v__VERSION__'
+          tagName: ${{ github.ref_name }}
+          releaseName: 'CoachLM ${{ github.ref_name }}'
           releaseBody: ${{ needs.changelog.outputs.notes }}
           releaseDraft: false
           prerelease: false
