@@ -219,6 +219,25 @@ impl Database {
             conn.execute_batch("ALTER TABLE chat_sessions ADD COLUMN title TEXT")?;
         }
 
+        // Add is_active column to training_plans (safe to run if column already exists)
+        let has_plan_active: bool = conn
+            .prepare("SELECT is_active FROM training_plans LIMIT 0")
+            .is_ok();
+        if !has_plan_active {
+            conn.execute_batch(
+                "ALTER TABLE training_plans ADD COLUMN is_active INTEGER DEFAULT 0",
+            )?;
+            // Migrate: set the most recent plan per active race as active
+            conn.execute_batch(
+                "UPDATE training_plans SET is_active = 1 WHERE id IN (
+                    SELECT tp.id FROM training_plans tp
+                    JOIN races r ON tp.race_id = r.id
+                    WHERE r.is_active = 1
+                    ORDER BY tp.generated_at DESC LIMIT 1
+                )",
+            )?;
+        }
+
         // Add enhanced activity columns (safe to run if columns already exist)
         let new_activity_cols = [
             ("elapsed_time", "INTEGER"),
@@ -830,14 +849,15 @@ impl Database {
     pub fn save_training_plan(&self, plan: &super::models::TrainingPlan) -> SqlResult<()> {
         let conn = self.conn();
         conn.execute(
-            "INSERT INTO training_plans (id, race_id, generated_at, llm_backend, prompt_hash)
-             VALUES (?1, ?2, ?3, ?4, ?5)",
+            "INSERT INTO training_plans (id, race_id, generated_at, llm_backend, prompt_hash, is_active)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             params![
                 plan.id,
                 plan.race_id,
                 plan.generated_at,
                 plan.llm_backend,
-                plan.prompt_hash
+                plan.prompt_hash,
+                plan.is_active,
             ],
         )?;
         Ok(())
@@ -878,10 +898,9 @@ impl Database {
     pub fn get_active_plan(&self) -> SqlResult<Option<super::models::TrainingPlan>> {
         let conn = self.conn();
         let result = conn.query_row(
-            "SELECT tp.id, tp.race_id, tp.generated_at, tp.llm_backend, tp.prompt_hash
+            "SELECT tp.id, tp.race_id, tp.generated_at, tp.llm_backend, tp.prompt_hash, tp.is_active
              FROM training_plans tp
-             JOIN races r ON tp.race_id = r.id
-             WHERE r.is_active = 1
+             WHERE tp.is_active = 1
              ORDER BY tp.generated_at DESC LIMIT 1",
             [],
             |row| {
@@ -891,6 +910,7 @@ impl Database {
                     generated_at: row.get(2)?,
                     llm_backend: row.get(3)?,
                     prompt_hash: row.get(4)?,
+                    is_active: row.get(5)?,
                 })
             },
         );
@@ -972,6 +992,50 @@ impl Database {
              WHERE id=?1",
             params![session_id, status, actual_duration_min, actual_distance_km, completed_at],
         )?;
+        Ok(())
+    }
+
+    pub fn list_plans(&self) -> SqlResult<Vec<super::models::TrainingPlanSummary>> {
+        let conn = self.conn();
+        let mut stmt = conn.prepare(
+            "SELECT tp.id, tp.race_id, r.name, tp.generated_at, tp.is_active,
+                    (SELECT COUNT(*) FROM plan_sessions ps
+                     JOIN plan_weeks pw ON ps.week_id = pw.id
+                     WHERE pw.plan_id = tp.id) AS total_sessions,
+                    (SELECT COUNT(*) FROM plan_sessions ps
+                     JOIN plan_weeks pw ON ps.week_id = pw.id
+                     WHERE pw.plan_id = tp.id AND ps.status = 'completed') AS completed_sessions
+             FROM training_plans tp
+             JOIN races r ON tp.race_id = r.id
+             ORDER BY tp.generated_at DESC",
+        )?;
+        let rows = stmt.query_map([], |row| {
+            Ok(super::models::TrainingPlanSummary {
+                id: row.get(0)?,
+                race_id: row.get(1)?,
+                race_name: row.get(2)?,
+                generated_at: row.get(3)?,
+                is_active: row.get(4)?,
+                total_sessions: row.get(5)?,
+                completed_sessions: row.get(6)?,
+            })
+        })?;
+        rows.collect()
+    }
+
+    pub fn set_active_plan(&self, plan_id: &str) -> SqlResult<()> {
+        let conn = self.conn();
+        conn.execute("UPDATE training_plans SET is_active = 0", [])?;
+        conn.execute(
+            "UPDATE training_plans SET is_active = 1 WHERE id = ?1",
+            params![plan_id],
+        )?;
+        Ok(())
+    }
+
+    pub fn deactivate_all_plans(&self) -> SqlResult<()> {
+        let conn = self.conn();
+        conn.execute("UPDATE training_plans SET is_active = 0", [])?;
         Ok(())
     }
 }

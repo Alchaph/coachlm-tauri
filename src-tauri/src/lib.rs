@@ -9,6 +9,7 @@ mod strava;
 use models::{
     ActivityData, AuthStatus, ExportData, InsightData, MessageData, OllamaMessage, PlanWeekWithSessions,
     ProfileData, Race, SessionData, SessionStatus, SettingsData, SettingsMeta, StatsData, TrainingPlan,
+    TrainingPlanSummary,
 };
 use std::sync::Arc;
 use storage::Database;
@@ -417,6 +418,21 @@ fn get_active_plan(state: tauri::State<'_, AppState>) -> Result<Option<TrainingP
 
 #[tauri::command]
 #[allow(clippy::needless_pass_by_value)]
+fn list_plans(state: tauri::State<'_, AppState>) -> Result<Vec<TrainingPlanSummary>, String> {
+    state.db.list_plans().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
+fn set_active_plan(
+    state: tauri::State<'_, AppState>,
+    plan_id: String,
+) -> Result<(), String> {
+    state.db.set_active_plan(&plan_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
 fn get_plan_weeks(
     state: tauri::State<'_, AppState>,
     plan_id: String,
@@ -524,6 +540,8 @@ pub fn run() {
             set_active_race,
             generate_plan_cmd,
             get_active_plan,
+            list_plans,
+            set_active_plan,
             get_plan_weeks,
             update_session_status,
             get_athlete_summary,

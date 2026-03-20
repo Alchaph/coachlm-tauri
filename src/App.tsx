@@ -5,7 +5,7 @@ import Chat from "./components/Chat";
 import Dashboard from "./components/Dashboard";
 import Context from "./components/Context";
 import SettingsPage from "./components/Settings";
-import TrainingPlan from "./components/TrainingPlan";
+import TrainingPlanPage from "./components/TrainingPlan";
 import Onboarding from "./components/Onboarding";
 import "./styles/global.css";
 import "./styles/markdown.css";
@@ -16,13 +16,11 @@ interface NavItem {
   id: Tab;
   label: string;
   icon: React.ReactNode;
-  hidden?: boolean;
 }
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>("chat");
   const [showOnboarding, setShowOnboarding] = useState(false);
-  const [hasPlan, setHasPlan] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -30,8 +28,6 @@ export default function App() {
       try {
         const firstRun = await invoke<boolean>("is_first_run");
         setShowOnboarding(firstRun);
-        const plan = await invoke("get_active_plan");
-        setHasPlan(plan !== null);
       } catch {
         setShowOnboarding(true);
       } finally {
@@ -61,7 +57,7 @@ export default function App() {
     { id: "chat", label: "Chat", icon: <MessageSquare size={20} /> },
     { id: "dashboard", label: "Dashboard", icon: <LayoutDashboard size={20} /> },
     { id: "context", label: "Context", icon: <Brain size={20} /> },
-    { id: "plan", label: "Training Plan", icon: <Calendar size={20} />, hidden: !hasPlan },
+    { id: "plan", label: "Plans", icon: <Calendar size={20} /> },
     { id: "settings", label: "Settings", icon: <SettingsIcon size={20} /> },
   ];
 
@@ -89,9 +85,7 @@ export default function App() {
         >
           CoachLM
         </div>
-        {navItems
-          .filter((item) => !item.hidden)
-          .map((item) => (
+        {navItems.map((item) => (
             <button
               key={item.id}
               onClick={() => { setActiveTab(item.id); }}
@@ -123,7 +117,7 @@ export default function App() {
         {activeTab === "chat" && <Chat />}
         {activeTab === "dashboard" && <Dashboard />}
         {activeTab === "context" && <Context />}
-        {activeTab === "plan" && <TrainingPlan onPlanChange={setHasPlan} />}
+        {activeTab === "plan" && <TrainingPlanPage />}
         {activeTab === "settings" && <SettingsPage />}
       </main>
     </div>

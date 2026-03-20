@@ -56,8 +56,10 @@ pub async fn generate_plan(
                     generated_at: now.to_rfc3339(),
                     llm_backend: settings.ollama_model.clone(),
                     prompt_hash: format!("{:x}", sha2::Sha256::digest(messages[1].content.as_bytes()))[..16].to_string(),
+                    is_active: true,
                 };
 
+                db.deactivate_all_plans().map_err(|e| e.to_string())?;
                 db.save_training_plan(&plan).map_err(|e| e.to_string())?;
 
                 for (week_num, sessions) in parsed {

@@ -115,6 +115,18 @@ pub struct TrainingPlan {
     pub generated_at: String,
     pub llm_backend: String,
     pub prompt_hash: String,
+    pub is_active: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TrainingPlanSummary {
+    pub id: String,
+    pub race_id: String,
+    pub race_name: String,
+    pub generated_at: String,
+    pub is_active: bool,
+    pub total_sessions: i64,
+    pub completed_sessions: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
