@@ -1,4 +1,4 @@
-use crate::models::*;
+use crate::models::{ActivityData, AuthStatus};
 use crate::storage::Database;
 use std::sync::Arc;
 use tauri::Emitter;
@@ -27,18 +27,17 @@ pub fn credentials_available() -> bool {
 pub async fn start_auth(db: Arc<Database>, app_handle: tauri::AppHandle) -> Result<(), String> {
     let client_id = get_client_id().ok_or("Strava client ID not configured")?;
     let client_secret = get_client_secret().ok_or("Strava client secret not configured")?;
-    let redirect_uri = format!("http://localhost:{}/callback", REDIRECT_PORT);
+    let redirect_uri = format!("http://localhost:{REDIRECT_PORT}/callback");
 
     let auth_url = format!(
-        "{}?client_id={}&redirect_uri={}&response_type=code&scope=read,activity:read_all",
-        STRAVA_AUTH_URL, client_id, redirect_uri
+        "{STRAVA_AUTH_URL}?client_id={client_id}&redirect_uri={redirect_uri}&response_type=code&scope=read,activity:read_all",
     );
 
-    let listener = tokio::net::TcpListener::bind(format!("127.0.0.1:{}", REDIRECT_PORT))
+    let listener = tokio::net::TcpListener::bind(format!("127.0.0.1:{REDIRECT_PORT}"))
         .await
-        .map_err(|e| format!("Failed to start callback server: {}", e))?;
+        .map_err(|e| format!("Failed to start callback server: {e}"))?;
 
-    open::that(&auth_url).map_err(|e| format!("Failed to open browser: {}", e))?;
+    open::that(&auth_url).map_err(|e| format!("Failed to open browser: {e}"))?;
 
     let (stream, _) = listener.accept().await.map_err(|e| e.to_string())?;
     let mut buf = vec![0u8; 4096];
@@ -64,7 +63,7 @@ pub async fn start_auth(db: Arc<Database>, app_handle: tauri::AppHandle) -> Resu
         ])
         .send()
         .await
-        .map_err(|e| format!("Token exchange failed: {}", e))?;
+        .map_err(|e| format!("Token exchange failed: {e}"))?;
 
     let token_data: serde_json::Value = token_response.json().await.map_err(|e| e.to_string())?;
 
@@ -76,6 +75,14 @@ pub async fn start_auth(db: Arc<Database>, app_handle: tauri::AppHandle) -> Resu
         .map_err(|e| e.to_string())?;
 
     app_handle.emit("strava:auth:complete", ()).ok();
+
+    let db_clone = db.clone();
+    let handle_clone = app_handle.clone();
+    tokio::spawn(async move {
+        if let Err(e) = sync_activities(db_clone, handle_clone).await {
+            log::warn!("Auto-sync after auth failed: {e}");
+        }
+    });
 
     Ok(())
 }
@@ -131,7 +138,7 @@ async fn get_valid_token(db: &Database) -> Result<String, String> {
         ])
         .send()
         .await
-        .map_err(|e| format!("Token refresh failed: {}", e))?;
+        .map_err(|e| format!("Token refresh failed: {e}"))?;
 
     let data: serde_json::Value = response.json().await.map_err(|e| e.to_string())?;
     let new_access = data["access_token"].as_str().ok_or("Missing access_token")?;
@@ -155,13 +162,13 @@ pub async fn sync_activities(db: Arc<Database>, app_handle: tauri::AppHandle) ->
     let mut total_fetched = 0i64;
 
     loop {
-        let url = format!("{}/athlete/activities?page={}&per_page=30", STRAVA_API_BASE, page);
+        let url = format!("{STRAVA_API_BASE}/athlete/activities?page={page}&per_page=30");
         let response = client
             .get(&url)
             .bearer_auth(&token)
             .send()
             .await
-            .map_err(|e| format!("Failed to fetch activities: {}", e))?;
+            .map_err(|e| format!("Failed to fetch activities: {e}"))?;
 
         if response.status() == 429 {
             let retry_after: u64 = response
@@ -175,7 +182,7 @@ pub async fn sync_activities(db: Arc<Database>, app_handle: tauri::AppHandle) ->
         }
 
         if !response.status().is_success() {
-            return Err(format!("Strava API error: {}", response.status()));
+        return Err(format!("Strava API error: {}", response.status()));
         }
 
         let activities: Vec<serde_json::Value> = response.json().await.map_err(|e| e.to_string())?;
@@ -202,7 +209,7 @@ pub async fn sync_activities(db: Arc<Database>, app_handle: tauri::AppHandle) ->
             match db.insert_activity(&activity) {
                 Ok(true) => new_count += 1,
                 Ok(false) => {}
-                Err(e) => log::warn!("Failed to insert activity: {}", e),
+                Err(e) => log::warn!("Failed to insert activity: {e}"),
             }
             total_fetched += 1;
         }
@@ -234,10 +241,12 @@ pub async fn sync_activities(db: Arc<Database>, app_handle: tauri::AppHandle) ->
     Ok(())
 }
 
+/// Planned for future use: fetches athlete heart rate zones from Strava API.
+#[allow(dead_code)]
 pub async fn fetch_athlete_zones(db: &Database) -> Result<(), String> {
     let token = get_valid_token(db).await?;
     let client = reqwest::Client::new();
-    let url = format!("{}/athlete/zones", STRAVA_API_BASE);
+    let url = format!("{STRAVA_API_BASE}/athlete/zones");
     let response = client.get(&url).bearer_auth(&token).send().await.map_err(|e| e.to_string())?;
     if response.status().is_success() {
         let data: serde_json::Value = response.json().await.map_err(|e| e.to_string())?;
@@ -246,10 +255,12 @@ pub async fn fetch_athlete_zones(db: &Database) -> Result<(), String> {
     Ok(())
 }
 
+/// Planned for future use: fetches athlete training stats from Strava API.
+#[allow(dead_code)]
 pub async fn fetch_athlete_stats(db: &Database, athlete_id: &str) -> Result<(), String> {
     let token = get_valid_token(db).await?;
     let client = reqwest::Client::new();
-    let url = format!("{}/athletes/{}/stats", STRAVA_API_BASE, athlete_id);
+    let url = format!("{STRAVA_API_BASE}/athletes/{athlete_id}/stats");
     let response = client.get(&url).bearer_auth(&token).send().await.map_err(|e| e.to_string())?;
     if response.status().is_success() {
         let data: serde_json::Value = response.json().await.map_err(|e| e.to_string())?;
