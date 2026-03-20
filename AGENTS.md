@@ -48,6 +48,18 @@ git tag --sort=-v:refname | head -5
 
 Use the next semver after the highest `vX.Y.Z` tag. Do not create `v0.XX` style tags for individual stories. Every release tag must be a proper `vMAJOR.MINOR.PATCH` that advances the sequence.
 
+### Version files (must stay in sync with the git tag)
+
+Three places carry the version. All three must match the tag being created:
+
+| File | Field | Example |
+|---|---|---|
+| `package.json` | `"version"` | `"1.4.0"` |
+| `src-tauri/tauri.conf.json` | `"version"` | `"1.4.0"` |
+| git tag | `vX.Y.Z` | `v1.4.0` |
+
+Before creating a release tag, update both files to the new version and include the change in the release commit. Failing to do this will cause the app binary to report the wrong version.
+
 ### Release notes
 
 Every release must include notes. The release workflow auto-generates them from commit messages since the previous tag, grouped by type:
@@ -224,6 +236,7 @@ To add a new backend, implement the same function signatures and add a story.
 - Do not use `unsafe` in Rust without justification.
 - Do not use `unwrap()` in production paths. Use `map_err` or `?` instead.
 - Do not modify another story's status unless you are working on it.
+- Do not create a release tag without updating the version in both `package.json` and `src-tauri/tauri.conf.json` to match.
 
 ---
 
