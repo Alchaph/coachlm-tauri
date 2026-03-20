@@ -2,10 +2,12 @@ use crate::models::{OllamaMessage, PlanSession, PlanWeek, ProfileData, Race, Tra
 use crate::storage::Database;
 use std::fmt::Write;
 use std::sync::Arc;
+use tauri::Emitter;
 
 pub async fn generate_plan(
     db: Arc<Database>,
     race_id: &str,
+    app_handle: &tauri::AppHandle,
 ) -> Result<TrainingPlan, String> {
     let races = db.list_races().map_err(|e| e.to_string())?;
     let race = races.iter().find(|r| r.id == race_id)
@@ -14,11 +16,13 @@ pub async fn generate_plan(
     let settings = db.get_settings().map_err(|e| e.to_string())?
         .ok_or("Settings not configured")?;
 
+    app_handle.emit("plan:generate:progress", serde_json::json!({ "status": "Loading athlete profile..." })).ok();
+
     let profile = db.get_profile().map_err(|e| e.to_string())?.unwrap_or(ProfileData {
         age: None, max_hr: None, resting_hr: None, threshold_pace_secs: None,
         weekly_mileage_target: None, race_goals: None, injury_history: None,
         experience_level: None, training_days_per_week: None, preferred_terrain: None,
-        heart_rate_zones: None,
+        heart_rate_zones: None, custom_notes: None,
     });
 
     let now = chrono::Utc::now();
@@ -31,6 +35,8 @@ pub async fn generate_plan(
         return Err("Race date is in the past".to_string());
     }
 
+    app_handle.emit("plan:generate:progress", serde_json::json!({ "status": "Building training context..." })).ok();
+
     let prompt = build_plan_prompt(&profile, race, weeks_to_race);
 
     let llm_context = crate::context::build_context(&db);
@@ -40,7 +46,11 @@ pub async fn generate_plan(
     ];
 
     let mut last_error = String::new();
-    for _attempt in 0..3 {
+    for attempt in 0..3u8 {
+        app_handle.emit("plan:generate:progress", serde_json::json!({
+            "status": format!("Generating plan with AI... (attempt {}/3)", attempt + 1)
+        })).ok();
+
         let response = crate::llm::chat(
             &settings,
             messages.clone(),
@@ -48,6 +58,8 @@ pub async fn generate_plan(
 
         match parse_plan_response(&response, race, weeks_to_race) {
             Ok(parsed) => {
+                app_handle.emit("plan:generate:progress", serde_json::json!({ "status": "Parsing plan structure..." })).ok();
+
                 let plan_id = uuid::Uuid::new_v4().to_string();
                 let plan = TrainingPlan {
                     id: plan_id.clone(),
@@ -62,6 +74,7 @@ pub async fn generate_plan(
                 };
 
                 db.deactivate_all_plans().map_err(|e| e.to_string())?;
+                app_handle.emit("plan:generate:progress", serde_json::json!({ "status": "Saving plan..." })).ok();
                 db.save_training_plan(&plan).map_err(|e| e.to_string())?;
 
                 for (week_num, sessions) in parsed {
@@ -186,6 +199,7 @@ mod tests {
             training_days_per_week: None,
             preferred_terrain: None,
             heart_rate_zones: None,
+            custom_notes: None,
         }
     }
 

@@ -13,7 +13,7 @@ use models::{
 };
 use std::sync::Arc;
 use storage::Database;
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 
 pub struct AppState {
     pub db: Arc<Database>,
@@ -400,9 +400,22 @@ fn set_active_race(state: tauri::State<'_, AppState>, id: String) -> Result<(), 
 #[tauri::command]
 async fn generate_plan_cmd(
     state: tauri::State<'_, AppState>,
+    app_handle: tauri::AppHandle,
     race_id: String,
-) -> Result<TrainingPlan, String> {
-    plan::generate_plan(state.db.clone(), &race_id).await
+) -> Result<(), String> {
+    let db = state.db.clone();
+    app_handle.emit("plan:generate:start", ()).ok();
+    tauri::async_runtime::spawn(async move {
+        match plan::generate_plan(db, &race_id, &app_handle).await {
+            Ok(plan) => {
+                app_handle.emit("plan:generate:complete", &plan).ok();
+            }
+            Err(e) => {
+                app_handle.emit("plan:generate:error", serde_json::json!({ "message": e })).ok();
+            }
+        }
+    });
+    Ok(())
 }
 
 #[tauri::command]

@@ -44,7 +44,7 @@ input, textarea, select, button {
 input, textarea, select {
   background: var(--bg-tertiary);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 0;
   padding: 8px 12px;
   color: var(--text-primary);
   outline: none;
@@ -62,7 +62,7 @@ input::placeholder, textarea::placeholder {
 button {
   cursor: pointer;
   border: none;
-  border-radius: 6px;
+  border-radius: 0;
   padding: 8px 16px;
   font-weight: 500;
   transition: background 0.2s, opacity 0.2s;
@@ -117,7 +117,7 @@ button:disabled {
 }
 ::-webkit-scrollbar-thumb {
   background: #475569;
-  border-radius: 6px;
+  border-radius: 0;
 }
 ::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;
@@ -137,7 +137,7 @@ label {
 .card {
   background: var(--bg-secondary);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 0;
   padding: 16px;
 }
 
@@ -169,7 +169,7 @@ a:hover {
   align-items: center;
   gap: 8px;
   padding: 12px 20px;
-  border-radius: 8px;
+  border-radius: 0;
   font-size: 13px;
   font-weight: 500;
   color: white;
@@ -284,7 +284,7 @@ a:hover {
   gap: 8px;
   padding: 8px 10px;
   margin: 1px 4px;
-  border-radius: 6px;
+  border-radius: 0;
   background: transparent;
   color: var(--text-secondary);
   font-size: 13px;
@@ -319,7 +319,7 @@ a:hover {
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 4px;
+  border-radius: 0;
   padding: 2px;
   opacity: 0;
   transition: opacity 0.15s, background 0.15s;

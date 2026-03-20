@@ -23,6 +23,7 @@ pub struct ProfileData {
     pub training_days_per_week: Option<i64>,
     pub preferred_terrain: Option<String>,
     pub heart_rate_zones: Option<String>,
+    pub custom_notes: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

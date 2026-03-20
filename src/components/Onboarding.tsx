@@ -105,8 +105,8 @@ export default function Onboarding({ onComplete }: { onComplete: () => void }) {
             </div>
             <h1 style={{ fontSize: 28, fontWeight: 700, margin: 0 }}>CoachLM</h1>
             <p style={{ fontSize: 18, color: "var(--text-secondary)", margin: 0 }}>Your personal AI running coach</p>
-            <div style={{ background: "var(--bg-tertiary)", padding: 16, borderRadius: 8, textAlign: "left", marginTop: 16 }}>
-              <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: 12 }}>
+             <div style={{ background: "var(--bg-tertiary)", padding: 16, borderRadius: 0, textAlign: "left", marginTop: 16 }}>
+               <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: 12 }}>
                 <li style={{ display: "flex", alignItems: "center", gap: 12 }}>
                   <Globe size={20} color="var(--accent)" />
                   <span>Connects to your Strava account</span>
@@ -136,8 +136,8 @@ export default function Onboarding({ onComplete }: { onComplete: () => void }) {
               Sync your running activities automatically to get personalized coaching insights.
             </p>
             
-            <div style={{ background: "var(--bg-tertiary)", padding: 24, borderRadius: 8, display: "flex", flexDirection: "column", alignItems: "center", gap: 16, marginTop: 8 }}>
-              {!stravaAvailable ? (
+             <div style={{ background: "var(--bg-tertiary)", padding: 24, borderRadius: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 16, marginTop: 8 }}>
+               {!stravaAvailable ? (
                 <div style={{ textAlign: "center", color: "var(--text-muted)" }}>
                   <p>Strava integration not available (no credentials configured).</p>
                 </div>
@@ -212,7 +212,7 @@ export default function Onboarding({ onComplete }: { onComplete: () => void }) {
                             key={m}
                             className={ollamaModel === m ? "btn-primary" : "btn-secondary"}
                             onClick={() => { setOllamaModel(m); }}
-                            style={{ padding: "4px 12px", fontSize: 13, borderRadius: 16 }}
+                            style={{ padding: "4px 12px", fontSize: 13, borderRadius: 0 }}
                           >
                             {m}
                           </button>
@@ -296,25 +296,25 @@ export default function Onboarding({ onComplete }: { onComplete: () => void }) {
               You're ready to start using CoachLM.
             </p>
 
-            <div style={{ background: "var(--bg-tertiary)", padding: 24, borderRadius: 8, display: "flex", flexDirection: "column", gap: 16, marginTop: 8 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <div style={{ background: "var(--success)", borderRadius: "50%", padding: 4, display: "flex" }}>
-                  <Check size={16} color="white" />
-                </div>
-                <span>Settings configured</span>
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <div style={{ background: stravaConnected ? "var(--success)" : "var(--text-muted)", borderRadius: "50%", padding: 4, display: "flex" }}>
-                  <Check size={16} color="white" />
-                </div>
-                <span style={{ color: stravaConnected ? "inherit" : "var(--text-muted)" }}>
-                  {stravaConnected ? "Strava connected" : "Strava skipped"}
-                </span>
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <div style={{ background: (provider === "ollama" ? ollamaModel : cloudModel) ? "var(--success)" : "var(--text-muted)", borderRadius: "50%", padding: 4, display: "flex" }}>
-                  <Check size={16} color="white" />
-                </div>
+             <div style={{ background: "var(--bg-tertiary)", padding: 24, borderRadius: 0, display: "flex", flexDirection: "column", gap: 16, marginTop: 8 }}>
+               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                 <div style={{ background: "var(--success)", borderRadius: "50%", padding: 4, display: "flex" }}>
+                   <Check size={16} color="white" />
+                 </div>
+                 <span>Settings configured</span>
+               </div>
+               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                 <div style={{ background: stravaConnected ? "var(--success)" : "var(--text-muted)", borderRadius: "50%", padding: 4, display: "flex" }}>
+                   <Check size={16} color="white" />
+                 </div>
+                 <span style={{ color: stravaConnected ? "inherit" : "var(--text-muted)" }}>
+                   {stravaConnected ? "Strava connected" : "Strava skipped"}
+                 </span>
+               </div>
+               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                 <div style={{ background: (provider === "ollama" ? ollamaModel : cloudModel) ? "var(--success)" : "var(--text-muted)", borderRadius: "50%", padding: 4, display: "flex" }}>
+                   <Check size={16} color="white" />
+                 </div>
                 <span style={{ color: (provider === "ollama" ? ollamaModel : cloudModel) ? "inherit" : "var(--text-muted)" }}>
                   {provider === "ollama"
                     ? (ollamaModel ? `Ollama model: ${ollamaModel}` : "No model selected")

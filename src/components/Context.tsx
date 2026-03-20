@@ -14,6 +14,7 @@ interface ProfileData {
   training_days_per_week: number | null;
   preferred_terrain: string | null;
   heart_rate_zones: string | null;
+  custom_notes: string | null;
 }
 
 interface Insight {
@@ -34,6 +35,7 @@ export default function Context() {
     weekly_mileage_target: null, race_goals: null, injury_history: null,
     experience_level: null, training_days_per_week: null, preferred_terrain: null,
     heart_rate_zones: null,
+    custom_notes: null,
   });
   const [insights, setInsights] = useState<Insight[]>([]);
   const [contextPreview, setContextPreview] = useState<string | null>(null);
@@ -250,6 +252,18 @@ export default function Context() {
               onChange={(e) => { setProfile({ ...profile, injury_history: e.target.value || null }); }}
               rows={2}
               style={{ width: "100%", resize: "vertical" }}
+            />
+          </div>
+
+          <div style={{ marginBottom: 16 }}>
+            <label htmlFor="profile-notes">Custom notes</label>
+            <textarea
+              id="profile-notes"
+              value={profile.custom_notes ?? ""}
+              onChange={(e) => { setProfile({ ...profile, custom_notes: e.target.value || null }); }}
+              rows={4}
+              style={{ width: "100%", resize: "vertical" }}
+              placeholder="Add any training context here — weekly schedule, preferred workouts, limitations, or anything else the coach should know."
             />
           </div>
 

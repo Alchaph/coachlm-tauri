@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Send, Pin, Plus, X, Dumbbell, MessageSquare, PanelLeftClose, PanelLeftOpen, Check } from "lucide-react";
+import { Send, Pin, Plus, X, MessageSquare, PanelLeftClose, PanelLeftOpen, Check } from "lucide-react";
 
 interface Message {
   id: number;
@@ -203,11 +203,6 @@ export default function Chat({ onStatusChange }: ChatProps) {
     setTimeout(() => { setToast(null); }, 3000);
   };
 
-  const sendPlanRequest = () => {
-    const planPrompt = "Generate a training plan based on my profile and current fitness level.";
-    setInput(planPrompt);
-  };
-
   const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
     const el = e.currentTarget;
     const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 50;
@@ -314,20 +309,16 @@ export default function Chat({ onStatusChange }: ChatProps) {
           }}
         >
           {!sidebarOpen && (
-            <button
-              className="btn-ghost"
-              onClick={() => { setSidebarOpen(true); }}
-              title="Open sidebar"
-            >
-              <PanelLeftOpen size={18} />
-            </button>
-          )}
-          <div style={{ flex: 1 }} />
-          <button className="btn-ghost" onClick={() => { sendPlanRequest(); }} title="Generate Training Plan" style={{ display: "flex", alignItems: "center", gap: 4 }}>
-            <Dumbbell size={16} />
-            <span style={{ fontSize: 12 }}>Generate Plan</span>
-          </button>
-        </div>
+             <button
+               className="btn-ghost"
+               onClick={() => { setSidebarOpen(true); }}
+               title="Open sidebar"
+             >
+               <PanelLeftOpen size={18} />
+             </button>
+           )}
+           <div style={{ flex: 1 }} />
+         </div>
 
         <div
           style={{ flex: 1, overflow: "auto", padding: "16px" }}
@@ -355,7 +346,7 @@ export default function Chat({ onStatusChange }: ChatProps) {
                 style={{
                   maxWidth: "80%",
                   padding: "10px 14px",
-                  borderRadius: msg.role === "user" ? "12px 12px 2px 12px" : "12px 12px 12px 2px",
+                  borderRadius: 0,
                   background: msg.role === "user" ? "var(--accent-dim)" : "var(--bg-secondary)",
                   border: msg.role === "user" ? "none" : "1px solid var(--border)",
                 }}
@@ -391,26 +382,26 @@ export default function Chat({ onStatusChange }: ChatProps) {
           ))}
 
           {loading && (
-            <div style={{ display: "flex", alignItems: "flex-start", marginBottom: 16 }}>
-              <div
-                style={{
-                  padding: "10px 14px",
-                  borderRadius: "12px 12px 12px 2px",
-                  background: "var(--bg-secondary)",
-                  border: "1px solid var(--border)",
-                  color: "var(--text-muted)",
-                }}
-              >
-                Thinking...
+             <div style={{ display: "flex", alignItems: "flex-start", marginBottom: 16 }}>
+               <div
+                 style={{
+                   padding: "10px 14px",
+                   borderRadius: 0,
+                   background: "var(--bg-secondary)",
+                   border: "1px solid var(--border)",
+                   color: "var(--text-muted)",
+                 }}
+               >
+                 Thinking...
               </div>
             </div>
           )}
 
-          {error && (
-            <div className="error-state" style={{ textAlign: "left", padding: "8px 14px", borderRadius: 8, background: "rgba(239,68,68,0.1)", border: "1px solid var(--danger)" }}>
-              {error}
-            </div>
-          )}
+           {error && (
+             <div className="error-state" style={{ textAlign: "left", padding: "8px 14px", borderRadius: 0, background: "rgba(239,68,68,0.1)", border: "1px solid var(--danger)" }}>
+               {error}
+             </div>
+           )}
 
           <div ref={messagesEndRef} />
         </div>

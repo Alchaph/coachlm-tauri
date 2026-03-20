@@ -1,8 +1,7 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { save, open } from "@tauri-apps/plugin-dialog";
-import { Save, RefreshCw, Plug, Unplug, Download, Upload, FileUp, Check, X } from "lucide-react";
+import { Save, RefreshCw, Plug, Unplug, Check, X } from "lucide-react";
 
 interface SettingsData {
   active_llm: string;
@@ -119,49 +118,6 @@ export default function SettingsPage() {
     }
   };
 
-  const exportContext = async () => {
-    try {
-      const date = new Date().toISOString().split("T")[0];
-      const filePath = await save({
-        defaultPath: `coach-context-${date}.coachctx`,
-        filters: [{ name: "Coach Context", extensions: ["coachctx"] }]
-      });
-      if (filePath) {
-        await invoke("export_context", { filePath });
-        showToast("Context exported", "success");
-      }
-    } catch {
-      showToast("Failed to export context", "error");
-    }
-  };
-
-  const importContext = async () => {
-    try {
-      const filePath = await open({
-        filters: [{ name: "Coach Context", extensions: ["coachctx"] }]
-      });
-      if (filePath && !Array.isArray(filePath)) {
-        await invoke("import_context", { filePath, replaceAll: false });
-        showToast("Context imported", "success");
-      }
-    } catch {
-      showToast("Failed to import context", "error");
-    }
-  };
-
-  const importFitFile = async () => {
-    try {
-      const filePath = await open({
-        filters: [{ name: "FIT File", extensions: ["fit"] }]
-      });
-      if (filePath && !Array.isArray(filePath)) {
-        const count = await invoke<number>("import_fit_file", { filePath });
-        showToast(`Imported ${String(count)} activities from FIT file`, "success");
-      }
-    } catch {
-      showToast("Failed to import FIT file", "error");
-    }
-  };
 
   return (
     <div style={{ padding: 24, overflow: "auto", height: "100%" }}>
@@ -238,7 +194,7 @@ export default function SettingsPage() {
                         }}
                         style={{
                           padding: "4px 12px",
-                          borderRadius: 16,
+                          borderRadius: 0,
                           fontSize: 12,
                           border: `1px solid var(--border)`,
                           background: settings.ollama_model === model ? "var(--accent)" : "var(--bg-tertiary)",
@@ -303,7 +259,7 @@ export default function SettingsPage() {
           <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 16 }}>Strava Integration</h2>
           
           {!stravaAvailable ? (
-            <div style={{ padding: 12, background: "var(--bg-tertiary)", borderRadius: 6, border: "1px solid var(--border)" }}>
+            <div style={{ padding: 12, background: "var(--bg-tertiary)", borderRadius: 0, border: "1px solid var(--border)" }}>
               <p style={{ color: "var(--text-muted)", fontSize: 13 }}>
                 Strava credentials are not configured in the environment. Please set STRAVA_CLIENT_ID and STRAVA_CLIENT_SECRET.
               </p>
@@ -338,25 +294,6 @@ export default function SettingsPage() {
               )}
             </div>
           )}
-        </div>
-
-        <div className="card">
-          <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 16 }}>Data Management</h2>
-          <p style={{ fontSize: 13, color: "var(--text-secondary)", marginBottom: 16 }}>
-            Export or import your athlete profile, pinned insights, and settings.
-          </p>
-          
-          <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-            <button className="btn-secondary" onClick={() => void exportContext()} style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <Download size={16} /> Export Context
-            </button>
-            <button className="btn-secondary" onClick={() => void importContext()} style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <Upload size={16} /> Import Context
-            </button>
-            <button className="btn-secondary" onClick={() => void importFitFile()} style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <FileUp size={16} /> Import FIT File
-            </button>
-          </div>
         </div>
 
       </div>

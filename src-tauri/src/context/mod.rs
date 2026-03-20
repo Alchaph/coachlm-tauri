@@ -163,6 +163,9 @@ fn format_profile_block(p: &ProfileData) -> String {
     if let Some(ref injuries) = p.injury_history {
         parts.push(format!("- Injury history: {injuries}"));
     }
+    if let Some(ref notes) = p.custom_notes {
+        parts.push(format!("- Custom notes: {notes}"));
+    }
 
     parts.join("\n")
 }
@@ -351,6 +354,7 @@ mod tests {
             training_days_per_week: None,
             preferred_terrain: None,
             heart_rate_zones: None,
+            custom_notes: None,
         }
     }
 
@@ -442,6 +446,7 @@ mod tests {
             training_days_per_week: Some(6),
             preferred_terrain: Some("road".to_string()),
             heart_rate_zones: None,
+            custom_notes: None,
         };
         let result = format_profile_block(&profile);
         assert!(result.contains("- Age: 35"));

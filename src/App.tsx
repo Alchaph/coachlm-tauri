@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { MessageSquare, LayoutDashboard, Brain, Calendar, Settings as SettingsIcon } from "lucide-react";
+import { listen } from "@tauri-apps/api/event";
+import { MessageSquare, LayoutDashboard, Brain, Calendar, Settings as SettingsIcon, RefreshCw, X, Check } from "lucide-react";
 import Chat from "./components/Chat";
 import Dashboard from "./components/Dashboard";
 import Context from "./components/Context";
@@ -24,6 +25,10 @@ export default function App() {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [loading, setLoading] = useState(true);
   const [chatStatus, setChatStatus] = useState<ChatStatus>("idle");
+  const [planGenerating, setPlanGenerating] = useState(false);
+  const [planProgress, setPlanProgress] = useState("");
+  const [planResult, setPlanResult] = useState<"success" | "error" | null>(null);
+  const [planError, setPlanError] = useState("");
 
   useEffect(() => {
     void (async () => {
@@ -36,6 +41,38 @@ export default function App() {
         setLoading(false);
       }
     })();
+  }, []);
+
+  useEffect(() => {
+    const unlisteners: (() => void)[] = [];
+
+    void (async () => {
+      unlisteners.push(
+        await listen("plan:generate:start", () => {
+          setPlanGenerating(true);
+          setPlanProgress("Starting plan generation...");
+          setPlanResult(null);
+          setPlanError("");
+        }),
+        await listen<{ status: string }>("plan:generate:progress", (event) => {
+          setPlanProgress(event.payload.status);
+        }),
+        await listen("plan:generate:complete", () => {
+          setPlanGenerating(false);
+          setPlanResult("success");
+          setPlanProgress("Plan generated!");
+          setTimeout(() => { setPlanResult(null); }, 3000);
+        }),
+        await listen<{ message: string }>("plan:generate:error", (event) => {
+          setPlanGenerating(false);
+          setPlanResult("error");
+          setPlanError(event.payload.message);
+          setPlanProgress("");
+        }),
+      );
+    })();
+
+    return () => { for (const u of unlisteners) u(); };
   }, []);
 
   useEffect(() => {
@@ -103,23 +140,23 @@ export default function App() {
             <button
               key={item.id}
               onClick={() => { setActiveTab(item.id); }}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 10,
-                padding: "10px 16px",
-                margin: "2px 8px",
-                borderRadius: 6,
-                background: activeTab === item.id ? "var(--bg-hover)" : "transparent",
-                color: activeTab === item.id ? "var(--text-primary)" : "var(--text-secondary)",
-                border: "none",
-                cursor: "pointer",
-                fontSize: 14,
-                fontWeight: activeTab === item.id ? 600 : 400,
-                textAlign: "left",
-                width: "calc(100% - 16px)",
-                transition: "background 0.15s, color 0.15s",
-              }}
+               style={{
+                 display: "flex",
+                 alignItems: "center",
+                 gap: 10,
+                 padding: "10px 16px",
+                 margin: "2px 8px",
+                 borderRadius: 0,
+                 background: activeTab === item.id ? "var(--bg-hover)" : "transparent",
+                 color: activeTab === item.id ? "var(--text-primary)" : "var(--text-secondary)",
+                 border: "none",
+                 cursor: "pointer",
+                 fontSize: 14,
+                 fontWeight: activeTab === item.id ? 600 : 400,
+                 textAlign: "left",
+                 width: "calc(100% - 16px)",
+                 transition: "background 0.15s, color 0.15s",
+               }}
             >
               {item.icon}
               {item.label}
@@ -156,6 +193,48 @@ export default function App() {
         {activeTab === "plan" && <TrainingPlanPage />}
         {activeTab === "settings" && <SettingsPage />}
       </main>
+
+      {(planGenerating || planResult) && (
+        <div style={{
+          position: "fixed",
+          bottom: 24,
+          right: 24,
+          zIndex: 200,
+          background: "var(--bg-secondary)",
+          border: `1px solid ${planResult === "error" ? "var(--danger)" : planResult === "success" ? "var(--success)" : "var(--border)"}`,
+          padding: "14px 20px",
+          minWidth: 280,
+          maxWidth: 400,
+          display: "flex",
+          alignItems: "center",
+          gap: 12,
+          boxShadow: "0 4px 24px rgba(0,0,0,0.3)",
+        }}>
+          {planGenerating && <RefreshCw size={18} className="spin" style={{ color: "var(--accent)", flexShrink: 0 }} />}
+          {planResult === "success" && <Check size={18} style={{ color: "var(--success)", flexShrink: 0 }} />}
+          {planResult === "error" && <X size={18} style={{ color: "var(--danger)", flexShrink: 0 }} />}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: planResult === "error" ? 4 : 0 }}>
+              {planGenerating ? "Generating Plan" : planResult === "success" ? "Plan Generated" : "Plan Generation Failed"}
+            </div>
+            {planGenerating && planProgress && (
+              <div style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 2 }}>{planProgress}</div>
+            )}
+            {planResult === "error" && planError && (
+              <div style={{ fontSize: 12, color: "var(--danger)", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{planError}</div>
+            )}
+          </div>
+          {planResult && (
+            <button
+              className="btn-ghost"
+              onClick={() => { setPlanResult(null); setPlanError(""); }}
+              style={{ flexShrink: 0, padding: 4 }}
+            >
+              <X size={14} />
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

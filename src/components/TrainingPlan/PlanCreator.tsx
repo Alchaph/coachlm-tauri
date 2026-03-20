@@ -1,14 +1,14 @@
 import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { Plus, Trash2, Trophy, Calendar, Pencil, RefreshCw, Check } from "lucide-react";
-import type { Race, TrainingPlan, TrainingPlanSummary } from "./types";
+import { listen } from "@tauri-apps/api/event";
+import { Plus, Trash2, Trophy, Calendar, Pencil, Check } from "lucide-react";
+import type { Race, TrainingPlanSummary } from "./types";
 import { formatGoalTime, getWeeksToRace } from "./types";
 
 export default function PlanCreator({ onPlanGenerated }: { onPlanGenerated: () => void }) {
   const [races, setRaces] = useState<Race[]>([]);
   const [plans, setPlans] = useState<TrainingPlanSummary[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [generating, setGenerating] = useState(false);
 
   const [showAddRace, setShowAddRace] = useState(false);
   const [editingRaceId, setEditingRaceId] = useState<string | null>(null);
@@ -36,6 +36,17 @@ export default function PlanCreator({ onPlanGenerated }: { onPlanGenerated: () =
   useEffect(() => {
     void loadData();
   }, [loadData]);
+
+  useEffect(() => {
+    let cleanup: (() => void) | undefined;
+    void (async () => {
+      cleanup = await listen("plan:generate:complete", () => {
+        void loadData();
+        onPlanGenerated();
+      });
+    })();
+    return () => { cleanup?.(); };
+  }, [loadData, onPlanGenerated]);
 
   const resetRaceForm = () => {
     setShowAddRace(false);
@@ -144,16 +155,11 @@ export default function PlanCreator({ onPlanGenerated }: { onPlanGenerated: () =
   };
 
   const handleGeneratePlan = async (raceId: string) => {
-    setGenerating(true);
     setError(null);
     try {
-      await invoke<TrainingPlan>("generate_plan_cmd", { raceId });
-      await loadData();
-      setGenerating(false);
-      onPlanGenerated();
+      await invoke("generate_plan_cmd", { raceId });
     } catch (e) {
       setError(String(e));
-      setGenerating(false);
     }
   };
 
@@ -165,18 +171,6 @@ export default function PlanCreator({ onPlanGenerated }: { onPlanGenerated: () =
       setError(String(e));
     }
   };
-
-  if (generating) {
-    return (
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", padding: 24 }}>
-        <RefreshCw size={48} className="spin" style={{ color: "var(--accent)", marginBottom: 24 }} />
-        <h2 style={{ fontSize: 20, fontWeight: 600, marginBottom: 8 }}>Generating Your Plan</h2>
-        <p style={{ color: "var(--text-secondary)", textAlign: "center", maxWidth: 400 }}>
-          Analyzing your recent activities and crafting a personalized training schedule to help you crush your goal...
-        </p>
-      </div>
-    );
-  }
 
   return (
     <div style={{ padding: 24, overflow: "auto", height: "100%" }}>
@@ -263,8 +257,8 @@ export default function PlanCreator({ onPlanGenerated }: { onPlanGenerated: () =
                 <div>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
                     <h3 style={{ fontSize: 16, fontWeight: 600 }}>{race.name}</h3>
-                    {race.is_active && <span style={{ background: "var(--accent)", color: "white", padding: "2px 6px", borderRadius: 4, fontSize: 10, fontWeight: 600 }}>ACTIVE</span>}
-                    <span style={{ background: "var(--bg-tertiary)", padding: "2px 6px", borderRadius: 4, fontSize: 10 }}>{race.priority} Race</span>
+                     {race.is_active && <span style={{ background: "var(--accent)", color: "white", padding: "2px 6px", borderRadius: 0, fontSize: 10, fontWeight: 600 }}>ACTIVE</span>}
+                     <span style={{ background: "var(--bg-tertiary)", padding: "2px 6px", borderRadius: 0, fontSize: 10 }}>{race.priority} Race</span>
                   </div>
                   <div style={{ color: "var(--text-secondary)", fontSize: 13, display: "flex", gap: 16, marginBottom: 12 }}>
                     <span>{new Date(race.race_date).toLocaleDateString()} ({getWeeksToRace(race.race_date)} weeks)</span>
@@ -306,7 +300,7 @@ export default function PlanCreator({ onPlanGenerated }: { onPlanGenerated: () =
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                       <h3 style={{ fontSize: 15, fontWeight: 600 }}>{p.race_name}</h3>
-                      {p.is_active && <span style={{ background: "var(--accent)", color: "white", padding: "2px 6px", borderRadius: 4, fontSize: 10, fontWeight: 600 }}>ACTIVE</span>}
+                       {p.is_active && <span style={{ background: "var(--accent)", color: "white", padding: "2px 6px", borderRadius: 0, fontSize: 10, fontWeight: 600 }}>ACTIVE</span>}
                     </div>
                     {!p.is_active && (
                       <button className="btn-secondary" onClick={() => { void handleSetActivePlan(p.id); }} style={{ fontSize: 12 }}>Set Active</button>
@@ -315,9 +309,9 @@ export default function PlanCreator({ onPlanGenerated }: { onPlanGenerated: () =
                   <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 10 }}>
                     Generated {new Date(p.generated_at).toLocaleDateString()}
                   </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <div style={{ flex: 1, height: 6, background: "var(--bg-tertiary)", borderRadius: 3, overflow: "hidden" }}>
-                      <div style={{ width: `${String(progress)}%`, height: "100%", background: "var(--success)", borderRadius: 3, transition: "width 0.3s" }} />
+                   <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                     <div style={{ flex: 1, height: 6, background: "var(--bg-tertiary)", borderRadius: 0, overflow: "hidden" }}>
+                       <div style={{ width: `${String(progress)}%`, height: "100%", background: "var(--success)", borderRadius: 0, transition: "width 0.3s" }} />
                     </div>
                     <div style={{ fontSize: 12, color: "var(--text-secondary)", whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: 4 }}>
                       <Check size={12} />

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { Check, X, RefreshCw, Calendar, List } from "lucide-react";
 import type { Race, TrainingPlan, PlanSession, PlanWeekWithSessions } from "./types";
 import { getSessionColor, formatPace, getWeeksToRace } from "./types";
@@ -41,14 +42,21 @@ export default function PlanCalendar({ onPlanGenerated }: { onPlanGenerated: () 
     void loadData();
   }, [loadData]);
 
+  useEffect(() => {
+    let cleanup: (() => void) | undefined;
+    void (async () => {
+      cleanup = await listen("plan:generate:complete", () => {
+        void loadData();
+        onPlanGenerated();
+      });
+    })();
+    return () => { cleanup?.(); };
+  }, [loadData, onPlanGenerated]);
+
   const handleRegenerate = async (raceId: string) => {
     setError(null);
     try {
-      const newPlan = await invoke<TrainingPlan>("generate_plan_cmd", { raceId });
-      setPlan(newPlan);
-      const weeks = await invoke<PlanWeekWithSessions[]>("get_plan_weeks", { planId: newPlan.id });
-      setPlanWeeks(weeks);
-      onPlanGenerated();
+      await invoke("generate_plan_cmd", { raceId });
     } catch (e) {
       setError(String(e));
     }
@@ -175,7 +183,7 @@ export default function PlanCalendar({ onPlanGenerated }: { onPlanGenerated: () 
                       style={{
                         background: isCompleted ? `${color}20` : isSkipped ? "var(--bg-tertiary)" : `${color}15`,
                         border: `1px solid ${isCompleted ? color : isSkipped ? "var(--border)" : `${color}50`}`,
-                        borderRadius: 6,
+                        borderRadius: 0,
                         padding: 8,
                         cursor: "pointer",
                         height: "100%",
@@ -260,9 +268,9 @@ export default function PlanCalendar({ onPlanGenerated }: { onPlanGenerated: () 
                   <div>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
                       <span style={{ fontSize: 13, color: "var(--text-secondary)" }}>{DAY_NAMES[day - 1]}</span>
-                      <span style={{ background: `${color}25`, color, padding: "2px 8px", borderRadius: 4, fontSize: 11, fontWeight: 600, textTransform: "uppercase" }}>
-                        {session.session_type.replace("_", " ")}
-                      </span>
+                      <span style={{ background: `${color}25`, color, padding: "2px 8px", borderRadius: 0, fontSize: 11, fontWeight: 600, textTransform: "uppercase" }}>
+                         {session.session_type.replace("_", " ")}
+                       </span>
                     </div>
                     <div style={{ display: "flex", gap: 16, fontSize: 13, marginTop: 6 }}>
                       {session.distance_km && <span style={{ fontWeight: 500 }}>{session.distance_km} km</span>}
@@ -312,12 +320,12 @@ export default function PlanCalendar({ onPlanGenerated }: { onPlanGenerated: () 
               {selectedSession.session_type.replace("_", " ")}
             </h2>
             <button className="btn-ghost" onClick={() => { setSelectedSession(null); }}><X size={20} /></button>
-          </div>
+           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 20, background: "var(--bg-tertiary)", padding: 12, borderRadius: 6 }}>
-            {selectedSession.distance_km && (
-              <div>
-                <div style={{ fontSize: 11, color: "var(--text-muted)" }}>Planned Distance</div>
+           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 20, background: "var(--bg-tertiary)", padding: 12, borderRadius: 0 }}>
+             {selectedSession.distance_km && (
+               <div>
+                 <div style={{ fontSize: 11, color: "var(--text-muted)" }}>Planned Distance</div>
                 <div style={{ fontWeight: 500 }}>{selectedSession.distance_km} km</div>
               </div>
             )}
@@ -343,9 +351,9 @@ export default function PlanCalendar({ onPlanGenerated }: { onPlanGenerated: () 
 
           {selectedSession.notes && (
             <div style={{ marginBottom: 20 }}>
-              <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 4 }}>Coach Notes</div>
-              <div style={{ fontSize: 13, color: "var(--text-secondary)", background: "var(--bg-tertiary)", padding: 12, borderRadius: 6 }}>
-                {selectedSession.notes}
+               <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 4 }}>Coach Notes</div>
+               <div style={{ fontSize: 13, color: "var(--text-secondary)", background: "var(--bg-tertiary)", padding: 12, borderRadius: 0 }}>
+                 {selectedSession.notes}
               </div>
             </div>
           )}

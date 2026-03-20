@@ -114,7 +114,8 @@ impl Database {
                 experience_level TEXT,
                 training_days_per_week INTEGER,
                 preferred_terrain TEXT,
-                heart_rate_zones TEXT
+                heart_rate_zones TEXT,
+                custom_notes TEXT
             );
 
             CREATE TABLE IF NOT EXISTS athlete_stats (
@@ -268,6 +269,13 @@ impl Database {
             }
         }
 
+        let has_custom_notes: bool = conn
+            .prepare("SELECT custom_notes FROM athlete_profile LIMIT 0")
+            .is_ok();
+        if !has_custom_notes {
+            conn.execute_batch("ALTER TABLE athlete_profile ADD COLUMN custom_notes TEXT")?;
+        }
+
         Ok(())
     }
 
@@ -381,7 +389,7 @@ impl Database {
         let mut stmt = conn.prepare(
             "SELECT age, max_hr, resting_hr, threshold_pace_secs, weekly_mileage_target,
                     race_goals, injury_history, experience_level, training_days_per_week,
-                    preferred_terrain, heart_rate_zones
+                    preferred_terrain, heart_rate_zones, custom_notes
              FROM athlete_profile WHERE id = 1",
         )?;
         let result = stmt.query_row([], |row| {
@@ -397,6 +405,7 @@ impl Database {
                 training_days_per_week: row.get(8)?,
                 preferred_terrain: row.get(9)?,
                 heart_rate_zones: row.get(10)?,
+                custom_notes: row.get(11)?,
             })
         });
         match result {
@@ -412,8 +421,8 @@ impl Database {
             "INSERT OR REPLACE INTO athlete_profile
              (id, age, max_hr, resting_hr, threshold_pace_secs, weekly_mileage_target,
               race_goals, injury_history, experience_level, training_days_per_week,
-              preferred_terrain, heart_rate_zones)
-             VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+              preferred_terrain, heart_rate_zones, custom_notes)
+             VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
             params![
                 data.age,
                 data.max_hr,
@@ -426,6 +435,7 @@ impl Database {
                 data.training_days_per_week,
                 data.preferred_terrain,
                 data.heart_rate_zones,
+                data.custom_notes,
             ],
         )?;
         Ok(())
