@@ -25,7 +25,7 @@ Every task follows this exact sequence. No exceptions.
 1. READ: Load the story file for the feature you are working on.
 2. UPDATE: Set story status to `in-progress`.
 3. BUILD: Implement the feature exactly as specified.
-4. TEST: Run `cargo test` for Rust and `npx tsc --noEmit` for TypeScript. Run `npm run tauri dev` to verify.
+4. TEST: Run `cargo clippy -- -D warnings` and `cargo test` for Rust. Run `npm run lint` and `npx tsc --noEmit` for TypeScript. Run `npm run tauri dev` to verify.
 5. UPDATE: Set story status to `done` (or `failed` with notes).
 6. COMMIT: git commit with message format: `feat|fix|docs(SXX): short description`.
 7. RELEASE: Create and push a semver tag (e.g. `v1.8.2`). This triggers the release pipeline.
@@ -47,6 +47,32 @@ git tag --sort=-v:refname | head -5
 ```
 
 Use the next semver after the highest `vX.Y.Z` tag. Do not create `v0.XX` style tags for individual stories. Every release tag must be a proper `vMAJOR.MINOR.PATCH` that advances the sequence.
+
+### Release notes
+
+Every release must include notes. The release workflow auto-generates them from commit messages since the previous tag, grouped by type:
+
+```
+## Features
+- feat(S12): add chat history sidebar
+
+## Fixes
+- fix(S37): prevent scroll jump on pin
+
+## Documentation
+- docs(S19): update README with setup instructions
+
+## Other
+- chore: scaffold project
+```
+
+Rules for release notes:
+
+- Notes are generated from commit messages. Write good commit messages.
+- Group commits by prefix: `feat` -> Features, `fix` -> Fixes, `docs` -> Documentation, everything else -> Other.
+- No emojis anywhere in commit messages or release notes.
+- No marketing language. State what changed, not why it is exciting.
+- If a release has no commits (empty diff), do not create a tag.
 
 ---
 
@@ -115,6 +141,38 @@ Update it by editing that line. Do not change anything else in the frontmatter u
 - Do not mark a story `done` if any test fails.
 - If a test is skipped intentionally, leave a comment explaining why.
 
+## Linting rules (mandatory on every task)
+
+Both linters MUST pass with zero warnings before any story is marked `done` or any code is committed.
+
+### Rust — Clippy (pedantic)
+
+Run: `cargo clippy -- -D warnings` (from `src-tauri/`).
+
+Configuration lives in `src-tauri/Cargo.toml` under `[lints.clippy]` and `src-tauri/clippy.toml`.
+Key rules enforced:
+- `clippy::pedantic` as baseline (warnings).
+- `clippy::unwrap_used` is denied — use `map_err` or `?` instead.
+- `clippy::panic` is denied — never panic in production paths.
+- `unsafe_code` is denied at the Rust level.
+
+### TypeScript — ESLint (strict)
+
+Run: `npm run lint` (from project root).
+
+Configuration lives in `eslint.config.js`. Key rules enforced:
+- `typescript-eslint/strictTypeChecked` as baseline.
+- No `any` types (`@typescript-eslint/no-explicit-any`).
+- No floating promises (`@typescript-eslint/no-floating-promises`).
+- No `console.log` in production code (warning).
+- Strict equality required (`eqeqeq`).
+
+### Fixing lint errors
+
+- Run `npm run lint:fix` for auto-fixable TypeScript issues.
+- Never suppress a lint with `// eslint-disable`, `#[allow(...)]`, `as any`, or `@ts-ignore` unless there is a documented justification in the code.
+- If a lint rule is wrong for a specific case, discuss before suppressing.
+
 ---
 
 ## Context engine — special rules
@@ -152,6 +210,8 @@ To add a new backend, implement the same function signatures and add a story.
 - Icons come from `lucide-react`.
 - Use inline styles with CSS variables from `global.css`.
 - The app uses a dark theme.
+- Use toast notifications for user feedback (save confirmations, errors), not button text changes. Toast pattern: local `useState<Toast | null>` with a `showToast(message, type)` helper that auto-clears after 3 seconds. Render a fixed-position `.toast.toast-{type}` element. CSS classes are in `global.css`.
+- Do not use dynamic text in buttons. Button labels must be static strings (e.g. always "Save Settings", never "Saving…" → "Save Settings"). Use the `disabled` attribute for loading states, not label swaps.
 
 ---
 
@@ -159,7 +219,7 @@ To add a new backend, implement the same function signatures and add a story.
 
 - Do not commit secrets, API keys, or tokens.
 - Do not skip writing tests to save time.
-- Do not mark a story `done` without running `cargo test` and `npx tsc --noEmit`.
+- Do not mark a story `done` without running `cargo clippy -- -D warnings`, `cargo test`, `npm run lint`, and `npx tsc --noEmit`.
 - Do not use `as any` or `@ts-ignore` in TypeScript.
 - Do not use `unsafe` in Rust without justification.
 - Do not use `unwrap()` in production paths. Use `map_err` or `?` instead.
