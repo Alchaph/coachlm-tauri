@@ -333,3 +333,168 @@ fn build_training_summary(db: &Database) -> String {
 
     summary
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn empty_profile() -> ProfileData {
+        ProfileData {
+            age: None,
+            max_hr: None,
+            resting_hr: None,
+            threshold_pace_secs: None,
+            weekly_mileage_target: None,
+            race_goals: None,
+            injury_history: None,
+            experience_level: None,
+            training_days_per_week: None,
+            preferred_terrain: None,
+            heart_rate_zones: None,
+        }
+    }
+
+    #[test]
+    fn assemble_within_budget_all_fit() {
+        let blocks = vec![("Hello ".to_string(), false), ("World".to_string(), false)];
+        let result = assemble_within_budget(&blocks, 1000);
+        assert_eq!(result, "Hello World");
+    }
+
+    #[test]
+    fn assemble_within_budget_skip_oversized_unpinned() {
+        let blocks = vec![("short".to_string(), false), ("x".repeat(500), false)];
+        let result = assemble_within_budget(&blocks, 50);
+        assert_eq!(result, "short");
+    }
+
+    #[test]
+    fn assemble_within_budget_pinned_always_included() {
+        let blocks = vec![
+            ("small".to_string(), false),
+            ("PINNED_BLOCK".to_string(), true),
+        ];
+        let result = assemble_within_budget(&blocks, 10);
+        assert!(
+            result.contains("small"),
+            "non-pinned block should be included"
+        );
+        assert!(
+            result.contains("PINNED_BLOCK"),
+            "pinned block must always be included"
+        );
+    }
+
+    #[test]
+    fn assemble_within_budget_truncate_when_over_100_remaining() {
+        let long_block = "a".repeat(300);
+        let blocks = vec![(long_block, false)];
+        let result = assemble_within_budget(&blocks, 200);
+        assert_eq!(result.len(), 200, "should truncate to budget size");
+        assert!(result.chars().all(|c| c == 'a'));
+    }
+
+    #[test]
+    fn assemble_within_budget_no_truncate_when_remaining_100_or_less() {
+        let blocks = vec![("a".repeat(60), false), ("b".repeat(200), false)];
+        let result = assemble_within_budget(&blocks, 100);
+        assert_eq!(result, "a".repeat(60));
+        assert!(!result.contains('b'));
+    }
+
+    #[test]
+    fn assemble_within_budget_empty_blocks() {
+        let blocks: Vec<(String, bool)> = vec![];
+        let result = assemble_within_budget(&blocks, 1000);
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn assemble_within_budget_zero_budget_pinned_still_included() {
+        let blocks = vec![("important".to_string(), true)];
+        let result = assemble_within_budget(&blocks, 0);
+        assert_eq!(
+            result, "important",
+            "pinned blocks must be included even with zero budget"
+        );
+    }
+
+    #[test]
+    fn format_profile_block_empty_profile() {
+        let result = format_profile_block(&empty_profile());
+        assert!(result.contains("## Athlete Profile"), "should have header");
+        assert!(!result.contains("Age:"));
+        assert!(!result.contains("Max HR:"));
+        assert!(!result.contains("Experience:"));
+    }
+
+    #[test]
+    fn format_profile_block_full_profile() {
+        let profile = ProfileData {
+            age: Some(35),
+            max_hr: Some(185),
+            resting_hr: Some(50),
+            threshold_pace_secs: Some(270),
+            weekly_mileage_target: Some(60.0),
+            race_goals: Some("Sub-3 marathon".to_string()),
+            injury_history: Some("IT band 2024".to_string()),
+            experience_level: Some("advanced".to_string()),
+            training_days_per_week: Some(6),
+            preferred_terrain: Some("road".to_string()),
+            heart_rate_zones: None,
+        };
+        let result = format_profile_block(&profile);
+        assert!(result.contains("- Age: 35"));
+        assert!(result.contains("- Max HR: 185 bpm"));
+        assert!(result.contains("- Resting HR: 50 bpm"));
+        assert!(result.contains("- Threshold pace: 4:30/km"));
+        assert!(result.contains("- Weekly mileage target: 60 km"));
+        assert!(result.contains("- Experience: advanced"));
+        assert!(result.contains("- Training days/week: 6"));
+        assert!(result.contains("- Preferred terrain: road"));
+        assert!(result.contains("- Race goals: Sub-3 marathon"));
+        assert!(result.contains("- Injury history: IT band 2024"));
+    }
+
+    #[test]
+    fn format_profile_block_partial_profile() {
+        let mut profile = empty_profile();
+        profile.age = Some(28);
+        profile.experience_level = Some("beginner".to_string());
+
+        let result = format_profile_block(&profile);
+        assert!(result.contains("- Age: 28"));
+        assert!(result.contains("- Experience: beginner"));
+        assert!(
+            !result.contains("Max HR:"),
+            "unset fields should be omitted"
+        );
+        assert!(
+            !result.contains("Threshold pace:"),
+            "unset fields should be omitted"
+        );
+        assert!(
+            !result.contains("Weekly mileage"),
+            "unset fields should be omitted"
+        );
+    }
+
+    #[test]
+    fn format_profile_block_threshold_pace_formatting() {
+        let mut profile = empty_profile();
+        profile.threshold_pace_secs = Some(300);
+        let result = format_profile_block(&profile);
+        assert!(
+            result.contains("- Threshold pace: 5:00/km"),
+            "result was: {result}"
+        );
+
+        let mut profile2 = empty_profile();
+        profile2.threshold_pace_secs = Some(305);
+        let result2 = format_profile_block(&profile2);
+        assert!(
+            result2.contains("- Threshold pace: 5:05/km"),
+            "result was: {result2}"
+        );
+    }
+}

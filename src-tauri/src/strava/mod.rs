@@ -313,3 +313,63 @@ pub async fn fetch_athlete_stats(db: &Database, athlete_id: &str) -> Result<(), 
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn extract_code_valid_request() {
+        let request = "GET /callback?code=abc123&scope=read HTTP/1.1\r\nHost: localhost";
+        let result = extract_code_from_request(request);
+        assert_eq!(result.as_deref(), Some("abc123"));
+    }
+
+    #[test]
+    fn extract_code_no_code_param() {
+        let request = "GET /callback?state=xyz&scope=read HTTP/1.1\r\nHost: localhost";
+        let result = extract_code_from_request(request);
+        assert!(result.is_none(), "should be None when no code param");
+    }
+
+    #[test]
+    fn extract_code_empty_string() {
+        let result = extract_code_from_request("");
+        assert!(result.is_none(), "should be None for empty string");
+    }
+
+    #[test]
+    fn extract_code_no_query_string() {
+        let request = "GET /callback HTTP/1.1\r\nHost: localhost";
+        let result = extract_code_from_request(request);
+        assert!(result.is_none(), "should be None with no query string");
+    }
+
+    #[test]
+    fn extract_code_code_is_first_param() {
+        let request = "GET /callback?code=first_param&other=val HTTP/1.1\r\nHost: localhost";
+        let result = extract_code_from_request(request);
+        assert_eq!(result.as_deref(), Some("first_param"));
+    }
+
+    #[test]
+    fn extract_code_code_is_last_param() {
+        let request = "GET /callback?state=xyz&scope=read&code=last_one HTTP/1.1\r\nHost: localhost";
+        let result = extract_code_from_request(request);
+        assert_eq!(result.as_deref(), Some("last_one"));
+    }
+
+    #[test]
+    fn extract_code_only_code_param() {
+        let request = "GET /callback?code=solo HTTP/1.1\r\nHost: localhost";
+        let result = extract_code_from_request(request);
+        assert_eq!(result.as_deref(), Some("solo"));
+    }
+
+    #[test]
+    fn extract_code_empty_code_value() {
+        let request = "GET /callback?code=&other=val HTTP/1.1\r\nHost: localhost";
+        let result = extract_code_from_request(request);
+        assert_eq!(result.as_deref(), Some(""));
+    }
+}

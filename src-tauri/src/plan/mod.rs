@@ -164,3 +164,174 @@ fn parse_plan_response(
 
     Ok(result)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn empty_profile() -> ProfileData {
+        ProfileData {
+            age: None,
+            max_hr: None,
+            resting_hr: None,
+            threshold_pace_secs: None,
+            weekly_mileage_target: None,
+            race_goals: None,
+            injury_history: None,
+            experience_level: None,
+            training_days_per_week: None,
+            preferred_terrain: None,
+            heart_rate_zones: None,
+        }
+    }
+
+    fn sample_race() -> Race {
+        Race {
+            id: "r1".to_string(),
+            name: "Spring Marathon".to_string(),
+            distance_km: 42.2,
+            race_date: "2026-04-15".to_string(),
+            terrain: "road".to_string(),
+            elevation_m: Some(150.0),
+            goal_time_s: Some(12600),
+            priority: "A".to_string(),
+            is_active: true,
+            created_at: "2026-01-01".to_string(),
+        }
+    }
+
+    #[test]
+    fn build_plan_prompt_includes_race_info() {
+        let prompt = build_plan_prompt(&empty_profile(), &sample_race(), 12);
+        assert!(prompt.contains("12"), "should contain week count");
+        assert!(prompt.contains("Spring Marathon"), "should contain race name");
+        assert!(prompt.contains("42.2km"), "should contain distance");
+        assert!(prompt.contains("2026-04-15"), "should contain race date");
+        assert!(prompt.contains("road"), "should contain terrain");
+    }
+
+    #[test]
+    fn build_plan_prompt_empty_profile_omits_optional_fields() {
+        let prompt = build_plan_prompt(&empty_profile(), &sample_race(), 8);
+        assert!(!prompt.contains("Experience:"), "empty profile should not have experience");
+        assert!(!prompt.contains("training days"), "empty profile should not have training days");
+        assert!(!prompt.contains("Threshold pace:"), "empty profile should not have threshold pace");
+    }
+
+    #[test]
+    fn build_plan_prompt_full_profile_includes_all_fields() {
+        let mut profile = empty_profile();
+        profile.experience_level = Some("intermediate".to_string());
+        profile.training_days_per_week = Some(5);
+        profile.threshold_pace_secs = Some(270);
+
+        let prompt = build_plan_prompt(&profile, &sample_race(), 16);
+        assert!(prompt.contains("Experience: intermediate"));
+        assert!(prompt.contains("Available training days: 5/week"));
+        assert!(prompt.contains("Threshold pace: 4:30/km"));
+    }
+
+    #[test]
+    fn build_plan_prompt_includes_json_format_instructions() {
+        let prompt = build_plan_prompt(&empty_profile(), &sample_race(), 4);
+        assert!(prompt.contains("JSON array"), "should instruct JSON format");
+        assert!(prompt.contains("sessions"), "should mention sessions");
+        assert!(prompt.contains("Day 1 = Monday"), "should specify day numbering");
+    }
+
+    #[test]
+    fn parse_plan_response_valid_json() {
+        let response = r#"Here is your plan:
+[{"week": 1, "sessions": [{"day": 1, "type": "easy", "duration_min": 40, "distance_km": 6.0, "hr_zone": 2, "notes": "Recovery run"}]},
+ {"week": 2, "sessions": [{"day": 3, "type": "tempo", "duration_min": 50, "distance_km": 8.0, "hr_zone": 4, "notes": "Tempo effort"}]}]
+Good luck!"#;
+
+        let result = parse_plan_response(response, &sample_race(), 2);
+        assert!(result.is_ok(), "should parse valid JSON");
+        let weeks = result.expect("already checked is_ok");
+        assert_eq!(weeks.len(), 2);
+        assert_eq!(weeks[0].0, 1);
+        assert_eq!(weeks[0].1.len(), 1);
+        assert_eq!(weeks[0].1[0].session_type, "easy");
+        assert_eq!(weeks[0].1[0].day_of_week, 1);
+        assert_eq!(weeks[0].1[0].duration_min, Some(40));
+        assert_eq!(weeks[0].1[0].distance_km, Some(6.0));
+        assert_eq!(weeks[0].1[0].hr_zone, Some(2));
+        assert_eq!(weeks[0].1[0].notes.as_deref(), Some("Recovery run"));
+        assert_eq!(weeks[1].0, 2);
+        assert_eq!(weeks[1].1[0].session_type, "tempo");
+    }
+
+    #[test]
+    fn parse_plan_response_no_json() {
+        let result = parse_plan_response("No JSON here at all", &sample_race(), 1);
+        assert!(result.is_err());
+        let err = result.expect_err("already checked is_err");
+        assert!(err.contains("No JSON array found"), "error: {err}");
+    }
+
+    #[test]
+    fn parse_plan_response_empty_array() {
+        let result = parse_plan_response("[]", &sample_race(), 1);
+        assert!(result.is_err());
+        let err = result.expect_err("already checked is_err");
+        assert!(err.contains("Empty plan"), "error: {err}");
+    }
+
+    #[test]
+    fn parse_plan_response_malformed_json() {
+        let result = parse_plan_response("[{broken json}]", &sample_race(), 1);
+        assert!(result.is_err());
+        let err = result.expect_err("already checked is_err");
+        assert!(err.contains("Invalid JSON"), "error: {err}");
+    }
+
+    #[test]
+    fn parse_plan_response_missing_week_number() {
+        let response = r#"[{"sessions": [{"day": 1, "type": "easy"}]}]"#;
+        let result = parse_plan_response(response, &sample_race(), 1);
+        assert!(result.is_err());
+        let err = result.expect_err("already checked is_err");
+        assert!(err.contains("Missing week number"), "error: {err}");
+    }
+
+    #[test]
+    fn parse_plan_response_missing_sessions_array() {
+        let response = r#"[{"week": 1}]"#;
+        let result = parse_plan_response(response, &sample_race(), 1);
+        assert!(result.is_err());
+        let err = result.expect_err("already checked is_err");
+        assert!(err.contains("Missing sessions array"), "error: {err}");
+    }
+
+    #[test]
+    fn parse_plan_response_session_defaults() {
+        let response = r#"[{"week": 1, "sessions": [{"day": 2, "type": "long_run"}]}]"#;
+        let result = parse_plan_response(response, &sample_race(), 1);
+        assert!(result.is_ok());
+        let weeks = result.expect("already checked is_ok");
+        let session = &weeks[0].1[0];
+        assert_eq!(session.day_of_week, 2);
+        assert_eq!(session.session_type, "long_run");
+        assert!(session.duration_min.is_none(), "optional field should be None");
+        assert!(session.distance_km.is_none());
+        assert!(session.hr_zone.is_none());
+        assert!(session.pace_min_low.is_none());
+        assert!(session.pace_min_high.is_none());
+        assert!(session.notes.is_none());
+        assert_eq!(session.status, "planned");
+    }
+
+    #[test]
+    fn parse_plan_response_notes_truncated_at_300_chars() {
+        let long_notes = "a".repeat(400);
+        let response = format!(
+            r#"[{{"week": 1, "sessions": [{{"day": 1, "type": "easy", "notes": "{long_notes}"}}]}}]"#
+        );
+        let result = parse_plan_response(&response, &sample_race(), 1);
+        assert!(result.is_ok());
+        let weeks = result.expect("already checked is_ok");
+        let notes = weeks[0].1[0].notes.as_ref().expect("notes should exist");
+        assert_eq!(notes.len(), 300, "notes should be truncated to 300 chars");
+    }
+}
