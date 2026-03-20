@@ -219,6 +219,26 @@ impl Database {
             conn.execute_batch("ALTER TABLE chat_sessions ADD COLUMN title TEXT")?;
         }
 
+        // Add enhanced activity columns (safe to run if columns already exist)
+        let new_activity_cols = [
+            ("elapsed_time", "INTEGER"),
+            ("total_elevation_gain", "REAL"),
+            ("max_speed", "REAL"),
+            ("workout_type", "INTEGER"),
+            ("sport_type", "TEXT"),
+            ("start_date_local", "TEXT"),
+        ];
+        for (col, col_type) in new_activity_cols {
+            let exists: bool = conn
+                .prepare(&format!("SELECT {col} FROM activities LIMIT 0"))
+                .is_ok();
+            if !exists {
+                conn.execute_batch(&format!(
+                    "ALTER TABLE activities ADD COLUMN {col} {col_type}"
+                ))?;
+            }
+        }
+
         Ok(())
     }
 
@@ -370,19 +390,39 @@ impl Database {
     // ── Activities ─────────────────────────────────────────────
     pub fn insert_activity(&self, a: &super::models::ActivityData) -> SqlResult<bool> {
         let conn = self.conn();
-        // Dedup check
         let exists: bool = conn.query_row(
             "SELECT COUNT(*) > 0 FROM activities WHERE activity_id = ?1 OR strava_id = ?2",
             params![a.activity_id, a.strava_id],
             |row| row.get(0),
         )?;
         if exists {
+            conn.execute(
+                "UPDATE activities SET
+                    elapsed_time = COALESCE(?1, elapsed_time),
+                    total_elevation_gain = COALESCE(?2, total_elevation_gain),
+                    max_speed = COALESCE(?3, max_speed),
+                    workout_type = COALESCE(?4, workout_type),
+                    sport_type = COALESCE(?5, sport_type),
+                    start_date_local = COALESCE(?6, start_date_local)
+                 WHERE strava_id = ?7 OR activity_id = ?8",
+                params![
+                    a.elapsed_time,
+                    a.total_elevation_gain,
+                    a.max_speed,
+                    a.workout_type,
+                    a.sport_type,
+                    a.start_date_local,
+                    a.strava_id,
+                    a.activity_id,
+                ],
+            )?;
             return Ok(false);
         }
         conn.execute(
             "INSERT INTO activities (activity_id, strava_id, name, type, start_date, distance,
-             moving_time, average_speed, average_heartrate, max_heartrate, average_cadence, gear_id)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+             moving_time, average_speed, average_heartrate, max_heartrate, average_cadence, gear_id,
+             elapsed_time, total_elevation_gain, max_speed, workout_type, sport_type, start_date_local)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)",
             params![
                 a.activity_id,
                 a.strava_id,
@@ -396,6 +436,12 @@ impl Database {
                 a.max_heartrate,
                 a.average_cadence,
                 a.gear_id,
+                a.elapsed_time,
+                a.total_elevation_gain,
+                a.max_speed,
+                a.workout_type,
+                a.sport_type,
+                a.start_date_local,
             ],
         )?;
         Ok(true)
@@ -405,7 +451,8 @@ impl Database {
         let conn = self.conn();
         let mut stmt = conn.prepare(
             "SELECT activity_id, strava_id, name, type, start_date, distance, moving_time,
-                    average_speed, average_heartrate, max_heartrate, average_cadence, gear_id
+                    average_speed, average_heartrate, max_heartrate, average_cadence, gear_id,
+                    elapsed_time, total_elevation_gain, max_speed, workout_type, sport_type, start_date_local
              FROM activities ORDER BY start_date DESC LIMIT ?1",
         )?;
         let rows = stmt.query_map(params![limit], |row| {
@@ -422,6 +469,12 @@ impl Database {
                 max_heartrate: row.get(9)?,
                 average_cadence: row.get(10)?,
                 gear_id: row.get(11)?,
+                elapsed_time: row.get(12)?,
+                total_elevation_gain: row.get(13)?,
+                max_speed: row.get(14)?,
+                workout_type: row.get(15)?,
+                sport_type: row.get(16)?,
+                start_date_local: row.get(17)?,
             })
         })?;
         rows.collect()
@@ -455,7 +508,8 @@ impl Database {
         let conn = self.conn();
         let mut stmt = conn.prepare(
             "SELECT activity_id, strava_id, name, type, start_date, distance, moving_time,
-                    average_speed, average_heartrate, max_heartrate, average_cadence, gear_id
+                    average_speed, average_heartrate, max_heartrate, average_cadence, gear_id,
+                    elapsed_time, total_elevation_gain, max_speed, workout_type, sport_type, start_date_local
              FROM activities WHERE start_date >= ?1 ORDER BY start_date DESC",
         )?;
         let rows = stmt.query_map(params![since], |row| {
@@ -472,6 +526,12 @@ impl Database {
                 max_heartrate: row.get(9)?,
                 average_cadence: row.get(10)?,
                 gear_id: row.get(11)?,
+                elapsed_time: row.get(12)?,
+                total_elevation_gain: row.get(13)?,
+                max_speed: row.get(14)?,
+                workout_type: row.get(15)?,
+                sport_type: row.get(16)?,
+                start_date_local: row.get(17)?,
             })
         })?;
         rows.collect()

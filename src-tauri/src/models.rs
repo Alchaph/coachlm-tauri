@@ -38,6 +38,12 @@ pub struct ActivityData {
     pub max_heartrate: Option<f64>,
     pub average_cadence: Option<f64>,
     pub gear_id: Option<String>,
+    pub elapsed_time: Option<i64>,
+    pub total_elevation_gain: Option<f64>,
+    pub max_speed: Option<f64>,
+    pub workout_type: Option<i64>,
+    pub sport_type: Option<String>,
+    pub start_date_local: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -165,6 +165,12 @@ fn parse_activity(act: &serde_json::Value) -> ActivityData {
         max_heartrate: act["max_heartrate"].as_f64(),
         average_cadence: act["average_cadence"].as_f64(),
         gear_id: act["gear_id"].as_str().map(String::from),
+        elapsed_time: act["elapsed_time"].as_i64(),
+        total_elevation_gain: act["total_elevation_gain"].as_f64(),
+        max_speed: act["max_speed"].as_f64(),
+        workout_type: act["workout_type"].as_i64(),
+        sport_type: act["sport_type"].as_str().map(String::from),
+        start_date_local: act["start_date_local"].as_str().map(String::from),
     }
 }
 
