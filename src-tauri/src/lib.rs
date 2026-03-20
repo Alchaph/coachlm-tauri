@@ -308,8 +308,19 @@ fn import_context(
             .map_err(|e| e.to_string())?;
     }
 
+    let mut failed_count: usize = 0;
     for activity in data.training_summaries {
-        state.db.insert_activity(&activity).ok();
+        match state.db.insert_activity(&activity) {
+            Ok(_) => {}
+            Err(e) => {
+                log::warn!("Failed to import activity: {e}");
+                failed_count += 1;
+            }
+        }
+    }
+
+    if failed_count > 0 {
+        return Err(format!("Failed to import {failed_count} activities"));
     }
 
     Ok(())

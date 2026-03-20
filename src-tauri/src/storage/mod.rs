@@ -283,8 +283,12 @@ impl Database {
         });
         match result {
             Ok((enc_a, enc_r, exp)) => {
-                let access = self.decrypt(&enc_a).unwrap_or_default();
-                let refresh = self.decrypt(&enc_r).unwrap_or_default();
+                let access = self.decrypt(&enc_a).map_err(|e| {
+                    rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::other(e)))
+                })?;
+                let refresh = self.decrypt(&enc_r).map_err(|e| {
+                    rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::other(e)))
+                })?;
                 Ok(Some((access, refresh, exp)))
             }
             Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
