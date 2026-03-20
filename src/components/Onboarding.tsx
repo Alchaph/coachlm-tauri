@@ -11,8 +11,11 @@ export default function Onboarding({ onComplete }: { onComplete: () => void }) {
   const [step, setStep] = useState(1);
   const [stravaAvailable, setStravaAvailable] = useState(false);
   const [stravaConnected, setStravaConnected] = useState(false);
+  const [provider, setProvider] = useState("ollama");
   const [ollamaEndpoint, setOllamaEndpoint] = useState("http://localhost:11434");
   const [ollamaModel, setOllamaModel] = useState("");
+  const [cloudApiKey, setCloudApiKey] = useState("");
+  const [cloudModel, setCloudModel] = useState("");
   const [models, setModels] = useState<string[]>([]);
   const [fetchingModels, setFetchingModels] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -66,10 +69,12 @@ export default function Onboarding({ onComplete }: { onComplete: () => void }) {
     try {
       await invoke("save_settings", {
         data: {
-          active_llm: "local",
+          active_llm: provider,
           ollama_endpoint: ollamaEndpoint,
           ollama_model: ollamaModel || "llama3",
-          custom_system_prompt: ""
+          custom_system_prompt: "",
+          cloud_api_key: cloudApiKey || null,
+          cloud_model: cloudModel || null,
         }
       });
       onComplete();
@@ -108,7 +113,7 @@ export default function Onboarding({ onComplete }: { onComplete: () => void }) {
                 </li>
                 <li style={{ display: "flex", alignItems: "center", gap: 12 }}>
                   <Zap size={20} color="var(--accent)" />
-                  <span>Uses local LLMs for privacy</span>
+                  <span>Uses local or cloud LLMs</span>
                 </li>
                 <li style={{ display: "flex", alignItems: "center", gap: 12 }}>
                   <Settings size={20} color="var(--accent)" />
@@ -160,57 +165,106 @@ export default function Onboarding({ onComplete }: { onComplete: () => void }) {
 
         {step === 3 && (
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            <h2 style={{ fontSize: 22, fontWeight: 600, margin: 0 }}>Ollama Setup</h2>
+            <h2 style={{ fontSize: 22, fontWeight: 600, margin: 0 }}>LLM Setup</h2>
             <p style={{ color: "var(--text-secondary)", margin: 0 }}>
-              Configure your local LLM endpoint and select a model.
+              Choose a local or cloud LLM provider.
             </p>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 16, marginTop: 8 }}>
               <div>
-                <label htmlFor="ollama-endpoint">Endpoint URL</label>
-                <div style={{ display: "flex", gap: 8 }}>
-                  <input
-                    id="ollama-endpoint"
-                    type="text"
-                    value={ollamaEndpoint}
-                    onChange={(e) => { setOllamaEndpoint(e.target.value); }}
-                    style={{ flex: 1 }}
-                  />
-                  <button className="btn-secondary" onClick={() => void fetchModels()} disabled={fetchingModels}>
-                    Fetch Models
-                  </button>
-                </div>
-              </div>
-
-              {models.length > 0 && (
-                <div>
-                  <label>Available Models</label>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 4 }}>
-                    {models.map(m => (
-                      <button
-                        key={m}
-                        className={ollamaModel === m ? "btn-primary" : "btn-secondary"}
-                        onClick={() => { setOllamaModel(m); }}
-                        style={{ padding: "4px 12px", fontSize: 13, borderRadius: 16 }}
-                      >
-                        {m}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              <div>
-                <label htmlFor="ollama-model">Model Name</label>
-                <input
-                  id="ollama-model"
-                  type="text"
-                  value={ollamaModel}
-                  onChange={(e) => { setOllamaModel(e.target.value); }}
-                  placeholder="e.g. llama3"
+                <label htmlFor="llm-provider">Provider</label>
+                <select
+                  id="llm-provider"
+                  value={provider}
+                  onChange={(e) => { setProvider(e.target.value); }}
                   style={{ width: "100%" }}
-                />
+                >
+                  <option value="ollama">Ollama (Local)</option>
+                  <option value="groq">Groq (Cloud - Free Tier)</option>
+                  <option value="openrouter">OpenRouter (Cloud - Free Tier)</option>
+                </select>
               </div>
+
+              {provider === "ollama" ? (
+                <>
+                  <div>
+                    <label htmlFor="ollama-endpoint">Endpoint URL</label>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <input
+                        id="ollama-endpoint"
+                        type="text"
+                        value={ollamaEndpoint}
+                        onChange={(e) => { setOllamaEndpoint(e.target.value); }}
+                        style={{ flex: 1 }}
+                      />
+                      <button className="btn-secondary" onClick={() => void fetchModels()} disabled={fetchingModels}>
+                        Fetch Models
+                      </button>
+                    </div>
+                  </div>
+
+                  {models.length > 0 && (
+                    <div>
+                      <label>Available Models</label>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 4 }}>
+                        {models.map(m => (
+                          <button
+                            key={m}
+                            className={ollamaModel === m ? "btn-primary" : "btn-secondary"}
+                            onClick={() => { setOllamaModel(m); }}
+                            style={{ padding: "4px 12px", fontSize: 13, borderRadius: 16 }}
+                          >
+                            {m}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div>
+                    <label htmlFor="ollama-model">Model Name</label>
+                    <input
+                      id="ollama-model"
+                      type="text"
+                      value={ollamaModel}
+                      onChange={(e) => { setOllamaModel(e.target.value); }}
+                      placeholder="e.g. llama3"
+                      style={{ width: "100%" }}
+                    />
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div>
+                    <label htmlFor="cloud-api-key">API Key</label>
+                    <input
+                      id="cloud-api-key"
+                      type="password"
+                      value={cloudApiKey}
+                      onChange={(e) => { setCloudApiKey(e.target.value); }}
+                      style={{ width: "100%" }}
+                      placeholder={provider === "groq" ? "gsk_..." : "sk-or-..."}
+                    />
+                    <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>
+                      {provider === "groq"
+                        ? "Get a free API key at console.groq.com"
+                        : "Get a free API key at openrouter.ai/keys"}
+                    </p>
+                  </div>
+
+                  <div>
+                    <label htmlFor="cloud-model">Model Name</label>
+                    <input
+                      id="cloud-model"
+                      type="text"
+                      value={cloudModel}
+                      onChange={(e) => { setCloudModel(e.target.value); }}
+                      style={{ width: "100%" }}
+                      placeholder={provider === "groq" ? "llama-3.3-70b-versatile" : "meta-llama/llama-3.3-70b-instruct:free"}
+                    />
+                  </div>
+                </>
+              )}
             </div>
 
             <div style={{ display: "flex", justifyContent: "space-between", marginTop: 24 }}>
@@ -218,13 +272,15 @@ export default function Onboarding({ onComplete }: { onComplete: () => void }) {
                 <ChevronLeft size={16} /> Back
               </button>
               <div style={{ display: "flex", gap: 8 }}>
-                <button className="btn-ghost" onClick={() => {
-                  setOllamaEndpoint("http://localhost:11434");
-                  setOllamaModel("llama3");
-                  setStep(4);
-                }}>
-                  Use defaults
-                </button>
+                {provider === "ollama" && (
+                  <button className="btn-ghost" onClick={() => {
+                    setOllamaEndpoint("http://localhost:11434");
+                    setOllamaModel("llama3");
+                    setStep(4);
+                  }}>
+                    Use defaults
+                  </button>
+                )}
                 <button className="btn-primary" onClick={() => { setStep(4); }} style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   Next <ChevronRight size={16} />
                 </button>
@@ -256,11 +312,13 @@ export default function Onboarding({ onComplete }: { onComplete: () => void }) {
                 </span>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <div style={{ background: ollamaModel ? "var(--success)" : "var(--text-muted)", borderRadius: "50%", padding: 4, display: "flex" }}>
+                <div style={{ background: (provider === "ollama" ? ollamaModel : cloudModel) ? "var(--success)" : "var(--text-muted)", borderRadius: "50%", padding: 4, display: "flex" }}>
                   <Check size={16} color="white" />
                 </div>
-                <span style={{ color: ollamaModel ? "inherit" : "var(--text-muted)" }}>
-                  {ollamaModel ? `Model selected: ${ollamaModel}` : "No model selected"}
+                <span style={{ color: (provider === "ollama" ? ollamaModel : cloudModel) ? "inherit" : "var(--text-muted)" }}>
+                  {provider === "ollama"
+                    ? (ollamaModel ? `Ollama model: ${ollamaModel}` : "No model selected")
+                    : (cloudModel ? `${provider}: ${cloudModel}` : `${provider}: no model selected`)}
                 </span>
               </div>
             </div>

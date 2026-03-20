@@ -203,12 +203,7 @@ async fn send_message(
         });
     }
 
-    let response = llm::chat_with_ollama(
-        &settings.ollama_endpoint,
-        &settings.ollama_model,
-        messages,
-    )
-    .await?;
+    let response = llm::chat(&settings, messages).await?;
 
     state
         .db

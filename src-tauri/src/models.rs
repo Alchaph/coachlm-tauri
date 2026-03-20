@@ -6,6 +6,8 @@ pub struct SettingsData {
     pub ollama_endpoint: String,
     pub ollama_model: String,
     pub custom_system_prompt: String,
+    pub cloud_api_key: Option<String>,
+    pub cloud_model: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -194,6 +196,41 @@ pub struct OllamaTagsResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OllamaModel {
     pub name: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChatMessage {
+    pub role: String,
+    pub content: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OpenAiChatRequest {
+    pub model: String,
+    pub messages: Vec<ChatMessage>,
+    pub stream: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OpenAiChoice {
+    pub message: ChatMessage,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OpenAiChatResponse {
+    pub choices: Vec<OpenAiChoice>,
+}
+
+pub struct CloudProvider;
+
+impl CloudProvider {
+    pub fn base_url(provider: &str) -> Option<&'static str> {
+        match provider {
+            "groq" => Some("https://api.groq.com/openai/v1"),
+            "openrouter" => Some("https://openrouter.ai/api/v1"),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

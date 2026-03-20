@@ -258,6 +258,16 @@ impl Database {
             }
         }
 
+        let new_settings_cols = [("cloud_api_key", "TEXT"), ("cloud_model", "TEXT")];
+        for (col, col_type) in new_settings_cols {
+            let exists: bool = conn
+                .prepare(&format!("SELECT {col} FROM settings LIMIT 0"))
+                .is_ok();
+            if !exists {
+                conn.execute_batch(&format!("ALTER TABLE settings ADD COLUMN {col} {col_type}"))?;
+            }
+        }
+
         Ok(())
     }
 
@@ -265,18 +275,28 @@ impl Database {
     pub fn get_settings(&self) -> SqlResult<Option<super::models::SettingsData>> {
         let conn = self.conn();
         let mut stmt = conn.prepare(
-            "SELECT active_llm, ollama_endpoint, ollama_model, custom_system_prompt FROM settings WHERE id = 1"
+            "SELECT active_llm, ollama_endpoint, ollama_model, custom_system_prompt, cloud_api_key, cloud_model FROM settings WHERE id = 1"
         )?;
         let result = stmt.query_row([], |row| {
-            Ok(super::models::SettingsData {
-                active_llm: row.get(0)?,
-                ollama_endpoint: row.get(1)?,
-                ollama_model: row.get(2)?,
-                custom_system_prompt: row.get(3)?,
-            })
+            Ok((
+                super::models::SettingsData {
+                    active_llm: row.get(0)?,
+                    ollama_endpoint: row.get(1)?,
+                    ollama_model: row.get(2)?,
+                    custom_system_prompt: row.get(3)?,
+                    cloud_api_key: None,
+                    cloud_model: row.get(5)?,
+                },
+                row.get::<_, Option<String>>(4)?,
+            ))
         });
         match result {
-            Ok(s) => Ok(Some(s)),
+            Ok((mut settings, encrypted_key)) => {
+                if let Some(ref enc) = encrypted_key {
+                    settings.cloud_api_key = self.decrypt(enc).ok();
+                }
+                Ok(Some(settings))
+            }
             Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
             Err(e) => Err(e),
         }
@@ -284,10 +304,15 @@ impl Database {
 
     pub fn save_settings(&self, data: &super::models::SettingsData) -> SqlResult<()> {
         let conn = self.conn();
+        let encrypted_key: Option<String> = data
+            .cloud_api_key
+            .as_ref()
+            .filter(|k| !k.is_empty())
+            .and_then(|k| self.encrypt(k).ok());
         conn.execute(
-            "INSERT OR REPLACE INTO settings (id, active_llm, ollama_endpoint, ollama_model, custom_system_prompt)
-             VALUES (1, ?1, ?2, ?3, ?4)",
-            params![data.active_llm, data.ollama_endpoint, data.ollama_model, data.custom_system_prompt],
+            "INSERT OR REPLACE INTO settings (id, active_llm, ollama_endpoint, ollama_model, custom_system_prompt, cloud_api_key, cloud_model)
+             VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6)",
+            params![data.active_llm, data.ollama_endpoint, data.ollama_model, data.custom_system_prompt, encrypted_key, data.cloud_model],
         )?;
         Ok(())
     }

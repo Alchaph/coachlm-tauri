@@ -41,9 +41,8 @@ pub async fn generate_plan(
 
     let mut last_error = String::new();
     for _attempt in 0..3 {
-        let response = crate::llm::chat_with_ollama(
-            &settings.ollama_endpoint,
-            &settings.ollama_model,
+        let response = crate::llm::chat(
+            &settings,
             messages.clone(),
         ).await?;
 
@@ -54,7 +53,10 @@ pub async fn generate_plan(
                     id: plan_id.clone(),
                     race_id: race.id.clone(),
                     generated_at: now.to_rfc3339(),
-                    llm_backend: settings.ollama_model.clone(),
+                    llm_backend: settings.cloud_model.as_deref()
+                        .filter(|_| settings.active_llm != "local" && settings.active_llm != "ollama")
+                        .unwrap_or(&settings.ollama_model)
+                        .to_string(),
                     prompt_hash: format!("{:x}", sha2::Sha256::digest(messages[1].content.as_bytes()))[..16].to_string(),
                     is_active: true,
                 };

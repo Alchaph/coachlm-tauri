@@ -9,6 +9,8 @@ interface SettingsData {
   ollama_endpoint: string;
   ollama_model: string;
   custom_system_prompt: string;
+  cloud_api_key: string | null;
+  cloud_model: string | null;
 }
 
 interface StravaAuthStatus {
@@ -27,6 +29,8 @@ export default function SettingsPage() {
     ollama_endpoint: "http://localhost:11434",
     ollama_model: "",
     custom_system_prompt: "",
+    cloud_api_key: null,
+    cloud_model: null,
   });
   const [models, setModels] = useState<string[]>([]);
   const [fetchingModels, setFetchingModels] = useState(false);
@@ -175,63 +179,112 @@ export default function SettingsPage() {
           <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 16 }}>LLM Configuration</h2>
           
           <div style={{ marginBottom: 16 }}>
-            <label htmlFor="ollama-endpoint">Ollama Endpoint URL</label>
-            <div style={{ display: "flex", gap: 8 }}>
-              <input
-                id="ollama-endpoint"
-                type="text"
-                value={settings.ollama_endpoint}
-                onChange={(e) => { setSettings({ ...settings, ollama_endpoint: e.target.value }); }}
-                style={{ flex: 1 }}
-                placeholder="http://localhost:11434"
-              />
-              <button className="btn-secondary" onClick={() => void fetchModels()} disabled={fetchingModels} style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <RefreshCw size={16} className={fetchingModels ? "spin" : ""} />
-                Fetch Models
-              </button>
-            </div>
+            <label htmlFor="llm-provider">Provider</label>
+            <select
+              id="llm-provider"
+              value={settings.active_llm === "local" ? "ollama" : settings.active_llm}
+              onChange={(e) => { setSettings({ ...settings, active_llm: e.target.value }); }}
+              style={{ width: "100%" }}
+            >
+              <option value="ollama">Ollama (Local)</option>
+              <option value="groq">Groq (Cloud - Free Tier)</option>
+              <option value="openrouter">OpenRouter (Cloud - Free Tier)</option>
+            </select>
           </div>
 
-          <div style={{ marginBottom: 16 }}>
-            <label htmlFor="ollama-model">Model Name</label>
-            <input
-              id="ollama-model"
-              type="text"
-              value={settings.ollama_model}
-              onChange={(e) => { setSettings({ ...settings, ollama_model: e.target.value }); }}
-              style={{ width: "100%" }}
-              placeholder="e.g. llama3"
-            />
-            
-            {models.length > 0 && (
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
-                {models.map((model) => (
-                  <button
-                    key={model}
-                    onClick={() => {
-                      const updated = { ...settings, ollama_model: model };
-                      setSettings(updated);
-                      void invoke("save_settings", { data: updated }).then(
-                        () => { showToast("Settings saved", "success"); },
-                        () => { showToast("Failed to save settings", "error"); },
-                      );
-                    }}
-                    style={{
-                      padding: "4px 12px",
-                      borderRadius: 16,
-                      fontSize: 12,
-                      border: `1px solid var(--border)`,
-                      background: settings.ollama_model === model ? "var(--accent)" : "var(--bg-tertiary)",
-                      color: settings.ollama_model === model ? "white" : "var(--text-primary)",
-                      cursor: "pointer",
-                    }}
-                  >
-                    {model}
+          {(settings.active_llm === "ollama" || settings.active_llm === "local") ? (
+            <>
+              <div style={{ marginBottom: 16 }}>
+                <label htmlFor="ollama-endpoint">Ollama Endpoint URL</label>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <input
+                    id="ollama-endpoint"
+                    type="text"
+                    value={settings.ollama_endpoint}
+                    onChange={(e) => { setSettings({ ...settings, ollama_endpoint: e.target.value }); }}
+                    style={{ flex: 1 }}
+                    placeholder="http://localhost:11434"
+                  />
+                  <button className="btn-secondary" onClick={() => void fetchModels()} disabled={fetchingModels} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <RefreshCw size={16} className={fetchingModels ? "spin" : ""} />
+                    Fetch Models
                   </button>
-                ))}
+                </div>
               </div>
-            )}
-          </div>
+
+              <div style={{ marginBottom: 16 }}>
+                <label htmlFor="ollama-model">Model Name</label>
+                <input
+                  id="ollama-model"
+                  type="text"
+                  value={settings.ollama_model}
+                  onChange={(e) => { setSettings({ ...settings, ollama_model: e.target.value }); }}
+                  style={{ width: "100%" }}
+                  placeholder="e.g. llama3"
+                />
+                
+                {models.length > 0 && (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
+                    {models.map((model) => (
+                      <button
+                        key={model}
+                        onClick={() => {
+                          const updated = { ...settings, ollama_model: model };
+                          setSettings(updated);
+                          void invoke("save_settings", { data: updated }).then(
+                            () => { showToast("Settings saved", "success"); },
+                            () => { showToast("Failed to save settings", "error"); },
+                          );
+                        }}
+                        style={{
+                          padding: "4px 12px",
+                          borderRadius: 16,
+                          fontSize: 12,
+                          border: `1px solid var(--border)`,
+                          background: settings.ollama_model === model ? "var(--accent)" : "var(--bg-tertiary)",
+                          color: settings.ollama_model === model ? "white" : "var(--text-primary)",
+                          cursor: "pointer",
+                        }}
+                      >
+                        {model}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </>
+          ) : (
+            <>
+              <div style={{ marginBottom: 16 }}>
+                <label htmlFor="cloud-api-key">API Key</label>
+                <input
+                  id="cloud-api-key"
+                  type="password"
+                  value={settings.cloud_api_key ?? ""}
+                  onChange={(e) => { setSettings({ ...settings, cloud_api_key: e.target.value || null }); }}
+                  style={{ width: "100%" }}
+                  placeholder={settings.active_llm === "groq" ? "gsk_..." : "sk-or-..."}
+                />
+                <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>
+                  {settings.active_llm === "groq"
+                    ? "Get a free API key at console.groq.com"
+                    : "Get a free API key at openrouter.ai/keys"}
+                </p>
+              </div>
+
+              <div style={{ marginBottom: 16 }}>
+                <label htmlFor="cloud-model">Model Name</label>
+                <input
+                  id="cloud-model"
+                  type="text"
+                  value={settings.cloud_model ?? ""}
+                  onChange={(e) => { setSettings({ ...settings, cloud_model: e.target.value || null }); }}
+                  style={{ width: "100%" }}
+                  placeholder={settings.active_llm === "groq" ? "llama-3.3-70b-versatile" : "meta-llama/llama-3.3-70b-instruct:free"}
+                />
+              </div>
+            </>
+          )}
 
           <div>
             <label htmlFor="custom-prompt">Custom System Prompt</label>
