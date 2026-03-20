@@ -59,6 +59,7 @@ pub struct InsightData {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SessionData {
     pub id: String,
+    pub title: Option<String>,
     pub created_at: String,
 }
 
