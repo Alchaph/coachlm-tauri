@@ -208,7 +208,14 @@ export default function SettingsPage() {
                 {models.map((model) => (
                   <button
                     key={model}
-                    onClick={() => { setSettings({ ...settings, ollama_model: model }); }}
+                    onClick={() => {
+                      const updated = { ...settings, ollama_model: model };
+                      setSettings(updated);
+                      void invoke("save_settings", { data: updated }).then(
+                        () => { showToast("Settings saved", "success"); },
+                        () => { showToast("Failed to save settings", "error"); },
+                      );
+                    }}
                     style={{
                       padding: "4px 12px",
                       borderRadius: 16,

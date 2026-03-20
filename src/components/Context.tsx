@@ -91,6 +91,7 @@ export default function Context() {
     try {
       await invoke("delete_pinned_insight", { id });
       setInsights((prev) => prev.filter((i) => i.id !== id));
+      showToast("Insight unpinned", "success");
     } catch {
       showToast("Failed to delete insight", "error");
     }

@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Send, Pin, Plus, X, Dumbbell, MessageSquare, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { Send, Pin, Plus, X, Dumbbell, MessageSquare, PanelLeftClose, PanelLeftOpen, Check } from "lucide-react";
 
 interface Message {
   id: number;
@@ -22,6 +22,11 @@ interface ChatProps {
   onStatusChange?: (status: "idle" | "thinking" | "replied") => void;
 }
 
+interface Toast {
+  message: string;
+  type: "success" | "error";
+}
+
 export default function Chat({ onStatusChange }: ChatProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
@@ -32,10 +37,23 @@ export default function Chat({ onStatusChange }: ChatProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const shouldAutoScroll = useRef(true);
+  const [toast, setToast] = useState<Toast | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [promptHistory, setPromptHistory] = useState<string[]>([]);
+  const historyIndex = useRef(-1);
+  const savedInput = useRef("");
 
   const scrollToBottom = useCallback(() => {
     if (shouldAutoScroll.current) {
       messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+  }, []);
+
+  const resizeTextarea = useCallback(() => {
+    const el = textareaRef.current;
+    if (el) {
+      el.style.height = "auto";
+      el.style.height = `${String(Math.min(el.scrollHeight, 120))}px`;
     }
   }, []);
 
@@ -109,7 +127,13 @@ export default function Chat({ onStatusChange }: ChatProps) {
   const sendMessage = async () => {
     if (!input.trim() || loading) return;
     const content = input.trim();
+    setPromptHistory((prev) => [content, ...prev]);
+    historyIndex.current = -1;
+    savedInput.current = "";
     setInput("");
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "auto";
+    }
     setError(null);
     setLoading(true);
     shouldAutoScroll.current = true;
@@ -167,9 +191,16 @@ export default function Chat({ onStatusChange }: ChatProps) {
   const pinMessage = async (content: string) => {
     try {
       await invoke("save_pinned_insight", { content });
+      showToast("Insight pinned", "success");
     } catch (e) {
       setError(String(e));
+      showToast("Failed to pin insight", "error");
     }
+  };
+
+  const showToast = (message: string, type: "success" | "error") => {
+    setToast({ message, type });
+    setTimeout(() => { setToast(null); }, 3000);
   };
 
   const sendPlanRequest = () => {
@@ -183,10 +214,40 @@ export default function Chat({ onStatusChange }: ChatProps) {
     shouldAutoScroll.current = atBottom;
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       void sendMessage();
+      return;
+    }
+
+    if (e.key === "ArrowUp" && promptHistory.length > 0) {
+      const el = textareaRef.current;
+      const cursorAtStart = el ? el.selectionStart === 0 && el.selectionEnd === 0 : true;
+      if (cursorAtStart) {
+        e.preventDefault();
+        if (historyIndex.current === -1) {
+          savedInput.current = input;
+        }
+        const nextIndex = Math.min(historyIndex.current + 1, promptHistory.length - 1);
+        historyIndex.current = nextIndex;
+        setInput(promptHistory[nextIndex]);
+      }
+    }
+
+    if (e.key === "ArrowDown") {
+      const el = textareaRef.current;
+      const cursorAtEnd = el ? el.selectionStart === el.value.length : true;
+      if (cursorAtEnd && historyIndex.current >= 0) {
+        e.preventDefault();
+        const nextIndex = historyIndex.current - 1;
+        historyIndex.current = nextIndex;
+        if (nextIndex < 0) {
+          setInput(savedInput.current);
+        } else {
+          setInput(promptHistory[nextIndex]);
+        }
+      }
     }
   };
 
@@ -361,15 +422,18 @@ export default function Chat({ onStatusChange }: ChatProps) {
             background: "var(--bg-secondary)",
             display: "flex",
             gap: 8,
+            alignItems: "flex-end",
           }}
         >
-          <input
+          <textarea
+            ref={textareaRef}
             value={input}
-            onChange={(e) => { setInput(e.target.value); }}
+            onChange={(e) => { setInput(e.target.value); resizeTextarea(); }}
             onKeyDown={handleKeyDown}
             placeholder="Ask your coach..."
             disabled={loading}
-            style={{ flex: 1 }}
+            rows={1}
+            style={{ flex: 1, resize: "none", lineHeight: "20px" }}
             id="chat-input"
           />
           <button
@@ -382,6 +446,13 @@ export default function Chat({ onStatusChange }: ChatProps) {
           </button>
         </div>
       </div>
+
+      {toast && (
+        <div className={`toast toast-${toast.type}`}>
+          {toast.type === "success" ? <Check size={16} /> : <X size={16} />}
+          {toast.message}
+        </div>
+      )}
     </div>
   );
 }
