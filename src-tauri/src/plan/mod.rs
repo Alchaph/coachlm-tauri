@@ -115,6 +115,17 @@ fn build_plan_prompt(profile: &ProfileData, race: &Race, weeks: i64) -> String {
     );
     let _ = writeln!(prompt, "Race date: {}, Terrain: {}", race.race_date, race.terrain);
 
+    if let Some(elev) = race.elevation_m {
+        let _ = writeln!(prompt, "Elevation gain: {elev}m");
+    }
+
+    if let Some(goal) = race.goal_time_s {
+        let h = goal / 3600;
+        let m = (goal % 3600) / 60;
+        let s = goal % 60;
+        let _ = writeln!(prompt, "Goal time: {h}:{m:02}:{s:02}");
+    }
+
     if let Some(ref exp) = profile.experience_level {
         let _ = writeln!(prompt, "Experience: {exp}");
     }
@@ -124,9 +135,14 @@ fn build_plan_prompt(profile: &ProfileData, race: &Race, weeks: i64) -> String {
     if let Some(tp) = profile.threshold_pace_secs {
         let _ = writeln!(prompt, "Threshold pace: {}:{:02}/km", tp / 60, tp % 60);
     }
+    if let Some(mileage) = profile.weekly_mileage_target {
+        let _ = writeln!(prompt, "Current weekly mileage: {mileage:.0} km/week");
+    }
 
+    prompt.push_str("\nInclude 1-2 rest days per week depending on training days.");
+    prompt.push_str("\nInclude pace targets (min/km), heart rate zones, and indicate training methodology (pace-based, heart rate-based).");
     prompt.push_str("\nRespond with a JSON array of weeks. Each week has sessions:\n");
-    prompt.push_str(r#"[{"week": 1, "sessions": [{"day": 1, "type": "easy", "duration_min": 40, "distance_km": 6.0, "hr_zone": 2, "notes": "Easy recovery"}]}]"#);
+    prompt.push_str(r#"[{"week": 1, "sessions": [{"day": 1, "type": "easy", "duration_min": 40, "distance_km": 6.0, "hr_zone": 2, "pace_min_low": 5.5, "pace_min_high": 6.0, "notes": "Easy recovery"}]}]"#);
     prompt.push_str("\nSession types: easy, tempo, intervals, long_run, strength, rest, race");
     prompt.push_str("\nInclude rest days. Day 1 = Monday, Day 7 = Sunday.");
 
@@ -232,8 +248,9 @@ mod tests {
     fn build_plan_prompt_empty_profile_omits_optional_fields() {
         let prompt = build_plan_prompt(&empty_profile(), &sample_race(), 8);
         assert!(!prompt.contains("Experience:"), "empty profile should not have experience");
-        assert!(!prompt.contains("training days"), "empty profile should not have training days");
+        assert!(!prompt.contains("Available training days:"), "empty profile should not have training days field");
         assert!(!prompt.contains("Threshold pace:"), "empty profile should not have threshold pace");
+        assert!(!prompt.contains("Current weekly mileage:"), "empty profile should not have mileage field");
     }
 
     #[test]
@@ -242,11 +259,28 @@ mod tests {
         profile.experience_level = Some("intermediate".to_string());
         profile.training_days_per_week = Some(5);
         profile.threshold_pace_secs = Some(270);
+        profile.weekly_mileage_target = Some(50.0);
 
         let prompt = build_plan_prompt(&profile, &sample_race(), 16);
         assert!(prompt.contains("Experience: intermediate"));
         assert!(prompt.contains("Available training days: 5/week"));
         assert!(prompt.contains("Threshold pace: 4:30/km"));
+        assert!(prompt.contains("Current weekly mileage: 50 km/week"));
+    }
+
+    #[test]
+    fn build_plan_prompt_includes_race_goal_time_and_elevation() {
+        let prompt = build_plan_prompt(&empty_profile(), &sample_race(), 12);
+        assert!(prompt.contains("Goal time: 3:30:00"), "should include goal time from race");
+        assert!(prompt.contains("Elevation gain: 150m"), "should include elevation from race");
+    }
+
+    #[test]
+    fn build_plan_prompt_includes_training_guidance() {
+        let prompt = build_plan_prompt(&empty_profile(), &sample_race(), 8);
+        assert!(prompt.contains("rest days"), "should mention rest days");
+        assert!(prompt.contains("pace targets"), "should mention pace targets");
+        assert!(prompt.contains("heart rate zones"), "should mention heart rate zones");
     }
 
     #[test]
