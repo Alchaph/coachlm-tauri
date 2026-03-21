@@ -1,17 +1,18 @@
 import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { MessageSquare, LayoutDashboard, Brain, Calendar, Settings as SettingsIcon, RefreshCw, X, Check } from "lucide-react";
+import { MessageSquare, LayoutDashboard, Brain, Calendar, Settings as SettingsIcon, RefreshCw, X, Check, Zap } from "lucide-react";
 import Chat from "./components/Chat";
 import Dashboard from "./components/Dashboard";
 import Context from "./components/Context";
 import SettingsPage from "./components/Settings";
 import TrainingPlanPage from "./components/TrainingPlan";
+import ShoeCalculator from "./components/ShoeCalculator";
 import Onboarding from "./components/Onboarding";
 import "./styles/global.css";
 import "./styles/markdown.css";
 
-type Tab = "chat" | "dashboard" | "context" | "plan" | "settings";
+type Tab = "chat" | "dashboard" | "context" | "plan" | "shoes" | "settings";
 type ChatStatus = "idle" | "thinking" | "replied";
 
 interface NavItem {
@@ -107,6 +108,7 @@ export default function App() {
     { id: "dashboard", label: "Dashboard", icon: <LayoutDashboard size={20} /> },
     { id: "context", label: "Context", icon: <Brain size={20} /> },
     { id: "plan", label: "Plans", icon: <Calendar size={20} /> },
+    { id: "shoes", label: "Shoes", icon: <Zap size={20} /> },
     { id: "settings", label: "Settings", icon: <SettingsIcon size={20} /> },
   ];
 
@@ -191,6 +193,7 @@ export default function App() {
         {activeTab === "dashboard" && <Dashboard />}
         {activeTab === "context" && <Context />}
         {activeTab === "plan" && <TrainingPlanPage />}
+        {activeTab === "shoes" && <ShoeCalculator />}
         {activeTab === "settings" && <SettingsPage />}
       </main>
 
