@@ -394,12 +394,87 @@ export default function PlanCalendar({ onPlanGenerated }: { onPlanGenerated: () 
     );
   };
 
+  const renderTrainingVisualization = (session: PlanSession) => {
+    const color = getSessionColor(session.session_type);
+    const duration = session.duration_min ?? 40;
+
+    if (session.session_type === "rest") {
+      return (
+        <div style={{ padding: "12px 0", marginBottom: 20, color: "var(--text-muted)", fontSize: 13, textAlign: "center", borderTop: "1px solid var(--border)", borderBottom: "1px solid var(--border)" }}>
+          Rest Day
+        </div>
+      );
+    }
+
+    interface Segment { label: string; pct: number; color: string; min: number }
+    let segments: Segment[] = [];
+
+    if (session.session_type === "tempo") {
+      const warmup = Math.round(duration * 0.15);
+      const work = Math.round(duration * 0.70);
+      const cooldown = duration - warmup - work;
+      segments = [
+        { label: `Warmup\n${String(warmup)}min`, pct: 15, color: "var(--bg-hover)", min: warmup },
+        { label: `Tempo\n${String(work)}min`, pct: 70, color, min: work },
+        { label: `Cooldown\n${String(cooldown)}min`, pct: 15, color: "var(--bg-hover)", min: cooldown },
+      ];
+    } else if (session.session_type === "intervals") {
+      const segCount = duration >= 60 ? 8 : 6;
+      const segDuration = Math.round(duration / segCount);
+      segments = Array.from({ length: segCount }, (_, i) => ({
+        label: i % 2 === 0 ? `Hard\n${String(segDuration)}min` : `Rest\n${String(segDuration)}min`,
+        pct: 100 / segCount,
+        color: i % 2 === 0 ? color : "var(--bg-hover)",
+        min: segDuration,
+      }));
+    } else {
+      segments = [
+        { label: `${session.session_type.replace("_", " ")}\n${String(duration)}min`, pct: 100, color, min: duration },
+      ];
+    }
+
+    return (
+      <div style={{ marginBottom: 20, paddingTop: 16, borderTop: "1px solid var(--border)" }}>
+        <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 10, color: "var(--text-secondary)" }}>Workout Structure</div>
+        <div style={{ display: "flex", height: 20, width: "100%", borderRadius: 0, overflow: "hidden" }}>
+          {segments.map((seg, i) => (
+            <div
+              key={i}
+              style={{
+                width: `${String(seg.pct)}%`,
+                background: seg.color,
+                borderRight: i < segments.length - 1 ? "1px solid var(--bg-primary)" : "none",
+              }}
+            />
+          ))}
+        </div>
+        <div style={{ display: "flex", marginTop: 6 }}>
+          {segments.map((seg, i) => (
+            <div
+              key={i}
+              style={{
+                width: `${String(seg.pct)}%`,
+                fontSize: 10,
+                color: "var(--text-muted)",
+                textAlign: "center",
+                whiteSpace: "pre-line",
+                lineHeight: 1.3,
+              }}
+            >
+              {seg.label.split("\n")[1]}
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
   const renderSessionModal = () => {
     if (!selectedSession) return null;
 
     return (
       <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 }}>
-        <div className="card" style={{ width: 400, maxWidth: "90%", maxHeight: "90%", overflow: "auto" }}>
+        <div className="card" style={{ width: 420, maxWidth: "90%", maxHeight: "90%", overflow: "auto" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
             <h2 style={{ fontSize: 18, fontWeight: 600, color: getSessionColor(selectedSession.session_type), textTransform: "capitalize" }}>
               {selectedSession.session_type.replace("_", " ")}
@@ -433,6 +508,8 @@ export default function PlanCalendar({ onPlanGenerated }: { onPlanGenerated: () 
               </div>
             )}
           </div>
+
+          {renderTrainingVisualization(selectedSession)}
 
           {selectedSession.notes && (
             <div style={{ marginBottom: 20 }}>
