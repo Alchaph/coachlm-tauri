@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { Check, X, RefreshCw, Calendar, List, ChevronLeft, ChevronRight } from "lucide-react";
+import { Check, X, Calendar, List, ChevronLeft, ChevronRight } from "lucide-react";
 import type { Race, TrainingPlan, PlanSession, PlanWeekWithSessions } from "./types";
 import { getSessionColor, formatPace, getWeeksToRace } from "./types";
 
@@ -54,15 +54,6 @@ export default function PlanCalendar({ onPlanGenerated }: { onPlanGenerated: () 
     })();
     return () => { cleanup?.(); };
   }, [loadData, onPlanGenerated]);
-
-  const handleRegenerate = async (raceId: string) => {
-    setError(null);
-    try {
-      await invoke("generate_plan_cmd", { raceId });
-    } catch (e) {
-      setError(String(e));
-    }
-  };
 
   const handleUpdateSession = async (status: string) => {
     if (!selectedSession) return;
@@ -472,11 +463,6 @@ export default function PlanCalendar({ onPlanGenerated }: { onPlanGenerated: () 
           {calendarView === "week" && renderWeekNav()}
           {calendarView === "calendar" && renderMonthNav()}
           {renderViewToggle()}
-          {activeRace && (
-            <button className="btn-secondary" onClick={() => { void handleRegenerate(activeRace.id); }} style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <RefreshCw size={16} /> Regenerate
-            </button>
-          )}
         </div>
       </div>
 
