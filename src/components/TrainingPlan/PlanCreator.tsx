@@ -190,6 +190,15 @@ export default function PlanCreator({ onPlanGenerated }: { onPlanGenerated: () =
     }
   };
 
+  const handleDeletePlan = async (planId: string) => {
+    try {
+      await invoke("delete_plan", { planId });
+      void loadData();
+    } catch (e) {
+      setError(String(e));
+    }
+  };
+
   return (
     <div style={{ padding: 24, overflow: "auto", height: "100%" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
@@ -320,9 +329,14 @@ export default function PlanCreator({ onPlanGenerated }: { onPlanGenerated: () =
                       <h3 style={{ fontSize: 15, fontWeight: 600 }}>{p.race_name}</h3>
                        {p.is_active && <span style={{ background: "var(--accent)", color: "white", padding: "2px 6px", borderRadius: 0, fontSize: 10, fontWeight: 600 }}>ACTIVE</span>}
                     </div>
-                    {!p.is_active && (
-                      <button className="btn-secondary" onClick={() => { void handleSetActivePlan(p.id); }} style={{ fontSize: 12 }}>Set Active</button>
-                    )}
+                    <div style={{ display: "flex", gap: 8 }}>
+                      {!p.is_active && (
+                        <button className="btn-secondary" onClick={() => { void handleSetActivePlan(p.id); }} style={{ fontSize: 12 }}>Set Active</button>
+                      )}
+                      <button className="btn-ghost" onClick={() => { void handleDeletePlan(p.id); }} style={{ color: "var(--danger)" }} title="Delete plan">
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
                   </div>
                   <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 10 }}>
                     Generated {new Date(p.generated_at).toLocaleDateString()}

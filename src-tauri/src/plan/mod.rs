@@ -75,6 +75,7 @@ pub async fn generate_plan(
 
                 db.deactivate_all_plans().map_err(|e| e.to_string())?;
                 app_handle.emit("plan:generate:progress", serde_json::json!({ "status": "Saving plan..." })).ok();
+                db.delete_plans_for_race(&race.id).map_err(|e| e.to_string())?;
                 db.save_training_plan(&plan).map_err(|e| e.to_string())?;
 
                 for (week_num, sessions) in parsed {

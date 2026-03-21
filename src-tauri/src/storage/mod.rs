@@ -1073,4 +1073,43 @@ impl Database {
         conn.execute("UPDATE training_plans SET is_active = 0", [])?;
         Ok(())
     }
+
+    pub fn delete_plans_for_race(&self, race_id: &str) -> SqlResult<()> {
+        let conn = self.conn();
+        conn.execute(
+            "DELETE FROM plan_sessions WHERE week_id IN (
+                SELECT pw.id FROM plan_weeks pw
+                JOIN training_plans tp ON pw.plan_id = tp.id
+                WHERE tp.race_id = ?1
+            )",
+            params![race_id],
+        )?;
+        conn.execute(
+            "DELETE FROM plan_weeks WHERE plan_id IN (
+                SELECT id FROM training_plans WHERE race_id = ?1
+            )",
+            params![race_id],
+        )?;
+        conn.execute(
+            "DELETE FROM training_plans WHERE race_id = ?1",
+            params![race_id],
+        )?;
+        Ok(())
+    }
+
+    pub fn delete_plan(&self, plan_id: &str) -> SqlResult<()> {
+        let conn = self.conn();
+        conn.execute(
+            "DELETE FROM plan_sessions WHERE week_id IN (
+                SELECT id FROM plan_weeks WHERE plan_id = ?1
+            )",
+            params![plan_id],
+        )?;
+        conn.execute(
+            "DELETE FROM plan_weeks WHERE plan_id = ?1",
+            params![plan_id],
+        )?;
+        conn.execute("DELETE FROM training_plans WHERE id = ?1", params![plan_id])?;
+        Ok(())
+    }
 }

@@ -464,6 +464,15 @@ fn set_active_plan(
 
 #[tauri::command]
 #[allow(clippy::needless_pass_by_value)]
+fn delete_plan(
+    state: tauri::State<'_, AppState>,
+    plan_id: String,
+) -> Result<(), String> {
+    state.db.delete_plan(&plan_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
 fn get_plan_weeks(
     state: tauri::State<'_, AppState>,
     plan_id: String,
@@ -573,6 +582,7 @@ pub fn run() {
             get_active_plan,
             list_plans,
             set_active_plan,
+            delete_plan,
             get_plan_weeks,
             update_session_status,
             get_athlete_summary,
