@@ -146,7 +146,7 @@ export default function App() {
                  gap: 10,
                  padding: "10px 16px",
                  margin: "2px 8px",
-                 borderRadius: 0,
+                 borderRadius: 4,
                  background: activeTab === item.id ? "var(--bg-hover)" : "transparent",
                  color: activeTab === item.id ? "var(--text-primary)" : "var(--text-secondary)",
                  border: "none",
@@ -208,7 +208,7 @@ export default function App() {
           display: "flex",
           alignItems: "center",
           gap: 12,
-          boxShadow: "0 4px 24px rgba(0,0,0,0.3)",
+          boxShadow: "0 4px 24px #000000",
         }}>
           {planGenerating && <RefreshCw size={18} className="spin" style={{ color: "var(--accent)", flexShrink: 0 }} />}
           {planResult === "success" && <Check size={18} style={{ color: "var(--success)", flexShrink: 0 }} />}
