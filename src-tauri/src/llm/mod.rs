@@ -33,7 +33,10 @@ async fn chat_with_cloud(
     model: &str,
     messages: Vec<OllamaMessage>,
 ) -> Result<String, String> {
-    let client = reqwest::Client::new();
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_mins(2))
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {e}"))?;
     let url = format!("{}/chat/completions", base_url.trim_end_matches('/'));
 
     let chat_messages: Vec<ChatMessage> = messages
@@ -53,6 +56,8 @@ async fn chat_with_cloud(
     let response = client
         .post(&url)
         .header("Authorization", format!("Bearer {api_key}"))
+        .header("HTTP-Referer", "https://coachlm.app")
+        .header("X-Title", "CoachLM")
         .json(&request)
         .send()
         .await
@@ -64,10 +69,16 @@ async fn chat_with_cloud(
         return Err(format!("Cloud provider returned status {status}: {body}"));
     }
 
-    let body: OpenAiChatResponse = response
-        .json()
+    let text = response
+        .text()
         .await
-        .map_err(|e| format!("Failed to parse cloud response: {e}"))?;
+        .map_err(|e| format!("Failed to read cloud response: {e}"))?;
+    let body: OpenAiChatResponse = serde_json::from_str(&text).map_err(|e| {
+        format!(
+            "Failed to parse cloud response: {e}\nRaw response: {}",
+            &text[..text.len().min(500)]
+        )
+    })?;
 
     body.choices
         .into_iter()
