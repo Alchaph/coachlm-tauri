@@ -146,6 +146,7 @@ export default function PlanCreator({ onPlanGenerated }: { onPlanGenerated: () =
   };
 
   const handleDeleteRace = async (id: string) => {
+    if (!window.confirm("Delete this race? This will also remove any associated training plans.")) return;
     try {
       await invoke("delete_race", { id });
       void loadData();

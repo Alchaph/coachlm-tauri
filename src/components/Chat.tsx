@@ -107,6 +107,7 @@ export default function Chat({ onStatusChange }: ChatProps) {
   };
 
   const closeSession = async (sessionId: string) => {
+    if (!window.confirm("Delete this chat session?")) return;
     try {
       await invoke("delete_chat_session", { sessionId });
       const remaining = sessions.filter((s) => s.id !== sessionId);

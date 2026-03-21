@@ -90,6 +90,7 @@ export default function Context() {
   };
 
   const deleteInsight = async (id: number) => {
+    if (!window.confirm("Unpin this insight?")) return;
     try {
       await invoke("delete_pinned_insight", { id });
       setInsights((prev) => prev.filter((i) => i.id !== id));
