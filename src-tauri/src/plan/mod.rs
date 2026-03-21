@@ -29,7 +29,7 @@ pub async fn generate_plan(
     let race_date = chrono::NaiveDate::parse_from_str(&race.race_date, "%Y-%m-%d")
         .map_err(|e| format!("Invalid race date: {e}"))?;
     #[allow(clippy::cast_precision_loss, clippy::cast_possible_truncation)]
-    let weeks_to_race = ((race_date - now.date_naive()).num_days() as f64 / 7.0).ceil() as i64;
+    let weeks_to_race = (((race_date - now.date_naive()).num_days() as f64 / 7.0).ceil() as i64).min(26);
 
     if weeks_to_race <= 0 {
         return Err("Race date is in the past".to_string());

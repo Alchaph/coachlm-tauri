@@ -84,6 +84,12 @@ export default function PlanCreator({ onPlanGenerated }: { onPlanGenerated: () =
         setError("Race date must be in the future");
         return;
       }
+      const twelveMonthsOut = new Date();
+      twelveMonthsOut.setMonth(twelveMonthsOut.getMonth() + 12);
+      if (dateObj > twelveMonthsOut) {
+        setError("Race date is more than 12 months away. The plan will be capped at 26 weeks of training.");
+        return;
+      }
     }
 
     let goalTimeS: number | null = null;
@@ -93,6 +99,18 @@ export default function PlanCreator({ onPlanGenerated }: { onPlanGenerated: () =
         goalTimeS = parseInt(parts[0]) * 3600 + parseInt(parts[1]) * 60 + parseInt(parts[2]);
       } else if (parts.length === 2) {
         goalTimeS = parseInt(parts[0]) * 60 + parseInt(parts[1]);
+      }
+      if (goalTimeS !== null) {
+        const minSeconds = 10 * 60;
+        const maxSeconds = raceDistance >= 42 ? 10 * 3600 : raceDistance >= 30 ? 24 * 3600 : 6 * 3600;
+        if (goalTimeS < minSeconds) {
+          setError("Goal time must be at least 10 minutes");
+          return;
+        }
+        if (goalTimeS > maxSeconds) {
+          setError(`Goal time seems unreasonably long for this distance`);
+          return;
+        }
       }
     }
 
