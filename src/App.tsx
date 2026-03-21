@@ -146,7 +146,7 @@ export default function App() {
                  gap: 10,
                  padding: "10px 16px",
                  margin: "2px 8px",
-                 borderRadius: 0,
+                 borderRadius: 4,
                  background: activeTab === item.id ? "var(--bg-hover)" : "transparent",
                  color: activeTab === item.id ? "var(--text-primary)" : "var(--text-secondary)",
                  border: "none",

@@ -55,6 +55,7 @@ export default function TrainingPlanPage() {
               fontWeight: activeSubTab === tab.id ? 600 : 400,
               fontSize: 13,
               border: "none",
+              borderRadius: 0,
               borderBottom: activeSubTab === tab.id ? "2px solid var(--accent)" : "2px solid transparent",
               cursor: "pointer",
               transition: "color 0.15s, border-color 0.15s",
