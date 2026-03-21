@@ -408,8 +408,8 @@ export default function Chat({ onStatusChange }: ChatProps) {
             </div>
           )}
 
-           {error && (
-              <div className="error-state" style={{ textAlign: "left", padding: "8px 14px", borderRadius: 6, background: "rgba(239,68,68,0.1)", border: "1px solid var(--danger)" }}>
+            {error && (
+               <div className="error-state" style={{ textAlign: "left", padding: "8px 14px", borderRadius: 6, background: "var(--bg-secondary)", border: "1px solid var(--danger)" }}>
                {error}
              </div>
            )}

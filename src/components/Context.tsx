@@ -307,7 +307,7 @@ export default function Context() {
       {showPreview && contextPreview && (
         <div
           style={{
-            position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)",
+            position: "fixed", inset: 0, background: "var(--bg-primary)",
             display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100,
           }}
           onClick={() => { setShowPreview(false); }}

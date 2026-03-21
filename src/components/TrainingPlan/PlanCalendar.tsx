@@ -181,8 +181,8 @@ export default function PlanCalendar({ onPlanGenerated }: { onPlanGenerated: () 
                     <div
                       onClick={() => { openSessionModal(session); }}
                       style={{
-                        background: isCompleted ? `${color}20` : isSkipped ? "var(--bg-tertiary)" : `${color}15`,
-                        border: `1px solid ${isCompleted ? color : isSkipped ? "var(--border)" : `${color}50`}`,
+                        background: isCompleted ? "var(--bg-tertiary)" : isSkipped ? "var(--bg-tertiary)" : "var(--bg-secondary)",
+                        border: `1px solid ${isCompleted ? color : isSkipped ? "var(--border)" : "var(--border)"}`,
                         borderRadius: 0,
                         padding: 8,
                         cursor: "pointer",
@@ -268,7 +268,7 @@ export default function PlanCalendar({ onPlanGenerated }: { onPlanGenerated: () 
                   <div>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
                       <span style={{ fontSize: 13, color: "var(--text-secondary)" }}>{DAY_NAMES[day - 1]}</span>
-                      <span style={{ background: `${color}25`, color, padding: "2px 8px", borderRadius: 0, fontSize: 11, fontWeight: 600, textTransform: "uppercase" }}>
+                      <span style={{ background: "var(--bg-tertiary)", color, padding: "2px 8px", borderRadius: 0, fontSize: 11, fontWeight: 600, textTransform: "uppercase" }}>
                          {session.session_type.replace("_", " ")}
                        </span>
                     </div>
@@ -313,7 +313,7 @@ export default function PlanCalendar({ onPlanGenerated }: { onPlanGenerated: () 
     if (!selectedSession) return null;
 
     return (
-      <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 }}>
+      <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "var(--bg-primary)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 }}>
         <div className="card" style={{ width: 400, maxWidth: "90%", maxHeight: "90%", overflow: "auto" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
             <h2 style={{ fontSize: 18, fontWeight: 600, color: getSessionColor(selectedSession.session_type), textTransform: "capitalize" }}>

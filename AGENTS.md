@@ -224,6 +224,8 @@ To add a new backend, implement the same function signatures and add a story.
 - The app uses a dark theme.
 - Use toast notifications for user feedback (save confirmations, errors), not button text changes. Toast pattern: local `useState<Toast | null>` with a `showToast(message, type)` helper that auto-clears after 3 seconds. Render a fixed-position `.toast.toast-{type}` element. CSS classes are in `global.css`.
 - Do not use dynamic text in buttons. Button labels must be static strings (e.g. always "Save Settings", never "Saving…" → "Save Settings"). Use the `disabled` attribute for loading states, not label swaps.
+- All backgrounds and colors must be fully opaque (alpha: 1). Do not use `rgba()` with alpha < 1, hex colors with alpha channel (e.g. `#ffffff80`), or any translucent/transparent overlays. Use solid CSS variable colors from `global.css` instead.
+- Patch releases for bug fixes (`fix:` commits), minor releases for new features (`feat:` commits). See Release versioning above.
 
 ---
 
