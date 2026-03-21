@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { Check, X, RefreshCw, Calendar, List } from "lucide-react";
+import { Check, X, RefreshCw, Calendar, List, ChevronLeft, ChevronRight } from "lucide-react";
 import type { Race, TrainingPlan, PlanSession, PlanWeekWithSessions } from "./types";
 import { getSessionColor, formatPace, getWeeksToRace } from "./types";
 
@@ -14,8 +14,10 @@ export default function PlanCalendar({ onPlanGenerated }: { onPlanGenerated: () 
   const [error, setError] = useState<string | null>(null);
   const [calendarView, setCalendarView] = useState<"calendar" | "week">("calendar");
 
+  const [selectedWeekIndex, setSelectedWeekIndex] = useState<number | null>(null);
+  const [monthOffset, setMonthOffset] = useState(0);
+
   const [selectedSession, setSelectedSession] = useState<PlanSession | null>(null);
-  const [sessionNotes, setSessionNotes] = useState("");
   const [actualDuration, setActualDuration] = useState("");
   const [actualDistance, setActualDistance] = useState("");
 
@@ -85,30 +87,46 @@ export default function PlanCalendar({ onPlanGenerated }: { onPlanGenerated: () 
 
   const openSessionModal = (session: PlanSession) => {
     setSelectedSession(session);
-    setSessionNotes(session.notes ?? "");
     setActualDuration(session.actual_duration_min?.toString() ?? "");
     setActualDistance(session.actual_distance_km?.toString() ?? "");
   };
 
-  const getCurrentWeek = (): PlanWeekWithSessions | null => {
+  const getCurrentWeekIndex = (): number => {
+    if (planWeeks.length === 0) return 0;
     const now = Date.now();
     const weekMs = 7 * 24 * 60 * 60 * 1000;
 
-    for (const pw of planWeeks) {
-      const start = new Date(pw.week.week_start).getTime();
-      if (start <= now && now < start + weekMs) {
-        return pw;
-      }
+    for (let i = 0; i < planWeeks.length; i++) {
+      const start = new Date(planWeeks[i].week.week_start).getTime();
+      if (start <= now && now < start + weekMs) return i;
     }
-
-    for (const pw of planWeeks) {
-      const start = new Date(pw.week.week_start).getTime();
-      if (start > now) {
-        return pw;
-      }
+    for (let i = 0; i < planWeeks.length; i++) {
+      const start = new Date(planWeeks[i].week.week_start).getTime();
+      if (start > now) return i;
     }
+    return planWeeks.length - 1;
+  };
 
-    return planWeeks.length > 0 ? planWeeks[planWeeks.length - 1] : null;
+  const getCurrentWeek = (): PlanWeekWithSessions | null => {
+    if (planWeeks.length === 0) return null;
+    const idx = selectedWeekIndex ?? getCurrentWeekIndex();
+    return planWeeks[idx] ?? null;
+  };
+
+  const getMonthGroups = (): { label: string; weeks: PlanWeekWithSessions[] }[] => {
+    const groups: Map<string, PlanWeekWithSessions[]> = new Map();
+    for (const pw of planWeeks) {
+      const d = new Date(pw.week.week_start);
+      const key = `${String(d.getFullYear())}-${String(d.getMonth())}`;
+      const existing = groups.get(key) ?? [];
+      existing.push(pw);
+      groups.set(key, existing);
+    }
+    return Array.from(groups.entries()).map(([, weeks]) => {
+      const d = new Date(weeks[0].week.week_start);
+      const label = d.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+      return { label, weeks };
+    });
   };
 
   if (!plan) {
@@ -124,6 +142,8 @@ export default function PlanCalendar({ onPlanGenerated }: { onPlanGenerated: () 
   }
 
   const activeRace = races.find(r => r.is_active);
+  const monthGroups = getMonthGroups();
+  const clampedMonthOffset = Math.min(monthOffset, Math.max(0, monthGroups.length - 1));
 
   const renderViewToggle = () => (
     <div style={{ display: "flex", gap: 4 }}>
@@ -146,69 +166,143 @@ export default function PlanCalendar({ onPlanGenerated }: { onPlanGenerated: () 
     </div>
   );
 
-  const renderCalendarGrid = () => (
-    <div className="card" style={{ padding: 0, overflowX: "auto" }}>
-      <div style={{ minWidth: 800 }}>
-        <div style={{ display: "grid", gridTemplateColumns: "60px repeat(7, 1fr)", borderBottom: "1px solid var(--border)", background: "var(--bg-tertiary)" }}>
-          <div style={{ padding: 12, fontWeight: 600, fontSize: 12, color: "var(--text-muted)", textAlign: "center" }}>Wk</div>
-          {DAY_NAMES.map(day => (
-            <div key={day} style={{ padding: 12, fontWeight: 600, fontSize: 12, color: "var(--text-muted)", textAlign: "center" }}>{day}</div>
-          ))}
-        </div>
-
-        {planWeeks.map((pw) => {
-          const isPast = new Date(pw.week.week_start).getTime() < Date.now() - 7 * 24 * 60 * 60 * 1000;
-          const plannedKm = pw.sessions.reduce((sum, s) => sum + (s.distance_km ?? 0), 0);
-          const actualKm = pw.sessions.reduce((sum, s) => sum + (s.actual_distance_km ?? 0), 0);
-
-          return (
-            <div key={pw.week.id} style={{ display: "grid", gridTemplateColumns: "60px repeat(7, 1fr)", borderBottom: "1px solid var(--border)", opacity: isPast ? 0.6 : 1 }}>
-              <div style={{ padding: 12, borderRight: "1px solid var(--border)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
-                <div style={{ fontWeight: 700 }}>{pw.week.week_number}</div>
-                <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 4 }}>{actualKm.toFixed(0)}/{plannedKm.toFixed(0)}km</div>
-              </div>
-
-              {[1, 2, 3, 4, 5, 6, 7].map(day => {
-                const session = pw.sessions.find(s => s.day_of_week === day);
-                if (!session) return <div key={day} style={{ padding: 8, borderRight: "1px solid var(--border)" }} />;
-
-                const color = getSessionColor(session.session_type);
-                const isCompleted = session.status === "completed";
-                const isSkipped = session.status === "skipped";
-
-                return (
-                  <div key={day} style={{ padding: 8, borderRight: "1px solid var(--border)" }}>
-                    <div
-                      onClick={() => { openSessionModal(session); }}
-                      style={{
-                        background: isCompleted ? `${color}20` : isSkipped ? "var(--bg-tertiary)" : `${color}15`,
-                        border: `1px solid ${isCompleted ? color : isSkipped ? "var(--border)" : `${color}50`}`,
-                        borderRadius: 0,
-                        padding: 8,
-                        cursor: "pointer",
-                        height: "100%",
-                        opacity: isSkipped ? 0.5 : 1,
-                        position: "relative",
-                      }}
-                    >
-                      <div style={{ fontSize: 11, fontWeight: 600, color: isSkipped ? "var(--text-muted)" : color, textTransform: "uppercase", marginBottom: 4 }}>
-                        {session.session_type.replace("_", " ")}
-                      </div>
-                      {session.distance_km && <div style={{ fontSize: 13, fontWeight: 500 }}>{session.distance_km} km</div>}
-                      {session.duration_min && <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>{session.duration_min} min</div>}
-
-                      {isCompleted && <Check size={14} style={{ position: "absolute", top: 6, right: 6, color }} />}
-                      {isSkipped && <X size={14} style={{ position: "absolute", top: 6, right: 6, color: "var(--text-muted)" }} />}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          );
-        })}
+  const renderWeekNav = () => {
+    const currentIdx = selectedWeekIndex ?? getCurrentWeekIndex();
+    const isAuto = selectedWeekIndex === null;
+    return (
+      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        <button
+          className="btn-secondary"
+          onClick={() => { setSelectedWeekIndex(Math.max(0, currentIdx - 1)); }}
+          disabled={currentIdx <= 0}
+          style={{ padding: "6px 10px" }}
+          title="Previous week"
+        >
+          <ChevronLeft size={14} />
+        </button>
+        <button
+          className={isAuto ? "btn-primary" : "btn-secondary"}
+          onClick={() => { setSelectedWeekIndex(null); }}
+          style={{ padding: "6px 12px", fontSize: 12 }}
+        >
+          Today
+        </button>
+        <button
+          className="btn-secondary"
+          onClick={() => { setSelectedWeekIndex(Math.min(planWeeks.length - 1, currentIdx + 1)); }}
+          disabled={currentIdx >= planWeeks.length - 1}
+          style={{ padding: "6px 10px" }}
+          title="Next week"
+        >
+          <ChevronRight size={14} />
+        </button>
       </div>
-    </div>
-  );
+    );
+  };
+
+  const renderMonthNav = () => {
+    return (
+      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        <button
+          className="btn-secondary"
+          onClick={() => { setMonthOffset(o => Math.max(0, o - 1)); }}
+          disabled={clampedMonthOffset <= 0}
+          style={{ padding: "6px 10px" }}
+          title="Previous month"
+        >
+          <ChevronLeft size={14} />
+        </button>
+        {monthGroups[clampedMonthOffset] && (
+          <span style={{ fontSize: 13, fontWeight: 600, minWidth: 130, textAlign: "center" }}>
+            {monthGroups[clampedMonthOffset].label}
+          </span>
+        )}
+        <button
+          className="btn-secondary"
+          onClick={() => { setMonthOffset(o => Math.min(monthGroups.length - 1, o + 1)); }}
+          disabled={clampedMonthOffset >= monthGroups.length - 1}
+          style={{ padding: "6px 10px" }}
+          title="Next month"
+        >
+          <ChevronRight size={14} />
+        </button>
+      </div>
+    );
+  };
+
+  const renderCalendarGrid = () => {
+    const weeksToRender = monthGroups[clampedMonthOffset]?.weeks ?? [];
+
+    return (
+      <div className="card" style={{ padding: 0, overflowX: "auto" }}>
+        <div style={{ minWidth: 800 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "60px repeat(7, 1fr)", borderBottom: "1px solid var(--border)", background: "var(--bg-tertiary)" }}>
+            <div style={{ padding: 12, fontWeight: 600, fontSize: 12, color: "var(--text-muted)", textAlign: "center" }}>Wk</div>
+            {DAY_NAMES.map(day => (
+              <div key={day} style={{ padding: 12, fontWeight: 600, fontSize: 12, color: "var(--text-muted)", textAlign: "center" }}>{day}</div>
+            ))}
+          </div>
+
+          {weeksToRender.map((pw) => {
+            const isPast = new Date(pw.week.week_start).getTime() < Date.now() - 7 * 24 * 60 * 60 * 1000;
+            const plannedKm = pw.sessions.reduce((sum, s) => sum + (s.distance_km ?? 0), 0);
+            const actualKm = pw.sessions.reduce((sum, s) => sum + (s.actual_distance_km ?? 0), 0);
+
+            return (
+              <div key={pw.week.id} style={{ display: "grid", gridTemplateColumns: "60px repeat(7, 1fr)", borderBottom: "1px solid var(--border)", opacity: isPast ? 0.6 : 1 }}>
+                <div style={{ padding: 12, borderRight: "1px solid var(--border)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+                  <div style={{ fontWeight: 700 }}>{pw.week.week_number}</div>
+                  <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 4 }}>{actualKm.toFixed(0)}/{plannedKm.toFixed(0)}km</div>
+                </div>
+
+                {[1, 2, 3, 4, 5, 6, 7].map(day => {
+                  const session = pw.sessions.find(s => s.day_of_week === day);
+                  if (!session) return <div key={day} style={{ padding: 8, borderRight: "1px solid var(--border)" }} />;
+
+                  const color = getSessionColor(session.session_type);
+                  const isCompleted = session.status === "completed";
+                  const isSkipped = session.status === "skipped";
+
+                  return (
+                    <div key={day} style={{ padding: 8, borderRight: "1px solid var(--border)" }}>
+                      <div
+                        onClick={() => { openSessionModal(session); }}
+                        style={{
+                          background: isCompleted ? `${color}20` : isSkipped ? "var(--bg-tertiary)" : `${color}15`,
+                          border: `1px solid ${isCompleted ? color : isSkipped ? "var(--border)" : `${color}50`}`,
+                          borderRadius: 0,
+                          padding: 8,
+                          cursor: "pointer",
+                          height: "100%",
+                          opacity: isSkipped ? 0.5 : 1,
+                          position: "relative",
+                        }}
+                      >
+                        <div style={{ fontSize: 11, fontWeight: 600, color: isSkipped ? "var(--text-muted)" : color, textTransform: "uppercase", marginBottom: 4 }}>
+                          {session.session_type.replace("_", " ")}
+                        </div>
+                        {session.distance_km && <div style={{ fontSize: 13, fontWeight: 500 }}>{session.distance_km} km</div>}
+                        {session.duration_min && <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>{session.duration_min} min</div>}
+
+                        {isCompleted && <Check size={14} style={{ position: "absolute", top: 6, right: 6, color }} />}
+                        {isSkipped && <X size={14} style={{ position: "absolute", top: 6, right: 6, color: "var(--text-muted)" }} />}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })}
+
+          {weeksToRender.length === 0 && (
+            <div style={{ padding: 32, textAlign: "center", color: "var(--text-muted)", fontSize: 13 }}>
+              No training weeks in this month.
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
 
   const renderWeeklyOverview = () => {
     const currentWeek = getCurrentWeek();
@@ -358,24 +452,6 @@ export default function PlanCalendar({ onPlanGenerated }: { onPlanGenerated: () 
             </div>
           )}
 
-          <div style={{ borderTop: "1px solid var(--border)", paddingTop: 16, marginBottom: 20 }}>
-            <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>Log Activity</h3>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
-              <div>
-                <label htmlFor="actualDistance">Actual Distance (km)</label>
-                <input id="actualDistance" type="number" value={actualDistance} onChange={e => { setActualDistance(e.target.value); }} style={{ width: "100%" }} step="0.1" />
-              </div>
-              <div>
-                <label htmlFor="actualDuration">Actual Duration (min)</label>
-                <input id="actualDuration" type="number" value={actualDuration} onChange={e => { setActualDuration(e.target.value); }} style={{ width: "100%" }} />
-              </div>
-            </div>
-            <div>
-              <label htmlFor="sessionNotes">Your Notes</label>
-              <textarea id="sessionNotes" value={sessionNotes} onChange={e => { setSessionNotes(e.target.value); }} style={{ width: "100%", height: 80, resize: "vertical" }} />
-            </div>
-          </div>
-
           <div style={{ display: "flex", gap: 8 }}>
             <button className="btn-secondary" onClick={() => { void handleUpdateSession("skipped"); }} style={{ flex: 1 }}>Mark Skipped</button>
             <button className="btn-primary" onClick={() => { void handleUpdateSession("completed"); }} style={{ flex: 2, background: "var(--success)" }}>Mark Completed</button>
@@ -393,6 +469,8 @@ export default function PlanCalendar({ onPlanGenerated }: { onPlanGenerated: () 
           {activeRace && <div style={{ fontSize: 13, color: "var(--text-secondary)" }}>{activeRace.name} &bull; {getWeeksToRace(activeRace.race_date)} weeks to go</div>}
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          {calendarView === "week" && renderWeekNav()}
+          {calendarView === "calendar" && renderMonthNav()}
           {renderViewToggle()}
           {activeRace && (
             <button className="btn-secondary" onClick={() => { void handleRegenerate(activeRace.id); }} style={{ display: "flex", alignItems: "center", gap: 6 }}>
