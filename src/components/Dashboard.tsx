@@ -36,20 +36,6 @@ interface AuthStatus {
   expires_at: number | null;
 }
 
-interface AthleteTotals {
-  count?: number;
-  distance?: number;
-  moving_time?: number;
-  elapsed_time?: number;
-  elevation_gain?: number;
-}
-
-interface AthleteSummary {
-  recent_run_totals?: AthleteTotals;
-  ytd_run_totals?: AthleteTotals;
-  all_run_totals?: AthleteTotals;
-}
-
 const thStyle: React.CSSProperties = {
   padding: "10px 14px",
   fontSize: 12,
@@ -140,7 +126,6 @@ export default function Dashboard() {
   const [syncing, setSyncing] = useState(false);
   const [syncProgress, setSyncProgress] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [athleteSummary, setAthleteSummary] = useState<AthleteSummary | null>(null);
   const [typeFilter, setTypeFilter] = useState("All");
 
   useEffect(() => {
@@ -177,16 +162,14 @@ export default function Dashboard() {
 
   const loadData = async () => {
     try {
-      const [acts, st, auth, summary] = await Promise.all([
+      const [acts, st, auth] = await Promise.all([
         invoke<ActivityItem[]>("get_recent_activities", { limit: 50 }),
         invoke<Stats>("get_activity_stats"),
         invoke<AuthStatus>("get_strava_auth_status"),
-        invoke<AthleteSummary | null>("get_athlete_summary"),
       ]);
       setActivities(acts);
       setStats(st);
       setAuthStatus(auth);
-      setAthleteSummary(summary ?? null);
     } catch (e) {
       setError(String(e));
     }
@@ -287,8 +270,6 @@ export default function Dashboard() {
 
   const weeklyVolume = useMemo(() => computeWeeklyVolume(activities), [activities]);
   const maxWeekKm = useMemo(() => Math.max(...weeklyVolume.map((w) => w.km), 1), [weeklyVolume]);
-
-  void athleteSummary;
 
   return (
     <div style={{ padding: 24, overflow: "auto", height: "100%" }}>
