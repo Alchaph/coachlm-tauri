@@ -4,7 +4,7 @@ import { listen } from "@tauri-apps/api/event";
 import { ask } from "@tauri-apps/plugin-dialog";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Send, Pin, Plus, X, MessageSquare, PanelLeftClose, PanelLeftOpen, Globe, Pencil } from "lucide-react";
+import { Send, Pin, Plus, X, MessageSquare, PanelLeftClose, PanelLeftOpen, Globe, Pencil, Copy } from "lucide-react";
 import { useToast } from "../hooks/useToast";
 
 interface Message {
@@ -228,6 +228,15 @@ export default function Chat({ onStatusChange }: ChatProps) {
     } catch (e) {
       setError(String(e));
       showToast("Failed to pin insight", "error");
+    }
+  };
+
+  const copyMessage = async (content: string) => {
+    try {
+      await navigator.clipboard.writeText(content);
+      showToast("Copied to clipboard", "success");
+    } catch {
+      showToast("Failed to copy", "error");
     }
   };
 
@@ -520,14 +529,24 @@ export default function Chat({ onStatusChange }: ChatProps) {
                 )}
               </div>
               {msg.role === "assistant" && (
-                <button
-                  className="btn-ghost"
-                  onClick={() => { void pinMessage(msg.content); }}
-                  style={{ marginTop: 4, fontSize: 11, display: "flex", alignItems: "center", gap: 4 }}
-                  title="Save as coaching insight"
-                >
-                  <Pin size={12} /> Pin
-                </button>
+                <div style={{ display: "flex", gap: 4, marginTop: 4 }}>
+                  <button
+                    className="btn-ghost"
+                    onClick={() => { void copyMessage(msg.content); }}
+                    style={{ fontSize: 11, display: "flex", alignItems: "center", gap: 4 }}
+                    title="Copy message"
+                  >
+                    <Copy size={12} /> Copy
+                  </button>
+                  <button
+                    className="btn-ghost"
+                    onClick={() => { void pinMessage(msg.content); }}
+                    style={{ fontSize: 11, display: "flex", alignItems: "center", gap: 4 }}
+                    title="Save as coaching insight"
+                  >
+                    <Pin size={12} /> Pin
+                  </button>
+                </div>
               )}
               {msg.role === "user" && editingMessageId !== msg.id && !loading && (
                 <button
