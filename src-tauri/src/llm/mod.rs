@@ -160,6 +160,8 @@ mod tests {
             custom_system_prompt: String::new(),
             cloud_api_key: None,
             cloud_model: None,
+            web_search_enabled: false,
+            web_search_provider: String::new(),
         }
     }
 
@@ -171,6 +173,8 @@ mod tests {
             custom_system_prompt: String::new(),
             cloud_api_key: Some("gsk_test_key".to_string()),
             cloud_model: Some("llama-3.3-70b-versatile".to_string()),
+            web_search_enabled: false,
+            web_search_provider: String::new(),
         }
     }
 

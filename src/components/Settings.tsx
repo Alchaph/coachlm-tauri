@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { Save, RefreshCw, Plug, Unplug, Check, X } from "lucide-react";
+import { Save, RefreshCw, Plug, Unplug, Check, X, Globe } from "lucide-react";
 
 interface SettingsData {
   active_llm: string;
@@ -10,6 +10,8 @@ interface SettingsData {
   custom_system_prompt: string;
   cloud_api_key: string | null;
   cloud_model: string | null;
+  web_search_enabled: boolean;
+  web_search_provider: string;
 }
 
 interface StravaAuthStatus {
@@ -30,6 +32,8 @@ export default function SettingsPage() {
     custom_system_prompt: "",
     cloud_api_key: null,
     cloud_model: null,
+    web_search_enabled: false,
+    web_search_provider: "duckduckgo",
   });
   const [models, setModels] = useState<string[]>([]);
   const [fetchingModels, setFetchingModels] = useState(false);
@@ -294,6 +298,43 @@ export default function SettingsPage() {
               )}
             </div>
           )}
+        </div>
+
+        <div className="card">
+          <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 16 }}>
+            <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <Globe size={18} /> Web Search
+            </span>
+          </h2>
+
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+            <div>
+              <div style={{ fontWeight: 500 }}>Enable Web Search</div>
+              <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>
+                Search the web for context before generating responses. Uses DuckDuckGo (no API key required).
+              </p>
+            </div>
+            <button
+              className={settings.web_search_enabled ? "btn-primary" : "btn-secondary"}
+              onClick={() => { setSettings({ ...settings, web_search_enabled: !settings.web_search_enabled }); }}
+              style={{ minWidth: 64, textAlign: "center" }}
+            >
+              {settings.web_search_enabled ? "On" : "Off"}
+            </button>
+          </div>
+
+          <div>
+            <label htmlFor="web-search-provider">Search Provider</label>
+            <select
+              id="web-search-provider"
+              value={settings.web_search_provider}
+              onChange={(e) => { setSettings({ ...settings, web_search_provider: e.target.value }); }}
+              style={{ width: "100%" }}
+              disabled={!settings.web_search_enabled}
+            >
+              <option value="duckduckgo">DuckDuckGo</option>
+            </select>
+          </div>
         </div>
 
       </div>

@@ -5,6 +5,7 @@ mod models;
 mod plan;
 mod storage;
 mod strava;
+mod web_search;
 
 use models::{
     ActivityData, AuthStatus, ExportData, InsightData, MessageData, OllamaMessage, PlanWeekWithSessions,
@@ -172,11 +173,20 @@ async fn generate_session_title(settings: &models::SettingsData, content: &str) 
     }
 }
 
+fn emit_chat_progress(app_handle: &tauri::AppHandle, status: &str) {
+    app_handle
+        .emit("chat:send:progress", serde_json::json!({ "status": status }))
+        .ok();
+}
+
 #[tauri::command]
 async fn send_message(
     state: tauri::State<'_, AppState>,
+    app_handle: tauri::AppHandle,
     content: String,
 ) -> Result<String, String> {
+    // Phase 1: Prepare session
+    emit_chat_progress(&app_handle, "Preparing session...");
     let session_id = {
         let mut sid = state
             .current_session_id
@@ -200,23 +210,51 @@ async fn send_message(
         .map_err(|e| e.to_string())?
         .ok_or("Settings not configured. Complete the setup wizard first.")?;
 
+    // Phase 2: Generate title (fire-and-forget for first message)
     let sessions = state.db.get_chat_sessions().map_err(|e| e.to_string())?;
     let current = sessions.iter().find(|s| s.id == session_id);
     let needs_title = current.is_some_and(|s| s.title.is_none());
     if needs_title {
-        let title = generate_session_title(&settings, &content).await;
-        state
-            .db
-            .update_chat_session_title(&session_id, &title)
-            .map_err(|e| e.to_string())?;
+        emit_chat_progress(&app_handle, "Generating title...");
+        let title_settings = settings.clone();
+        let title_content = content.clone();
+        let title_db = state.db.clone();
+        let title_session_id = session_id.clone();
+        tauri::async_runtime::spawn(async move {
+            let title = generate_session_title(&title_settings, &title_content).await;
+            title_db
+                .update_chat_session_title(&title_session_id, &title)
+                .ok();
+        });
     }
 
+    // Phase 2.5: Web search (if enabled)
+    let mut web_search_context = String::new();
+    if settings.web_search_enabled {
+        emit_chat_progress(&app_handle, "Searching the web...");
+        match web_search::search_duckduckgo(&content, 5).await {
+            Ok(results) => {
+                web_search_context = web_search::format_search_results(&results);
+            }
+            Err(e) => {
+                log::warn!("Web search failed, continuing without results: {e}");
+            }
+        }
+    }
+
+    // Phase 3: Gather context
+    emit_chat_progress(&app_handle, "Gathering context...");
     let llm_ctx = context::build_context(&state.db);
     let history = state.db.get_chat_messages(&session_id).map_err(|e| e.to_string())?;
 
+    let mut system_content = llm_ctx;
+    if !web_search_context.is_empty() {
+        system_content = format!("{web_search_context}\n\n{system_content}");
+    }
+
     let mut messages = vec![OllamaMessage {
         role: "system".to_string(),
-        content: llm_ctx,
+        content: system_content,
     }];
 
     for msg in &history {
@@ -226,8 +264,12 @@ async fn send_message(
         });
     }
 
+    // Phase 4: Query model
+    emit_chat_progress(&app_handle, "Querying model...");
     let response = llm::chat(&settings, messages).await?;
 
+    // Phase 5: Save response
+    emit_chat_progress(&app_handle, "Saving response...");
     state
         .db
         .insert_chat_message(&session_id, "assistant", &response)

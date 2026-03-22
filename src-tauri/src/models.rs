@@ -8,6 +8,14 @@ pub struct SettingsData {
     pub custom_system_prompt: String,
     pub cloud_api_key: Option<String>,
     pub cloud_model: Option<String>,
+    #[serde(default)]
+    pub web_search_enabled: bool,
+    #[serde(default = "default_web_search_provider")]
+    pub web_search_provider: String,
+}
+
+fn default_web_search_provider() -> String {
+    "duckduckgo".to_string()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

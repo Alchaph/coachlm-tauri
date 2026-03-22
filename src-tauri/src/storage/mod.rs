@@ -259,7 +259,12 @@ impl Database {
             }
         }
 
-        let new_settings_cols = [("cloud_api_key", "TEXT"), ("cloud_model", "TEXT")];
+        let new_settings_cols = [
+            ("cloud_api_key", "TEXT"),
+            ("cloud_model", "TEXT"),
+            ("web_search_enabled", "INTEGER DEFAULT 0"),
+            ("web_search_provider", "TEXT DEFAULT 'duckduckgo'"),
+        ];
         for (col, col_type) in new_settings_cols {
             let exists: bool = conn
                 .prepare(&format!("SELECT {col} FROM settings LIMIT 0"))
@@ -283,7 +288,7 @@ impl Database {
     pub fn get_settings(&self) -> SqlResult<Option<super::models::SettingsData>> {
         let conn = self.conn();
         let mut stmt = conn.prepare(
-            "SELECT active_llm, ollama_endpoint, ollama_model, custom_system_prompt, cloud_api_key, cloud_model FROM settings WHERE id = 1"
+            "SELECT active_llm, ollama_endpoint, ollama_model, custom_system_prompt, cloud_api_key, cloud_model, web_search_enabled, web_search_provider FROM settings WHERE id = 1"
         )?;
         let result = stmt.query_row([], |row| {
             Ok((
@@ -294,6 +299,10 @@ impl Database {
                     custom_system_prompt: row.get(3)?,
                     cloud_api_key: None,
                     cloud_model: row.get(5)?,
+                    web_search_enabled: row.get::<_, i64>(6).unwrap_or(0) != 0,
+                    web_search_provider: row
+                        .get::<_, Option<String>>(7)?
+                        .unwrap_or_else(|| "duckduckgo".to_string()),
                 },
                 row.get::<_, Option<String>>(4)?,
             ))
@@ -318,9 +327,9 @@ impl Database {
             .filter(|k| !k.is_empty())
             .and_then(|k| self.encrypt(k).ok());
         conn.execute(
-            "INSERT OR REPLACE INTO settings (id, active_llm, ollama_endpoint, ollama_model, custom_system_prompt, cloud_api_key, cloud_model)
-             VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6)",
-            params![data.active_llm, data.ollama_endpoint, data.ollama_model, data.custom_system_prompt, encrypted_key, data.cloud_model],
+            "INSERT OR REPLACE INTO settings (id, active_llm, ollama_endpoint, ollama_model, custom_system_prompt, cloud_api_key, cloud_model, web_search_enabled, web_search_provider)
+             VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            params![data.active_llm, data.ollama_endpoint, data.ollama_model, data.custom_system_prompt, encrypted_key, data.cloud_model, i64::from(data.web_search_enabled), data.web_search_provider],
         )?;
         Ok(())
     }

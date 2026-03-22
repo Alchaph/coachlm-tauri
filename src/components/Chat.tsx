@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Send, Pin, Plus, X, MessageSquare, PanelLeftClose, PanelLeftOpen, Check } from "lucide-react";
+import { Send, Pin, Plus, X, MessageSquare, PanelLeftClose, PanelLeftOpen, Check, Globe } from "lucide-react";
 
 interface Message {
   id: number;
@@ -19,7 +20,18 @@ interface Session {
 }
 
 interface ChatProps {
-  onStatusChange?: (status: "idle" | "thinking" | "replied") => void;
+  onStatusChange?: (status: "idle" | "thinking" | "replied", detail?: string) => void;
+}
+
+interface ChatSettingsData {
+  active_llm: string;
+  ollama_endpoint: string;
+  ollama_model: string;
+  custom_system_prompt: string;
+  cloud_api_key: string | null;
+  cloud_model: string | null;
+  web_search_enabled: boolean;
+  web_search_provider: string;
 }
 
 interface Toast {
@@ -32,6 +44,7 @@ export default function Chat({ onStatusChange }: ChatProps) {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [loadingStatus, setLoadingStatus] = useState("Thinking...");
   const [error, setError] = useState<string | null>(null);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -42,6 +55,7 @@ export default function Chat({ onStatusChange }: ChatProps) {
   const [promptHistory, setPromptHistory] = useState<string[]>([]);
   const historyIndex = useRef(-1);
   const savedInput = useRef("");
+  const [webSearchEnabled, setWebSearchEnabled] = useState(false);
 
   const scrollToBottom = useCallback(() => {
     if (shouldAutoScroll.current) {
@@ -80,9 +94,26 @@ export default function Chat({ onStatusChange }: ChatProps) {
         setCurrentSessionId(firstId);
         shouldAutoScroll.current = true;
       }
+      try {
+        const settings = await invoke<ChatSettingsData>("get_settings");
+        setWebSearchEnabled(settings.web_search_enabled);
+      } catch {
+        // Settings may not exist yet on first run
+      }
     };
     void init();
   }, [refreshSessions]);
+
+  useEffect(() => {
+    let cleanup: (() => void) | undefined;
+    void (async () => {
+      cleanup = await listen<{ status: string }>("chat:send:progress", (event) => {
+        setLoadingStatus(event.payload.status);
+        onStatusChange?.("thinking", event.payload.status);
+      });
+    })();
+    return () => { cleanup?.(); };
+  }, [onStatusChange]);
 
   const loadSession = async (sessionId: string) => {
     try {
@@ -137,6 +168,7 @@ export default function Chat({ onStatusChange }: ChatProps) {
     }
     setError(null);
     setLoading(true);
+    setLoadingStatus("Thinking...");
     shouldAutoScroll.current = true;
     onStatusChange?.("thinking");
 
@@ -196,6 +228,19 @@ export default function Chat({ onStatusChange }: ChatProps) {
     } catch (e) {
       setError(String(e));
       showToast("Failed to pin insight", "error");
+    }
+  };
+
+  const toggleWebSearch = async () => {
+    const newValue = !webSearchEnabled;
+    setWebSearchEnabled(newValue);
+    try {
+      const settings = await invoke<ChatSettingsData>("get_settings");
+      await invoke("save_settings", {
+        data: { ...settings, web_search_enabled: newValue },
+      });
+    } catch {
+      setWebSearchEnabled(!newValue);
     }
   };
 
@@ -403,8 +448,8 @@ export default function Chat({ onStatusChange }: ChatProps) {
                    color: "var(--text-muted)",
                  }}
                >
-                 Thinking...
-              </div>
+                  {loadingStatus}
+               </div>
             </div>
           )}
 
@@ -438,6 +483,19 @@ export default function Chat({ onStatusChange }: ChatProps) {
             style={{ flex: 1, resize: "none", lineHeight: "20px" }}
             id="chat-input"
           />
+          <button
+            className="btn-ghost"
+            onClick={() => { void toggleWebSearch(); }}
+            title={webSearchEnabled ? "Web search enabled" : "Web search disabled"}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              padding: "6px",
+              color: webSearchEnabled ? "var(--accent)" : "var(--text-muted)",
+            }}
+          >
+            <Globe size={18} />
+          </button>
           <button
             className="btn-primary"
             onClick={() => { void sendMessage(); }}

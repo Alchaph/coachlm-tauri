@@ -9,6 +9,8 @@ export default function PlanCreator({ onPlanGenerated }: { onPlanGenerated: () =
   const [races, setRaces] = useState<Race[]>([]);
   const [plans, setPlans] = useState<TrainingPlanSummary[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [progressMessage, setProgressMessage] = useState("");
 
   const [showAddRace, setShowAddRace] = useState(false);
   const [editingRaceId, setEditingRaceId] = useState<string | null>(null);
@@ -38,14 +40,31 @@ export default function PlanCreator({ onPlanGenerated }: { onPlanGenerated: () =
   }, [loadData]);
 
   useEffect(() => {
-    let cleanup: (() => void) | undefined;
+    const cleanups: (() => void)[] = [];
     void (async () => {
-      cleanup = await listen("plan:generate:complete", () => {
-        void loadData();
-        onPlanGenerated();
-      });
+      cleanups.push(
+        await listen("plan:generate:start", () => {
+          setIsGenerating(true);
+          setProgressMessage("Starting plan generation...");
+          setError(null);
+        }),
+        await listen<{ status: string }>("plan:generate:progress", (event) => {
+          setProgressMessage(event.payload.status);
+        }),
+        await listen("plan:generate:complete", () => {
+          setIsGenerating(false);
+          setProgressMessage("");
+          void loadData();
+          onPlanGenerated();
+        }),
+        await listen<{ message: string }>("plan:generate:error", (event) => {
+          setIsGenerating(false);
+          setProgressMessage("");
+          setError(event.payload.message);
+        }),
+      );
     })();
-    return () => { cleanup?.(); };
+    return () => { for (const fn of cleanups) fn(); };
   }, [loadData, onPlanGenerated]);
 
   const resetRaceForm = () => {
@@ -307,9 +326,12 @@ export default function PlanCreator({ onPlanGenerated }: { onPlanGenerated: () =
               </div>
               {race.is_active && (
                 <div style={{ marginTop: 16, paddingTop: 16, borderTop: "1px solid var(--border)" }}>
-                  <button className="btn-primary" onClick={() => { void handleGeneratePlan(race.id); }} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <button className="btn-primary" onClick={() => { void handleGeneratePlan(race.id); }} disabled={isGenerating} style={{ display: "flex", alignItems: "center", gap: 6 }}>
                     <Calendar size={16} /> Generate Training Plan
                   </button>
+                  {isGenerating && progressMessage && (
+                    <div style={{ marginTop: 8, fontSize: 12, color: "var(--text-secondary)" }}>{progressMessage}</div>
+                  )}
                 </div>
               )}
             </div>
