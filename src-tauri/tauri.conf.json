@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "CoachLM",
-  "version": "1.10.0",
+  "version": "1.11.0",
   "identifier": "com.coachlm.app",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -31,6 +31,18 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "createUpdaterArtifacts": true
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IHJzaWduIGVuY3J5cHRlZCBzZWNyZXQga2V5ClJXUlRZMEl5dGQ0bjUyeHozWEFtVk9aYnlqMXdEeGtvTkJjRjRWTGVkaGpOYVhraWhoVUFBQkFBQUFBQUFBQUFBQUlBQUFBQWRoWG0vd05tS2htWW1zQ2xDZ1FGR1RjeHkrN2N5em01Mm5VN21VR2hlUmVzMEM5eHAvUFBPa2pVZ1BLdFBIb0dFVnFRU1JDbXdWZDQ4SkVtN0pLUVZ3N1V1Nzdrb2RJaDVDRzgwZWE4QlJTbm1sa1JHclZCeWJ2eHJHODFLWUo2L3NhR2FGYXFzN1E9Cg==",
+      "endpoints": [
+        "https://github.com/Alchaph/coachlm-tauri/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
   }
 }

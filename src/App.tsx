@@ -1,7 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { MessageSquare, LayoutDashboard, Brain, Calendar, Settings as SettingsIcon, RefreshCw, X, Check, Zap, CloudDownload } from "lucide-react";
+import { check } from "@tauri-apps/plugin-updater";
+import { relaunch } from "@tauri-apps/plugin-process";
+import { MessageSquare, LayoutDashboard, Brain, Calendar, Settings as SettingsIcon, RefreshCw, X, Check, Zap, CloudDownload, Download } from "lucide-react";
 import Chat from "./components/Chat";
 import Dashboard from "./components/Dashboard";
 import Context from "./components/Context";
@@ -35,6 +37,10 @@ export default function App() {
   const [syncProgress, setSyncProgress] = useState("");
   const [syncResult, setSyncResult] = useState<"success" | "error" | null>(null);
   const [syncMessage, setSyncMessage] = useState("");
+  const [updateAvailable, setUpdateAvailable] = useState(false);
+  const [updateVersion, setUpdateVersion] = useState("");
+  const [updateDownloading, setUpdateDownloading] = useState(false);
+  const [updateProgress, setUpdateProgress] = useState(0);
 
   useEffect(() => {
     void (async () => {
@@ -51,6 +57,57 @@ export default function App() {
         setShowOnboarding(true);
       } finally {
         setLoading(false);
+      }
+    })();
+  }, []);
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const update = await check();
+        if (update) {
+          setUpdateAvailable(true);
+          setUpdateVersion(update.version);
+        }
+      } catch {
+        // Fail silently — offline or endpoint unreachable
+      }
+    })();
+  }, []);
+
+  const handleUpdate = useCallback(() => {
+    void (async () => {
+      try {
+        const update = await check();
+        if (!update) return;
+
+        setUpdateDownloading(true);
+        setUpdateProgress(0);
+
+        let downloaded = 0;
+        let contentLength = 0;
+
+        await update.downloadAndInstall((event) => {
+          switch (event.event) {
+            case "Started":
+              contentLength = event.data.contentLength ?? 0;
+              break;
+            case "Progress":
+              downloaded += event.data.chunkLength;
+              if (contentLength > 0) {
+                setUpdateProgress(Math.round((downloaded / contentLength) * 100));
+              }
+              break;
+            case "Finished":
+              setUpdateProgress(100);
+              break;
+          }
+        });
+
+        await relaunch();
+      } catch {
+        setUpdateDownloading(false);
+        setUpdateProgress(0);
       }
     })();
   }, []);
@@ -330,6 +387,77 @@ export default function App() {
             >
               <X size={14} />
             </button>
+          )}
+        </div>
+      )}
+
+      {updateAvailable && (
+        <div style={{
+          position: "fixed",
+          bottom: (syncActive || syncResult) ? ((planGenerating || planResult) ? 156 : 90) : (planGenerating || planResult) ? 90 : 24,
+          right: 24,
+          zIndex: 200,
+          background: "var(--bg-secondary)",
+          border: "1px solid var(--accent)",
+          padding: "14px 20px",
+          minWidth: 280,
+          maxWidth: 400,
+          display: "flex",
+          alignItems: "center",
+          gap: 12,
+          boxShadow: "0 4px 24px #000000",
+          transition: "bottom 0.2s ease",
+        }}>
+          {updateDownloading
+            ? <RefreshCw size={18} className="spin" style={{ color: "var(--accent)", flexShrink: 0 }} />
+            : <Download size={18} style={{ color: "var(--accent)", flexShrink: 0 }} />}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 13, fontWeight: 600 }}>
+              {updateDownloading ? "Downloading Update" : `Update Available: v${updateVersion}`}
+            </div>
+            {updateDownloading ? (
+              <div style={{ marginTop: 6 }}>
+                <div style={{
+                  height: 4,
+                  background: "var(--bg-primary)",
+                  borderRadius: 2,
+                  overflow: "hidden",
+                }}>
+                  <div style={{
+                    height: "100%",
+                    width: `${String(updateProgress)}%`,
+                    background: "var(--accent)",
+                    borderRadius: 2,
+                    transition: "width 0.2s ease",
+                  }} />
+                </div>
+                <div style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 2 }}>
+                  {`${String(updateProgress)}%`}
+                </div>
+              </div>
+            ) : (
+              <div style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 2 }}>
+                Click install to update and restart
+              </div>
+            )}
+          </div>
+          {!updateDownloading && (
+            <>
+              <button
+                className="btn-ghost"
+                onClick={handleUpdate}
+                style={{ flexShrink: 0, padding: "4px 10px", fontSize: 12, fontWeight: 600, color: "var(--accent)" }}
+              >
+                Install
+              </button>
+              <button
+                className="btn-ghost"
+                onClick={() => { setUpdateAvailable(false); }}
+                style={{ flexShrink: 0, padding: 4 }}
+              >
+                <X size={14} />
+              </button>
+            </>
           )}
         </div>
       )}
