@@ -55,11 +55,44 @@ function ProgressStepRow({ step, isActive }: { step: ProgressStep; isActive: boo
   const elapsedStr = elapsed < 10 ? elapsed.toFixed(1) : String(Math.round(elapsed));
 
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, lineHeight: "20px" }}>
+    <div style={{
+      display: "flex",
+      alignItems: "center",
+      gap: 6,
+      fontSize: 11,
+      lineHeight: "16px",
+      color: isActive ? "var(--text-secondary)" : "var(--text-muted)",
+    }}>
+      <span style={{
+        width: 8,
+        textAlign: "center",
+        color: isActive ? "var(--accent)" : "var(--text-muted)",
+        fontSize: 10,
+      }}>
+        {isActive ? "\u25CF" : "\u00B7"}
+      </span>
       <span>{step.label}</span>
-      <span style={{ color: "var(--text-muted)", fontSize: 11 }}>
+      <span style={{ color: "var(--text-muted)", fontSize: 10 }}>
         {elapsedStr}s
       </span>
+    </div>
+  );
+}
+
+function CollapsedStepsSummary({ steps }: { steps: ProgressStep[] }) {
+  const totalMs = steps.reduce((sum, s) => sum + ((s.completedAt ?? s.startedAt) - s.startedAt), 0);
+  const totalSec = totalMs / 1000;
+  const totalStr = totalSec < 10 ? totalSec.toFixed(1) : String(Math.round(totalSec));
+  const labels = steps.map((s) => s.label).join(" \u00B7 ");
+
+  return (
+    <div style={{
+      fontSize: 11,
+      color: "var(--text-muted)",
+      marginBottom: 4,
+      lineHeight: "16px",
+    }}>
+      {labels} &middot; {totalStr}s
     </div>
   );
 }
@@ -84,6 +117,8 @@ export default function Chat({ onStatusChange }: ChatProps) {
   const [webSearchEnabled, setWebSearchEnabled] = useState(false);
   const [editingMessageId, setEditingMessageId] = useState<number | null>(null);
   const [editContent, setEditContent] = useState("");
+  const [completedSteps, setCompletedSteps] = useState<ProgressStep[] | null>(null);
+  const lastCompletedStepsRef = useRef<ProgressStep[] | null>(null);
 
   const scrollToBottom = useCallback(() => {
     if (shouldAutoScroll.current) {
@@ -105,6 +140,19 @@ export default function Chat({ onStatusChange }: ChatProps) {
   useEffect(() => {
     currentSessionIdRef.current = currentSessionId;
   }, [currentSessionId]);
+
+  useEffect(() => {
+    if (!loading && progressSteps.length > 0) {
+      const finalized = progressSteps.map((s, i) =>
+        i === progressSteps.length - 1 && !s.completedAt ? { ...s, completedAt: Date.now() } : s,
+      );
+      setCompletedSteps(finalized);
+      lastCompletedStepsRef.current = finalized;
+    }
+    if (loading) {
+      setCompletedSteps(null);
+    }
+  }, [loading, progressSteps]);
 
   const refreshSessions = useCallback(async () => {
     try {
@@ -531,7 +579,14 @@ export default function Chat({ onStatusChange }: ChatProps) {
             </div>
           )}
 
-          {messages.map((msg) => (
+          {messages.map((msg, msgIndex) => {
+            const isLastAssistant = msg.role === "assistant" && msgIndex === messages.length - 1;
+            const isStreaming = msg.id === -1;
+            const showActiveStepper = isStreaming && loading && progressSteps.length > 0;
+            const showThinkingLabel = isStreaming && loading && progressSteps.length === 0;
+            const showCollapsedSummary = isLastAssistant && !isStreaming && !loading && completedSteps !== null && completedSteps.length > 0;
+
+            return (
             <div
               key={msg.id}
               style={{
@@ -541,6 +596,21 @@ export default function Chat({ onStatusChange }: ChatProps) {
                 alignItems: msg.role === "user" ? "flex-end" : "flex-start",
               }}
             >
+              {showActiveStepper && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 2, marginBottom: 6 }}>
+                  {progressSteps.map((step, i) => (
+                    <ProgressStepRow key={i} step={step} isActive={i === progressSteps.length - 1 && !step.completedAt} />
+                  ))}
+                </div>
+              )}
+              {showThinkingLabel && (
+                <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>
+                  Thinking...
+                </div>
+              )}
+              {showCollapsedSummary && (
+                <CollapsedStepsSummary steps={completedSteps} />
+              )}
               <div
                 className={msg.role === "user" ? "chat-message-user" : undefined}
                 style={{
@@ -642,29 +712,22 @@ export default function Chat({ onStatusChange }: ChatProps) {
                 </button>
               )}
             </div>
-          ))}
+            );
+          })}
 
-          {loading && (
-             <div style={{ display: "flex", alignItems: "flex-start", marginBottom: 16 }}>
-               <div
-                 style={{
-                  padding: "10px 14px",
-                    borderRadius: 6,
-                    background: "var(--bg-secondary)",
-                   border: "1px solid var(--border)",
-                   color: "var(--text-muted)",
-                 }}
-               >
-                  {progressSteps.length === 0 ? (
-                    "Thinking..."
-                  ) : (
-                    <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                      {progressSteps.map((step, i) => (
-                        <ProgressStepRow key={i} step={step} isActive={i === progressSteps.length - 1 && !step.completedAt} />
-                      ))}
-                    </div>
-                  )}
-               </div>
+          {loading && !messages.some((m) => m.id === -1) && (
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", marginBottom: 16 }}>
+              {progressSteps.length > 0 ? (
+                <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                  {progressSteps.map((step, i) => (
+                    <ProgressStepRow key={i} step={step} isActive={i === progressSteps.length - 1 && !step.completedAt} />
+                  ))}
+                </div>
+              ) : (
+                <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                  Thinking...
+                </div>
+              )}
             </div>
           )}
 
