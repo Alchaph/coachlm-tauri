@@ -1,4 +1,5 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { RefreshCw, Activity, Mountain, Timer, TrendingUp, BarChart3 } from "lucide-react";
@@ -245,6 +246,15 @@ export default function Dashboard() {
     return activities.filter((a) => (a.sport_type ?? a.type) === typeFilter);
   }, [activities, typeFilter]);
 
+  const tableContainerRef = useRef<HTMLDivElement>(null);
+
+  const rowVirtualizer = useVirtualizer({
+    count: filteredActivities.length,
+    getScrollElement: () => tableContainerRef.current,
+    estimateSize: () => 44,
+    overscan: 10,
+  });
+
   const totalElevation = useMemo(() => {
     let sum = 0;
     for (const a of activities) {
@@ -385,28 +395,56 @@ export default function Dashboard() {
                   <th style={{ ...thStyle, textAlign: "right" }}>Avg HR</th>
                 </tr>
               </thead>
-              <tbody>
-                {filteredActivities.map((a) => (
-                  <tr key={a.activity_id} style={{ borderBottom: "1px solid var(--border)" }}>
-                    <td style={{ ...tdStyle, color: "var(--text-secondary)" }}>
-                      {a.start_date ? new Date(a.start_date).toLocaleDateString() : "\u2014"}
-                    </td>
-                    <td style={tdStyle}>
-                      {getWorkoutBadge(a.workout_type, a.sport_type, a.type)}
-                    </td>
-                    <td style={tdStyle}>{a.name ?? "Untitled"}</td>
-                    <td style={{ ...tdStyle, textAlign: "right" }}>{formatDistance(a.distance)}</td>
-                    <td style={{ ...tdStyle, textAlign: "right" }}>{formatDuration(a.moving_time)}</td>
-                    <td style={{ ...tdStyle, textAlign: "right" }}>{formatPace(a.distance, a.moving_time)}</td>
-                    <td style={{ ...tdStyle, textAlign: "right" }}>{formatElevation(a.total_elevation_gain)}</td>
-                    <td style={{ ...tdStyle, textAlign: "right" }}>{formatMaxSpeedPace(a.max_speed)}</td>
-                    <td style={{ ...tdStyle, textAlign: "right" }}>
-                      {a.average_heartrate ? String(Math.round(a.average_heartrate)) : "\u2014"}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
             </table>
+            <div
+              ref={tableContainerRef}
+              style={{ maxHeight: 600, overflow: "auto" }}
+            >
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <tbody>
+                  {(() => {
+                    const virtualItems = rowVirtualizer.getVirtualItems();
+                    const topHeight = virtualItems.length > 0 ? virtualItems[0].start : 0;
+                    const lastEnd = virtualItems.length > 0
+                      ? virtualItems[virtualItems.length - 1].end
+                      : 0;
+                    const bottomHeight = rowVirtualizer.getTotalSize() - lastEnd;
+                    return (
+                      <>
+                        {virtualItems.length > 0 && (
+                          <tr style={{ height: `${String(topHeight)}px` }} />
+                        )}
+                        {virtualItems.map((virtualRow) => {
+                          const a = filteredActivities[virtualRow.index];
+                          return (
+                            <tr key={a.activity_id} style={{ borderBottom: "1px solid var(--border)" }}>
+                              <td style={{ ...tdStyle, color: "var(--text-secondary)" }}>
+                                {a.start_date ? new Date(a.start_date).toLocaleDateString() : "\u2014"}
+                              </td>
+                              <td style={tdStyle}>
+                                {getWorkoutBadge(a.workout_type, a.sport_type, a.type)}
+                              </td>
+                              <td style={tdStyle}>{a.name ?? "Untitled"}</td>
+                              <td style={{ ...tdStyle, textAlign: "right" }}>{formatDistance(a.distance)}</td>
+                              <td style={{ ...tdStyle, textAlign: "right" }}>{formatDuration(a.moving_time)}</td>
+                              <td style={{ ...tdStyle, textAlign: "right" }}>{formatPace(a.distance, a.moving_time)}</td>
+                              <td style={{ ...tdStyle, textAlign: "right" }}>{formatElevation(a.total_elevation_gain)}</td>
+                              <td style={{ ...tdStyle, textAlign: "right" }}>{formatMaxSpeedPace(a.max_speed)}</td>
+                              <td style={{ ...tdStyle, textAlign: "right" }}>
+                                {a.average_heartrate ? String(Math.round(a.average_heartrate)) : "\u2014"}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                        {virtualItems.length > 0 && (
+                          <tr style={{ height: `${String(bottomHeight)}px` }} />
+                        )}
+                      </>
+                    );
+                  })()}
+                </tbody>
+              </table>
+            </div>
           </div>
 
           {hasMore && (
