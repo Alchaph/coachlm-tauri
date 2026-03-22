@@ -129,6 +129,7 @@ export default function Dashboard() {
   const [error, setError] = useState<string | null>(null);
   const [typeFilter, setTypeFilter] = useState("All");
   const [hasMore, setHasMore] = useState(true);
+  const [dataLoaded, setDataLoaded] = useState(false);
 
   useEffect(() => {
     void loadData();
@@ -166,9 +167,12 @@ export default function Dashboard() {
       } else {
         setActivities((prev) => [...prev, ...acts]);
       }
-      setHasMore(acts.length >= PAGE_SIZE);
-      setStats(st);
-      setAuthStatus(auth);
+       setHasMore(acts.length >= PAGE_SIZE);
+       setStats(st);
+       setAuthStatus(auth);
+       if (offset === 0) {
+         setDataLoaded(true);
+       }
     } catch (e) {
       setError(String(e));
     }
@@ -318,7 +322,45 @@ export default function Dashboard() {
 
       {error && <div className="error-state" style={{ marginBottom: 16 }}>{error}</div>}
 
-      {stats && stats.total_activities > 0 && (
+      {!dataLoaded && (
+        <div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 12, marginBottom: 20 }}>
+            {Array.from({ length: 6 }, (_, i) => (
+              <div key={i} className="card" style={{ textAlign: "center", padding: 16 }}>
+                <div className="skeleton" style={{ width: 16, height: 16, margin: "0 auto 8px", borderRadius: "50%" }} />
+                <div className="skeleton" style={{ width: 60, height: 28, margin: "0 auto 6px" }} />
+                <div className="skeleton" style={{ width: 80, height: 14, margin: "0 auto" }} />
+              </div>
+            ))}
+          </div>
+          <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead>
+                <tr style={{ borderBottom: "1px solid var(--border)" }}>
+                  {["Date", "Type", "Name", "Distance", "Duration", "Pace", "Elevation", "Max Speed", "Avg HR"].map((h) => (
+                    <th key={h} style={{ padding: "10px 14px", textAlign: "left" }}>
+                      <div className="skeleton" style={{ width: 60, height: 12 }} />
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {Array.from({ length: 8 }, (_, i) => (
+                  <tr key={i} style={{ borderBottom: "1px solid var(--border)" }}>
+                    {Array.from({ length: 9 }, (_, j) => (
+                      <td key={j} style={{ padding: "10px 14px" }}>
+                        <div className="skeleton" style={{ width: j === 2 ? 120 : 60, height: 14 }} />
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {dataLoaded && stats && stats.total_activities > 0 && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 12, marginBottom: 20 }}>
           <div className="card" style={{ textAlign: "center" }}>
             <Activity size={16} style={{ color: "var(--accent)", marginBottom: 4 }} />
@@ -353,7 +395,7 @@ export default function Dashboard() {
         </div>
       )}
 
-      {filteredActivities.length === 0 && activities.length === 0 ? (
+      {dataLoaded && filteredActivities.length === 0 && activities.length === 0 ? (
         <div className="empty-state">
           <Activity size={48} style={{ margin: "0 auto 16px", opacity: 0.3 }} />
           <p>No activities yet.</p>

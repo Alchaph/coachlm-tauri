@@ -79,7 +79,7 @@ export default function Onboarding({ onComplete }: { onComplete: () => void }) {
       <div className="card" style={{ width: "100%", maxWidth: 520, padding: 32, display: "flex", flexDirection: "column", gap: 24 }}>
         <div style={{ display: "flex", justifyContent: "center", gap: 8, marginBottom: 8 }}>
           {[1, 2, 3, 4].map(s => (
-            <div key={s} style={{
+            <div key={s} role="img" aria-label={`Step ${String(s)} of 4${s === step ? ", current" : s < step ? ", completed" : ""}`} style={{
               width: 12, height: 12, borderRadius: "50%",
               background: s === step ? "var(--accent)" : s < step ? "var(--success)" : "var(--bg-tertiary)",
               transition: "background 0.3s"
@@ -145,9 +145,14 @@ export default function Onboarding({ onComplete }: { onComplete: () => void }) {
               <button className="btn-ghost" onClick={() => { setStep(1); }} style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <ChevronLeft size={16} /> Back
               </button>
-              <button className="btn-secondary" onClick={() => { setStep(3); }} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                Next <ChevronRight size={16} />
-              </button>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button className="btn-ghost" onClick={() => { setStep(3); }}>
+                  Skip for now
+                </button>
+                <button className="btn-secondary" onClick={() => { setStep(3); }} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  Next <ChevronRight size={16} />
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -261,6 +266,13 @@ export default function Onboarding({ onComplete }: { onComplete: () => void }) {
                 <ChevronLeft size={16} /> Back
               </button>
               <div style={{ display: "flex", gap: 8 }}>
+                <button className="btn-ghost" onClick={() => {
+                  setOllamaEndpoint("http://localhost:11434");
+                  setOllamaModel("llama3");
+                  setStep(4);
+                }}>
+                  Skip for now
+                </button>
                 {provider === "ollama" && (
                   <button className="btn-ghost" onClick={() => {
                     setOllamaEndpoint("http://localhost:11434");

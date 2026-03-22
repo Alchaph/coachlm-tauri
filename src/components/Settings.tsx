@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { ask } from "@tauri-apps/plugin-dialog";
 import { Save, RefreshCw, Plug, Unplug, Globe } from "lucide-react";
 import { useToast } from "../hooks/useToast";
 
@@ -38,6 +39,8 @@ export default function SettingsPage() {
   const [stravaAuth, setStravaAuth] = useState<StravaAuthStatus>({ connected: false, expires_at: null });
   const [stravaAvailable, setStravaAvailable] = useState(false);
   const [ollamaConnected, setOllamaConnected] = useState<boolean | null>(null);
+  const [initialSettings, setInitialSettings] = useState<SettingsData | null>(null);
+  const isDirty = initialSettings !== null && JSON.stringify(settings) !== JSON.stringify(initialSettings);
 
   useEffect(() => {
     void loadData();
@@ -60,6 +63,11 @@ export default function SettingsPage() {
         invoke<boolean>("get_strava_credentials_available"),
       ]);
       setSettings({
+        ...s,
+        active_llm: s.active_llm || "local",
+        ollama_endpoint: s.ollama_endpoint || "http://localhost:11434",
+      });
+      setInitialSettings({
         ...s,
         active_llm: s.active_llm || "local",
         ollama_endpoint: s.ollama_endpoint || "http://localhost:11434",
@@ -87,6 +95,7 @@ export default function SettingsPage() {
     setSaving(true);
     try {
       await invoke("save_settings", { data: settings });
+      setInitialSettings({ ...settings });
       showToast("Settings saved", "success");
     } catch {
       showToast("Failed to save settings", "error");
@@ -118,6 +127,8 @@ export default function SettingsPage() {
   };
 
   const disconnectStrava = async () => {
+    const confirmed = await ask("Disconnect your Strava account? You can reconnect later.", { title: "CoachLM", kind: "warning" });
+    if (!confirmed) return;
     try {
       await invoke("disconnect_strava");
       const auth = await invoke<StravaAuthStatus>("get_strava_auth_status");
@@ -133,7 +144,7 @@ export default function SettingsPage() {
     <div style={{ padding: 24, overflow: "auto", height: "100%" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
         <h1 style={{ fontSize: 20, fontWeight: 700 }}>Settings</h1>
-        <button className="btn-primary" onClick={() => void saveSettings()} disabled={saving} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        <button className="btn-primary" onClick={() => void saveSettings()} disabled={saving || !isDirty} style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <Save size={16} />
           Save Settings
         </button>
@@ -334,6 +345,8 @@ export default function SettingsPage() {
             <button
               className={settings.web_search_enabled ? "btn-primary" : "btn-secondary"}
               onClick={() => { setSettings({ ...settings, web_search_enabled: !settings.web_search_enabled }); }}
+              role="switch"
+              aria-checked={settings.web_search_enabled}
               style={{ minWidth: 64, textAlign: "center" }}
             >
               {settings.web_search_enabled ? "On" : "Off"}

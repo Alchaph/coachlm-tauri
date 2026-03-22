@@ -200,10 +200,49 @@ export default function App() {
     setActiveTab("context");
   };
 
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "k") {
+        e.preventDefault();
+        setActiveTab("chat");
+        setTimeout(() => {
+          document.getElementById("chat-input")?.focus();
+        }, 50);
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === "n") {
+        e.preventDefault();
+        setActiveTab("chat");
+      }
+    };
+    window.addEventListener("keydown", handleGlobalKeyDown);
+    return () => { window.removeEventListener("keydown", handleGlobalKeyDown); };
+  }, []);
+
   if (loading) {
     return (
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh" }}>
-        <div style={{ color: "var(--text-muted)" }}>Loading...</div>
+      <div style={{ display: "flex", height: "100vh", overflow: "hidden" }}>
+        <div style={{
+          width: "var(--sidebar-width)",
+          minWidth: "var(--sidebar-width)",
+          background: "var(--bg-secondary)",
+          borderRight: "1px solid var(--border)",
+          padding: "12px 0",
+        }}>
+          <div style={{ padding: "8px 16px 20px" }}>
+            <div className="skeleton" style={{ width: 90, height: 20 }} />
+          </div>
+          {Array.from({ length: 6 }, (_, i) => (
+            <div key={i} style={{ padding: "10px 16px", margin: "2px 8px" }}>
+              <div className="skeleton" style={{ width: "80%", height: 16 }} />
+            </div>
+          ))}
+        </div>
+        <div style={{ flex: 1, padding: 24 }}>
+          <div className="skeleton" style={{ width: 200, height: 24, marginBottom: 20 }} />
+          <div className="skeleton" style={{ width: "100%", height: 120, marginBottom: 16 }} />
+          <div className="skeleton" style={{ width: "60%", height: 16, marginBottom: 10 }} />
+          <div className="skeleton" style={{ width: "40%", height: 16 }} />
+        </div>
       </div>
     );
   }
@@ -251,6 +290,7 @@ export default function App() {
             <button
               key={item.id}
               onClick={() => { setActiveTab(item.id); }}
+              aria-current={activeTab === item.id ? "page" : undefined}
                style={{
                  display: "flex",
                  alignItems: "center",

@@ -11,13 +11,16 @@ export function useToast() {
 
   const showToast = useCallback((message: string, type: "success" | "error") => {
     setToast({ message, type });
-    setTimeout(() => { setToast(null); }, 3000);
+    const duration = type === "error" ? 5000 : 3000;
+    setTimeout(() => { setToast(null); }, duration);
   }, []);
 
   const toastElement = toast ? (
-    <div className={`toast toast-${toast.type}`}>
-      {toast.type === "success" ? <Check size={16} /> : <X size={16} />}
-      {toast.message}
+    <div aria-live="assertive" role="status">
+      <div className={`toast toast-${toast.type}`}>
+        {toast.type === "success" ? <Check size={16} /> : <X size={16} />}
+        {toast.message}
+      </div>
     </div>
   ) : null;
 

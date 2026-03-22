@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { Plus, ChevronDown, ChevronUp, Zap, Search, BookOpen } from "lucide-react";
+import { Plus, ChevronDown, ChevronUp, Zap, Search, BookOpen, X } from "lucide-react";
 import { useToast } from "../hooks/useToast";
 import { type Shoe, BUILT_IN_SHOES } from "../data/shoes";
 
@@ -62,6 +62,7 @@ export default function ShoeCalculator() {
   const [selectedBrands, setSelectedBrands] = useState<Set<string>>(new Set());
   const [selectedTier, setSelectedTier] = useState<"all" | "supershoe" | "racer" | "trainer">("all");
   const [showHowItWorks, setShowHowItWorks] = useState(false);
+  const [formErrors, setFormErrors] = useState<{ name?: string; stack?: string }>({});
 
   const distanceKm: number | null = (() => {
     if (selectedDistanceKm !== null) return selectedDistanceKm;
@@ -103,6 +104,14 @@ export default function ShoeCalculator() {
     });
   };
 
+  const hasActiveFilters = searchQuery.trim() !== "" || selectedBrands.size > 0 || selectedTier !== "all";
+
+  const resetAllFilters = () => {
+    setSearchQuery("");
+    setSelectedBrands(new Set());
+    setSelectedTier("all");
+  };
+
   const filteredShoes = useMemo(() => {
     return shoes.filter((shoe) => {
       if (searchQuery.trim() !== "" && !shoe.name.toLowerCase().includes(searchQuery.toLowerCase()) && !shoe.brand.toLowerCase().includes(searchQuery.toLowerCase())) {
@@ -131,15 +140,22 @@ export default function ShoeCalculator() {
   })();
 
   const handleAddCustomShoe = () => {
+    const errors: { name?: string; stack?: string } = {};
+
     if (customName.trim() === "") {
-      showToast("Shoe name is required", "error");
-      return;
+      errors.name = "Shoe name is required";
     }
     const stackVal = parseInt(customStack, 10);
     if (isNaN(stackVal) || stackVal <= 0) {
-      showToast("Enter a valid stack height", "error");
+      errors.stack = "Enter a valid stack height (mm)";
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFormErrors(errors);
       return;
     }
+
+    setFormErrors({});
 
     let benefit: number;
     const parsedBenefit = parseFloat(customBenefit);
@@ -347,9 +363,32 @@ export default function ShoeCalculator() {
                 </button>
               ))}
             </div>
-            <span style={{ fontSize: 12, color: "var(--text-muted)", marginLeft: "auto" }}>
-              Showing {filteredShoes.length} of {shoes.length} shoes
-            </span>
+            <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10 }}>
+              {hasActiveFilters && (
+                <button
+                  type="button"
+                  onClick={resetAllFilters}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 4,
+                    fontSize: 12,
+                    padding: "4px 10px",
+                    borderRadius: 6,
+                    border: "1px solid var(--border)",
+                    background: "var(--bg-tertiary)",
+                    color: "var(--text-secondary)",
+                    cursor: "pointer",
+                  }}
+                >
+                  <X size={12} />
+                  Reset filters
+                </button>
+              )}
+              <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
+                Showing {filteredShoes.length} of {shoes.length} shoes
+              </span>
+            </div>
           </div>
 
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
@@ -587,7 +626,7 @@ export default function ShoeCalculator() {
         <div className="card" style={{ marginBottom: 24, overflow: "hidden" }}>
           <button
             type="button"
-            onClick={() => { setShowCustomForm((v) => !v); }}
+            onClick={() => { setShowCustomForm((v) => !v); setFormErrors({}); }}
             style={{
               display: "flex",
               alignItems: "center",
@@ -621,11 +660,11 @@ export default function ShoeCalculator() {
                     type="text"
                     placeholder="e.g. My Custom Racer"
                     value={customName}
-                    onChange={(e) => { setCustomName(e.target.value); }}
+                    onChange={(e) => { setCustomName(e.target.value); if (formErrors.name) setFormErrors((prev) => ({ ...prev, name: undefined })); }}
                     style={{
                       width: "100%",
                       background: "var(--bg-tertiary)",
-                      border: "1px solid var(--border)",
+                      border: `1px solid ${formErrors.name ? "var(--danger)" : "var(--border)"}`,
                       borderRadius: 6,
                       color: "var(--text-primary)",
                       padding: "8px 10px",
@@ -633,6 +672,9 @@ export default function ShoeCalculator() {
                       boxSizing: "border-box",
                     }}
                   />
+                  {formErrors.name && (
+                    <div style={{ fontSize: 11, color: "var(--danger)", marginTop: 4 }}>{formErrors.name}</div>
+                  )}
                 </div>
                 <div>
                   <label style={{ fontSize: 12, color: "var(--text-secondary)", display: "block", marginBottom: 6 }}>
@@ -665,11 +707,11 @@ export default function ShoeCalculator() {
                     max="80"
                     placeholder="e.g. 36"
                     value={customStack}
-                    onChange={(e) => { setCustomStack(e.target.value); }}
+                    onChange={(e) => { setCustomStack(e.target.value); if (formErrors.stack) setFormErrors((prev) => ({ ...prev, stack: undefined })); }}
                     style={{
                       width: "100%",
                       background: "var(--bg-tertiary)",
-                      border: "1px solid var(--border)",
+                      border: `1px solid ${formErrors.stack ? "var(--danger)" : "var(--border)"}`,
                       borderRadius: 6,
                       color: "var(--text-primary)",
                       padding: "8px 10px",
@@ -677,6 +719,9 @@ export default function ShoeCalculator() {
                       boxSizing: "border-box",
                     }}
                   />
+                  {formErrors.stack && (
+                    <div style={{ fontSize: 11, color: "var(--danger)", marginTop: 4 }}>{formErrors.stack}</div>
+                  )}
                 </div>
                 <div>
                   <label style={{ fontSize: 12, color: "var(--text-secondary)", display: "block", marginBottom: 6 }}>

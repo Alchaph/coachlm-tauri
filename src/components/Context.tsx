@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { ask } from "@tauri-apps/plugin-dialog";
 import { Trash2, Eye, Save } from "lucide-react";
@@ -42,8 +42,21 @@ export default function Context() {
   const [tab, setTab] = useState<"profile" | "insights">("profile");
   const [paceMinutes, setPaceMinutes] = useState("");
   const [paceSeconds, setPaceSeconds] = useState("");
+  const previewBtnRef = useRef<HTMLButtonElement>(null);
+  const modalRef = useRef<HTMLDivElement>(null);
+
+  const closePreview = useCallback(() => {
+    setShowPreview(false);
+    previewBtnRef.current?.focus();
+  }, []);
 
   useEffect(() => { void loadData(); }, []);
+
+  useEffect(() => {
+    if (showPreview) {
+      modalRef.current?.focus();
+    }
+  }, [showPreview]);
 
   const loadData = async () => {
     try {
@@ -125,7 +138,7 @@ export default function Context() {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
         <h1 style={{ fontSize: 20, fontWeight: 700 }}>Context</h1>
         <div style={{ display: "flex", gap: 8 }}>
-          <button className="btn-secondary" onClick={() => void loadPreview()} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          <button ref={previewBtnRef} className="btn-secondary" onClick={() => void loadPreview()} style={{ display: "flex", alignItems: "center", gap: 4 }}>
             <Eye size={16} /> Preview Prompt
           </button>
         </div>
@@ -303,16 +316,42 @@ export default function Context() {
             position: "fixed", inset: 0, background: "var(--bg-primary)",
             display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100,
           }}
-          onClick={() => { setShowPreview(false); }}
+          onClick={() => { closePreview(); }}
         >
           <div
+            ref={modalRef}
             className="card"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="context-preview-title"
+            tabIndex={-1}
             onClick={(e) => { e.stopPropagation(); }}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") {
+                closePreview();
+                return;
+              }
+              if (e.key === "Tab") {
+                const focusable = modalRef.current?.querySelectorAll<HTMLElement>(
+                  'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+                );
+                if (!focusable?.length) return;
+                const first = focusable[0];
+                const last = focusable[focusable.length - 1];
+                if (e.shiftKey && document.activeElement === first) {
+                  e.preventDefault();
+                  last.focus();
+                } else if (!e.shiftKey && document.activeElement === last) {
+                  e.preventDefault();
+                  first.focus();
+                }
+              }
+            }}
             style={{ maxWidth: 700, maxHeight: "80vh", overflow: "auto", width: "90%", padding: 20 }}
           >
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
-              <h2 style={{ fontSize: 16, fontWeight: 600 }}>Context Preview</h2>
-              <button className="btn-ghost" onClick={() => { setShowPreview(false); }}>✕</button>
+              <h2 id="context-preview-title" style={{ fontSize: 16, fontWeight: 600 }}>Context Preview</h2>
+              <button className="btn-ghost" onClick={() => { closePreview(); }} aria-label="Close preview">&#10005;</button>
             </div>
             <pre style={{ fontSize: 12, whiteSpace: "pre-wrap", fontFamily: "monospace", lineHeight: 1.6, color: "var(--text-secondary)" }}>
               {contextPreview}

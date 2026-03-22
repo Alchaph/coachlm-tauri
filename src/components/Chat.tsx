@@ -4,7 +4,7 @@ import { listen } from "@tauri-apps/api/event";
 import { ask } from "@tauri-apps/plugin-dialog";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Send, Pin, Plus, X, MessageSquare, PanelLeftClose, PanelLeftOpen, Globe, Pencil, Copy } from "lucide-react";
+import { Send, Pin, Plus, X, MessageSquare, PanelLeftClose, PanelLeftOpen, Globe, Pencil, Copy, RefreshCw, Square } from "lucide-react";
 import { useToast } from "../hooks/useToast";
 
 interface Message {
@@ -111,9 +111,10 @@ export default function Chat({ onStatusChange }: ChatProps) {
   const shouldAutoScroll = useRef(true);
   const { showToast, toastElement } = useToast();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const [promptHistory, setPromptHistory] = useState<string[]>([]);
-  const historyIndex = useRef(-1);
-  const savedInput = useRef("");
+   const [promptHistory, setPromptHistory] = useState<string[]>([]);
+   const historyIndex = useRef(-1);
+   const savedInput = useRef("");
+   const lastSentContentRef = useRef("");
   const [webSearchEnabled, setWebSearchEnabled] = useState(false);
   const [editingMessageId, setEditingMessageId] = useState<number | null>(null);
   const [editContent, setEditContent] = useState("");
@@ -250,16 +251,17 @@ export default function Chat({ onStatusChange }: ChatProps) {
     }
   };
 
-  const createNewSession = async () => {
-    try {
-      const session = await invoke<Session>("create_chat_session");
-      setCurrentSessionId(session.id);
-      setMessages([]);
-      setSessions((prev) => [session, ...prev]);
-    } catch (e) {
-      setError(String(e));
-    }
-  };
+   const createNewSession = async () => {
+     try {
+       const session = await invoke<Session>("create_chat_session");
+       setCurrentSessionId(session.id);
+       setMessages([]);
+       setSessions((prev) => [session, ...prev]);
+       setTimeout(() => { textareaRef.current?.focus(); }, 50);
+     } catch (e) {
+       setError(String(e));
+     }
+   };
 
   const closeSession = async (sessionId: string) => {
     const confirmed = await ask("Delete this chat session?", { title: "CoachLM", kind: "warning" });
@@ -281,9 +283,10 @@ export default function Chat({ onStatusChange }: ChatProps) {
     }
   };
 
-  const sendMessage = async () => {
-    if (!input.trim() || loading) return;
-    const content = input.trim();
+   const sendMessage = async () => {
+     if (!input.trim() || loading) return;
+     const content = input.trim();
+     lastSentContentRef.current = content;
     setPromptHistory((prev) => [content, ...prev]);
     historyIndex.current = -1;
     savedInput.current = "";
@@ -492,21 +495,23 @@ export default function Chat({ onStatusChange }: ChatProps) {
     <div style={{ display: "flex", height: "100%" }}>
       <div className={`chat-sidebar${sidebarOpen ? "" : " chat-sidebar-collapsed"}`}>
         <div className="chat-sidebar-header">
-          <button
-            className="btn-ghost"
-            onClick={() => { setSidebarOpen(false); }}
-            title="Close sidebar"
-            style={{ padding: "4px" }}
-          >
+           <button
+             className="btn-ghost"
+             onClick={() => { setSidebarOpen(false); }}
+             title="Close sidebar"
+             aria-label="Close sidebar"
+             style={{ padding: "4px" }}
+           >
             <PanelLeftClose size={16} />
           </button>
           <span style={{ flex: 1 }}>History</span>
-          <button
-            className="btn-ghost"
-            onClick={() => { void createNewSession(); }}
-            title="New chat"
-            style={{ padding: "4px" }}
-          >
+           <button
+             className="btn-ghost"
+             onClick={() => { void createNewSession(); }}
+             title="New chat"
+             aria-label="New chat"
+             style={{ padding: "4px" }}
+           >
             <Plus size={16} />
           </button>
         </div>
@@ -545,12 +550,13 @@ export default function Chat({ onStatusChange }: ChatProps) {
             background: "var(--bg-secondary)",
           }}
         >
-           {!sidebarOpen && (
-              <button
-                className="btn-ghost"
-                onClick={() => { setSidebarOpen(true); }}
-                title="Open sidebar"
-              >
+            {!sidebarOpen && (
+               <button
+                 className="btn-ghost"
+                 onClick={() => { setSidebarOpen(true); }}
+                 title="Open sidebar"
+                 aria-label="Open sidebar"
+               >
                 <PanelLeftOpen size={18} />
               </button>
             )}
@@ -683,31 +689,34 @@ export default function Chat({ onStatusChange }: ChatProps) {
               </div>
               {msg.role === "assistant" && (
                 <div style={{ display: "flex", gap: 4, marginTop: 4 }}>
-                  <button
-                    className="btn-ghost"
-                    onClick={() => { void copyMessage(msg.content); }}
-                    style={{ fontSize: 11, display: "flex", alignItems: "center", gap: 4 }}
-                    title="Copy message"
-                  >
+                   <button
+                     className="btn-ghost"
+                     onClick={() => { void copyMessage(msg.content); }}
+                     style={{ fontSize: 11, display: "flex", alignItems: "center", gap: 4 }}
+                     title="Copy message"
+                     aria-label="Copy message"
+                   >
                     <Copy size={12} /> Copy
                   </button>
-                  <button
-                    className="btn-ghost"
-                    onClick={() => { void pinMessage(msg.content); }}
-                    style={{ fontSize: 11, display: "flex", alignItems: "center", gap: 4 }}
-                    title="Save as coaching insight"
-                  >
+                   <button
+                     className="btn-ghost"
+                     onClick={() => { void pinMessage(msg.content); }}
+                     style={{ fontSize: 11, display: "flex", alignItems: "center", gap: 4 }}
+                     title="Save as coaching insight"
+                     aria-label="Pin insight"
+                   >
                     <Pin size={12} /> Pin
                   </button>
                 </div>
               )}
               {msg.role === "user" && editingMessageId !== msg.id && !loading && (
-                <button
-                  className="btn-ghost chat-message-edit"
-                  onClick={() => { startEditing(msg); }}
-                  style={{ marginTop: 4, fontSize: 11, display: "flex", alignItems: "center", gap: 4 }}
-                  title="Edit and resend"
-                >
+                 <button
+                   className="btn-ghost chat-message-edit"
+                   onClick={() => { startEditing(msg); }}
+                   style={{ marginTop: 4, fontSize: 11, display: "flex", alignItems: "center", gap: 4 }}
+                   title="Edit and resend"
+                   aria-label="Edit and resend"
+                 >
                   <Pencil size={12} /> Edit
                 </button>
               )}
@@ -715,27 +724,49 @@ export default function Chat({ onStatusChange }: ChatProps) {
             );
           })}
 
-          {loading && !messages.some((m) => m.id === -1) && (
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", marginBottom: 16 }}>
-              {progressSteps.length > 0 ? (
-                <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                  {progressSteps.map((step, i) => (
-                    <ProgressStepRow key={i} step={step} isActive={i === progressSteps.length - 1 && !step.completedAt} />
-                  ))}
-                </div>
-              ) : (
-                <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
-                  Thinking...
-                </div>
-              )}
-            </div>
-          )}
-
-            {error && (
-               <div className="error-state" style={{ textAlign: "left", padding: "8px 14px", borderRadius: 6, background: "var(--bg-secondary)", border: "1px solid var(--danger)" }}>
-               {error}
+           {loading && !messages.some((m) => m.id === -1) && (
+             <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", marginBottom: 16 }}>
+               {progressSteps.length > 0 ? (
+                 <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                   {progressSteps.map((step, i) => (
+                     <ProgressStepRow key={i} step={step} isActive={i === progressSteps.length - 1 && !step.completedAt} />
+                   ))}
+                 </div>
+               ) : (
+                 <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                   Thinking...
+                 </div>
+               )}
              </div>
            )}
+
+           {loading && messages.some((m) => m.id === -1) && (
+             <div style={{ display: "flex", justifyContent: "center", marginBottom: 16 }}>
+               <button
+                 className="btn-secondary"
+                 onClick={() => { setLoading(false); setProgressSteps([]); onStatusChange?.("idle"); }}
+                 style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, padding: "6px 14px" }}
+               >
+                 <Square size={12} /> Stop generating
+                </button>
+              </div>
+            )}
+
+             {error && (
+               <div className="error-state" style={{ textAlign: "left", padding: "8px 14px", borderRadius: 6, background: "var(--bg-secondary)", border: "1px solid var(--danger)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                 <span>{error}</span>
+                 {!loading && (
+                   <button
+                     className="btn-ghost"
+                     onClick={() => { setError(null); setInput(lastSentContentRef.current); }}
+                     aria-label="Retry"
+                     style={{ flexShrink: 0, display: "flex", alignItems: "center", gap: 4, color: "var(--danger)" }}
+                   >
+                     <RefreshCw size={14} /> Retry
+                   </button>
+                 )}
+               </div>
+             )}
 
           <div ref={messagesEndRef} />
         </div>
@@ -758,23 +789,25 @@ export default function Chat({ onStatusChange }: ChatProps) {
             </button>
           </div>
           <div style={{ display: "flex", gap: 8, alignItems: "flex-end", paddingBottom: 12 }}>
-            <textarea
-              ref={textareaRef}
-              value={input}
-              onChange={(e) => { setInput(e.target.value); resizeTextarea(); }}
-              onKeyDown={handleKeyDown}
-              placeholder="Ask your coach..."
-              disabled={loading}
-              rows={1}
-              style={{ flex: 1, resize: "none", lineHeight: "20px" }}
-              id="chat-input"
-            />
-            <button
-              className="btn-primary"
-              onClick={() => { void sendMessage(); }}
-              disabled={loading || !input.trim()}
-              style={{ display: "flex", alignItems: "center", gap: 4 }}
-            >
+             <textarea
+               ref={textareaRef}
+               value={input}
+               onChange={(e) => { setInput(e.target.value); resizeTextarea(); }}
+               onKeyDown={handleKeyDown}
+               placeholder="Ask your coach..."
+               disabled={loading}
+               rows={1}
+               style={{ flex: 1, resize: "none", lineHeight: "20px" }}
+               id="chat-input"
+               aria-label="Message input"
+             />
+             <button
+               className="btn-primary"
+               onClick={() => { void sendMessage(); }}
+               disabled={loading || !input.trim()}
+               style={{ display: "flex", alignItems: "center", gap: 4 }}
+               aria-label="Send message"
+             >
               <Send size={16} />
             </button>
           </div>

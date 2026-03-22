@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { Check, X, Calendar, List, ChevronLeft, ChevronRight } from "lucide-react";
@@ -20,6 +20,9 @@ export default function PlanCalendar({ onPlanGenerated }: { onPlanGenerated: () 
   const [selectedSession, setSelectedSession] = useState<PlanSession | null>(null);
   const [actualDuration, setActualDuration] = useState("");
   const [actualDistance, setActualDistance] = useState("");
+
+  const sessionModalRef = useRef<HTMLDivElement>(null);
+  const lastFocusedRef = useRef<HTMLElement | null>(null);
 
   const loadData = useCallback(async () => {
     try {
@@ -77,10 +80,43 @@ export default function PlanCalendar({ onPlanGenerated }: { onPlanGenerated: () 
   };
 
   const openSessionModal = (session: PlanSession) => {
+    lastFocusedRef.current = document.activeElement as HTMLElement;
     setSelectedSession(session);
     setActualDuration(session.actual_duration_min?.toString() ?? "");
     setActualDistance(session.actual_distance_km?.toString() ?? "");
   };
+
+  useEffect(() => {
+    if (!selectedSession || !sessionModalRef.current) return;
+    const modal = sessionModalRef.current;
+    modal.focus();
+    const focusableElements = modal.querySelectorAll<HTMLElement>(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+    );
+    const firstFocusable = focusableElements[0] as HTMLElement | undefined;
+    const lastFocusable = focusableElements[focusableElements.length - 1] as HTMLElement | undefined;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setSelectedSession(null);
+        lastFocusedRef.current?.focus();
+        return;
+      }
+      if (e.key !== "Tab") return;
+      if (e.shiftKey) {
+        if (document.activeElement === firstFocusable) {
+          e.preventDefault();
+          lastFocusable?.focus();
+        }
+      } else {
+        if (document.activeElement === lastFocusable) {
+          e.preventDefault();
+          firstFocusable?.focus();
+        }
+      }
+    };
+    modal.addEventListener("keydown", handleKeyDown);
+    return () => { modal.removeEventListener("keydown", handleKeyDown); };
+  }, [selectedSession]);
 
   const getCurrentWeekIndex = (): number => {
     if (planWeeks.length === 0) return 0;
@@ -257,7 +293,10 @@ export default function PlanCalendar({ onPlanGenerated }: { onPlanGenerated: () 
                   return (
                     <div key={day} style={{ padding: 8, borderRight: "1px solid var(--border)" }}>
                       <div
+                        role="button"
+                        tabIndex={0}
                         onClick={() => { openSessionModal(session); }}
+                        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openSessionModal(session); } }}
                         style={{
                           background: isCompleted ? "var(--bg-tertiary)" : isSkipped ? "var(--bg-tertiary)" : "var(--bg-secondary)",
                           border: `1px solid ${isCompleted ? color : isSkipped ? "var(--border)" : "var(--border)"}`,
@@ -341,7 +380,10 @@ export default function PlanCalendar({ onPlanGenerated }: { onPlanGenerated: () 
               <div
                 key={day}
                 className="card"
+                role="button"
+                tabIndex={0}
                 onClick={() => { openSessionModal(session); }}
+                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openSessionModal(session); } }}
                 style={{
                   borderLeft: `4px solid ${color}`,
                   cursor: "pointer",
@@ -473,13 +515,13 @@ export default function PlanCalendar({ onPlanGenerated }: { onPlanGenerated: () 
     if (!selectedSession) return null;
 
     return (
-      <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "var(--bg-primary)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 }}>
-        <div className="card" style={{ width: 420, maxWidth: "90%", maxHeight: "90%", overflow: "auto" }}>
+      <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "var(--bg-primary)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 }} onClick={() => { setSelectedSession(null); lastFocusedRef.current?.focus(); }}>
+        <div ref={sessionModalRef} role="dialog" aria-modal="true" aria-labelledby="session-modal-title" tabIndex={-1} className="card" style={{ width: 420, maxWidth: "90%", maxHeight: "90%", overflow: "auto" }} onClick={(e) => { e.stopPropagation(); }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-            <h2 style={{ fontSize: 18, fontWeight: 600, color: getSessionColor(selectedSession.session_type), textTransform: "capitalize" }}>
+            <h2 id="session-modal-title" style={{ fontSize: 18, fontWeight: 600, color: getSessionColor(selectedSession.session_type), textTransform: "capitalize" }}>
               {selectedSession.session_type.replace("_", " ")}
             </h2>
-            <button className="btn-ghost" onClick={() => { setSelectedSession(null); }}><X size={20} /></button>
+            <button className="btn-ghost" onClick={() => { setSelectedSession(null); lastFocusedRef.current?.focus(); }} aria-label="Close"><X size={20} /></button>
            </div>
 
            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 20, background: "var(--bg-tertiary)", padding: 12, borderRadius: 0 }}>
