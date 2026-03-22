@@ -1149,3 +1149,879 @@ impl Database {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::{
+        ActivityData, GearData, PlanSession, PlanWeek, ProfileData, Race, SettingsData,
+        TrainingPlan,
+    };
+    use std::path::PathBuf;
+
+    fn temp_db() -> (Database, PathBuf) {
+        let dir = std::env::temp_dir().join(format!("coachlm_test_{}", uuid::Uuid::new_v4()));
+        let db = Database::new(&dir).expect("Failed to create test database");
+        (db, dir)
+    }
+
+    fn cleanup(dir: &PathBuf) {
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    fn sample_settings() -> SettingsData {
+        SettingsData {
+            active_llm: "local".to_string(),
+            ollama_endpoint: "http://localhost:11434".to_string(),
+            ollama_model: "llama3".to_string(),
+            custom_system_prompt: "You are a coach.".to_string(),
+            cloud_api_key: None,
+            cloud_model: None,
+            web_search_enabled: false,
+            web_search_provider: "duckduckgo".to_string(),
+        }
+    }
+
+    fn sample_profile() -> ProfileData {
+        ProfileData {
+            age: Some(30),
+            max_hr: Some(190),
+            resting_hr: Some(50),
+            threshold_pace_secs: Some(240),
+            weekly_mileage_target: Some(60.0),
+            race_goals: Some("Sub-3 marathon".to_string()),
+            injury_history: Some("None".to_string()),
+            experience_level: Some("Advanced".to_string()),
+            training_days_per_week: Some(6),
+            preferred_terrain: Some("Road".to_string()),
+            heart_rate_zones: Some("Z1:120,Z2:140,Z3:160,Z4:175,Z5:190".to_string()),
+            custom_notes: Some("Early morning runner".to_string()),
+        }
+    }
+
+    fn sample_activity(id: &str, strava_id: Option<&str>) -> ActivityData {
+        ActivityData {
+            activity_id: id.to_string(),
+            strava_id: strava_id.map(ToString::to_string),
+            name: Some("Morning Run".to_string()),
+            activity_type: Some("Run".to_string()),
+            start_date: Some("2025-03-01T07:00:00Z".to_string()),
+            distance: Some(10000.0),
+            moving_time: Some(3000),
+            average_speed: Some(3.33),
+            average_heartrate: Some(150.0),
+            max_heartrate: Some(175.0),
+            average_cadence: Some(180.0),
+            gear_id: Some("g123".to_string()),
+            elapsed_time: Some(3100),
+            total_elevation_gain: Some(50.0),
+            max_speed: Some(4.5),
+            workout_type: Some(0),
+            sport_type: Some("Run".to_string()),
+            start_date_local: Some("2025-03-01T08:00:00".to_string()),
+        }
+    }
+
+    fn sample_race(id: &str) -> Race {
+        Race {
+            id: id.to_string(),
+            name: "Spring Marathon".to_string(),
+            distance_km: 42.195,
+            race_date: "2025-09-15".to_string(),
+            terrain: "Road".to_string(),
+            elevation_m: Some(200.0),
+            goal_time_s: Some(10800),
+            priority: "A".to_string(),
+            is_active: true,
+            created_at: chrono::Utc::now().to_rfc3339(),
+        }
+    }
+
+    // ── Database Init ──────────────────────────────────────────
+
+    #[test]
+    fn database_new_creates_dir_and_db() {
+        let (db, dir) = temp_db();
+        assert!(dir.join("coachlm.db").exists());
+        let settings = db.get_settings().expect("get_settings failed");
+        assert!(settings.is_none());
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn is_first_run_true_when_no_settings() {
+        let (db, dir) = temp_db();
+        assert!(db.is_first_run());
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn is_first_run_false_after_save_settings() {
+        let (db, dir) = temp_db();
+        db.save_settings(&sample_settings())
+            .expect("save_settings failed");
+        assert!(!db.is_first_run());
+        cleanup(&dir);
+    }
+
+    // ── Settings ───────────────────────────────────────────────
+
+    #[test]
+    fn settings_round_trip() {
+        let (db, dir) = temp_db();
+        let settings = sample_settings();
+        db.save_settings(&settings).expect("save failed");
+
+        let loaded = db
+            .get_settings()
+            .expect("get failed")
+            .expect("should exist");
+        assert_eq!(loaded.active_llm, "local");
+        assert_eq!(loaded.ollama_endpoint, "http://localhost:11434");
+        assert_eq!(loaded.ollama_model, "llama3");
+        assert_eq!(loaded.custom_system_prompt, "You are a coach.");
+        assert!(!loaded.web_search_enabled);
+        assert_eq!(loaded.web_search_provider, "duckduckgo");
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn settings_with_cloud_api_key_encrypts_and_decrypts() {
+        let (db, dir) = temp_db();
+        let mut settings = sample_settings();
+        settings.cloud_api_key = Some("sk-secret-key-12345".to_string());
+        db.save_settings(&settings).expect("save failed");
+
+        let loaded = db
+            .get_settings()
+            .expect("get failed")
+            .expect("should exist");
+        assert_eq!(loaded.cloud_api_key.as_deref(), Some("sk-secret-key-12345"));
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn settings_upsert_overwrites() {
+        let (db, dir) = temp_db();
+        db.save_settings(&sample_settings()).expect("save1 failed");
+
+        let mut updated = sample_settings();
+        updated.ollama_model = "mistral".to_string();
+        updated.web_search_enabled = true;
+        db.save_settings(&updated).expect("save2 failed");
+
+        let loaded = db
+            .get_settings()
+            .expect("get failed")
+            .expect("should exist");
+        assert_eq!(loaded.ollama_model, "mistral");
+        assert!(loaded.web_search_enabled);
+        cleanup(&dir);
+    }
+
+    // ── Encryption ─────────────────────────────────────────────
+
+    #[test]
+    fn encrypt_decrypt_round_trip() {
+        let (db, dir) = temp_db();
+        let plaintext = "super-secret-token";
+        let encrypted = db.encrypt(plaintext).expect("encrypt failed");
+        assert_ne!(encrypted, plaintext);
+        let decrypted = db.decrypt(&encrypted).expect("decrypt failed");
+        assert_eq!(decrypted, plaintext);
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn decrypt_invalid_data_returns_error() {
+        let (db, dir) = temp_db();
+        let result = db.decrypt("dG9v");
+        assert!(result.is_err());
+        cleanup(&dir);
+    }
+
+    // ── OAuth Tokens ───────────────────────────────────────────
+
+    #[test]
+    fn oauth_tokens_round_trip() {
+        let (db, dir) = temp_db();
+        db.save_oauth_tokens("access123", "refresh456", 1_700_000_000)
+            .expect("save failed");
+
+        let (access, refresh, expires) = db
+            .get_oauth_tokens()
+            .expect("get failed")
+            .expect("should exist");
+        assert_eq!(access, "access123");
+        assert_eq!(refresh, "refresh456");
+        assert_eq!(expires, 1_700_000_000);
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn oauth_tokens_none_when_empty() {
+        let (db, dir) = temp_db();
+        let result = db.get_oauth_tokens().expect("get failed");
+        assert!(result.is_none());
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn delete_oauth_tokens_clears_all() {
+        let (db, dir) = temp_db();
+        db.save_oauth_tokens("a", "r", 100).expect("save failed");
+        db.delete_oauth_tokens().expect("delete failed");
+        assert!(db.get_oauth_tokens().expect("get failed").is_none());
+        cleanup(&dir);
+    }
+
+    // ── Profile ────────────────────────────────────────────────
+
+    #[test]
+    fn profile_round_trip() {
+        let (db, dir) = temp_db();
+        let profile = sample_profile();
+        db.save_profile(&profile).expect("save failed");
+
+        let loaded = db.get_profile().expect("get failed").expect("should exist");
+        assert_eq!(loaded.age, Some(30));
+        assert_eq!(loaded.max_hr, Some(190));
+        assert_eq!(loaded.experience_level.as_deref(), Some("Advanced"));
+        assert_eq!(loaded.custom_notes.as_deref(), Some("Early morning runner"));
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn profile_none_when_empty() {
+        let (db, dir) = temp_db();
+        assert!(db.get_profile().expect("get failed").is_none());
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn profile_upsert_overwrites() {
+        let (db, dir) = temp_db();
+        let mut profile = sample_profile();
+        db.save_profile(&profile).expect("save1 failed");
+
+        profile.age = Some(31);
+        profile.race_goals = Some("Sub-2:55 marathon".to_string());
+        db.save_profile(&profile).expect("save2 failed");
+
+        let loaded = db.get_profile().expect("get failed").expect("should exist");
+        assert_eq!(loaded.age, Some(31));
+        assert_eq!(loaded.race_goals.as_deref(), Some("Sub-2:55 marathon"));
+        cleanup(&dir);
+    }
+
+    // ── Activities ─────────────────────────────────────────────
+
+    #[test]
+    fn insert_activity_returns_true_for_new() {
+        let (db, dir) = temp_db();
+        let activity = sample_activity("act-1", Some("strava-1"));
+        let inserted = db.insert_activity(&activity).expect("insert failed");
+        assert!(inserted);
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn insert_activity_dedup_by_activity_id() {
+        let (db, dir) = temp_db();
+        let activity = sample_activity("act-1", Some("strava-1"));
+        db.insert_activity(&activity).expect("insert1 failed");
+        let inserted = db.insert_activity(&activity).expect("insert2 failed");
+        assert!(!inserted);
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn insert_activity_dedup_by_strava_id() {
+        let (db, dir) = temp_db();
+        let a1 = sample_activity("act-1", Some("strava-1"));
+        let a2 = sample_activity("act-2", Some("strava-1"));
+        db.insert_activity(&a1).expect("insert1 failed");
+        let inserted = db.insert_activity(&a2).expect("insert2 failed");
+        assert!(!inserted);
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn get_recent_activities_respects_limit_and_offset() {
+        let (db, dir) = temp_db();
+        for i in 0..5 {
+            let mut a = sample_activity(&format!("act-{i}"), None);
+            a.start_date = Some(format!("2025-03-0{}T07:00:00Z", i + 1));
+            db.insert_activity(&a).expect("insert failed");
+        }
+
+        let recent = db.get_recent_activities(2, 0).expect("get failed");
+        assert_eq!(recent.len(), 2);
+        assert_eq!(recent[0].activity_id, "act-4");
+
+        let page2 = db.get_recent_activities(2, 2).expect("get page2 failed");
+        assert_eq!(page2.len(), 2);
+        assert_eq!(page2[0].activity_id, "act-2");
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn get_activity_stats_aggregates_correctly() {
+        let (db, dir) = temp_db();
+        let stats_empty = db.get_activity_stats().expect("stats failed");
+        assert_eq!(stats_empty.total_activities, 0);
+
+        let mut a1 = sample_activity("a1", None);
+        a1.distance = Some(10000.0);
+        a1.start_date = Some("2025-01-01T00:00:00Z".to_string());
+        db.insert_activity(&a1).expect("insert1 failed");
+
+        let mut a2 = sample_activity("a2", None);
+        a2.distance = Some(5000.0);
+        a2.start_date = Some("2025-03-01T00:00:00Z".to_string());
+        db.insert_activity(&a2).expect("insert2 failed");
+
+        let stats = db.get_activity_stats().expect("stats failed");
+        assert_eq!(stats.total_activities, 2);
+        assert!((stats.total_distance_km - 15.0).abs() < f64::EPSILON);
+        assert_eq!(stats.earliest_date.as_deref(), Some("2025-01-01T00:00:00Z"));
+        assert_eq!(stats.latest_date.as_deref(), Some("2025-03-01T00:00:00Z"));
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn get_activities_since_filters_by_date() {
+        let (db, dir) = temp_db();
+        let mut a1 = sample_activity("a1", None);
+        a1.start_date = Some("2025-01-01T00:00:00Z".to_string());
+        db.insert_activity(&a1).expect("insert1 failed");
+
+        let mut a2 = sample_activity("a2", None);
+        a2.start_date = Some("2025-03-01T00:00:00Z".to_string());
+        db.insert_activity(&a2).expect("insert2 failed");
+
+        let since = db
+            .get_activities_since("2025-02-01T00:00:00Z")
+            .expect("get failed");
+        assert_eq!(since.len(), 1);
+        assert_eq!(since[0].activity_id, "a2");
+        cleanup(&dir);
+    }
+
+    // ── Pinned Insights ────────────────────────────────────────
+
+    #[test]
+    fn pinned_insight_save_and_get() {
+        let (db, dir) = temp_db();
+        db.save_pinned_insight("You should run more hills", Some("sess-1"))
+            .expect("save failed");
+
+        let insights = db.get_pinned_insights().expect("get failed");
+        assert_eq!(insights.len(), 1);
+        assert_eq!(insights[0].content, "You should run more hills");
+        assert_eq!(insights[0].source_session_id.as_deref(), Some("sess-1"));
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn pinned_insight_dedup_same_content() {
+        let (db, dir) = temp_db();
+        db.save_pinned_insight("Run more hills", None)
+            .expect("save1 failed");
+        db.save_pinned_insight("Run more hills", None)
+            .expect("save2 failed");
+
+        let insights = db.get_pinned_insights().expect("get failed");
+        assert_eq!(insights.len(), 1);
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn delete_pinned_insight_removes_it() {
+        let (db, dir) = temp_db();
+        db.save_pinned_insight("Insight A", None)
+            .expect("save failed");
+        let insights = db.get_pinned_insights().expect("get failed");
+        assert_eq!(insights.len(), 1);
+
+        db.delete_pinned_insight(insights[0].id)
+            .expect("delete failed");
+        let after = db.get_pinned_insights().expect("get failed");
+        assert_eq!(after.len(), 0);
+        cleanup(&dir);
+    }
+
+    // ── Chat Sessions & Messages ───────────────────────────────
+
+    #[test]
+    fn create_and_list_chat_sessions() {
+        let (db, dir) = temp_db();
+        let s1 = db.create_chat_session().expect("create1 failed");
+        let s2 = db.create_chat_session().expect("create2 failed");
+
+        let sessions = db.get_chat_sessions().expect("list failed");
+        assert_eq!(sessions.len(), 2);
+        assert_eq!(sessions[0].id, s2.id);
+        assert_eq!(sessions[1].id, s1.id);
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn update_chat_session_title() {
+        let (db, dir) = temp_db();
+        let session = db.create_chat_session().expect("create failed");
+        assert!(session.title.is_none());
+
+        db.update_chat_session_title(&session.id, "My Chat")
+            .expect("update failed");
+        let sessions = db.get_chat_sessions().expect("list failed");
+        assert_eq!(sessions[0].title.as_deref(), Some("My Chat"));
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn delete_chat_session_cascades_messages() {
+        let (db, dir) = temp_db();
+        let session = db.create_chat_session().expect("create failed");
+        db.insert_chat_message(&session.id, "user", "Hello")
+            .expect("insert failed");
+        db.insert_chat_message(&session.id, "assistant", "Hi there!")
+            .expect("insert failed");
+
+        db.delete_chat_session(&session.id).expect("delete failed");
+        let sessions = db.get_chat_sessions().expect("list failed");
+        assert_eq!(sessions.len(), 0);
+        let messages = db.get_chat_messages(&session.id).expect("get failed");
+        assert_eq!(messages.len(), 0);
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn chat_message_crud() {
+        let (db, dir) = temp_db();
+        let session = db.create_chat_session().expect("create failed");
+
+        db.insert_chat_message(&session.id, "user", "Hello")
+            .expect("insert1 failed");
+        db.insert_chat_message(&session.id, "assistant", "Hi!")
+            .expect("insert2 failed");
+        db.insert_chat_message(&session.id, "user", "How are you?")
+            .expect("insert3 failed");
+
+        let messages = db.get_chat_messages(&session.id).expect("get failed");
+        assert_eq!(messages.len(), 3);
+        assert_eq!(messages[0].role, "user");
+        assert_eq!(messages[0].content, "Hello");
+        assert_eq!(messages[1].role, "assistant");
+        assert_eq!(messages[2].content, "How are you?");
+
+        db.update_chat_message_content(&session.id, messages[0].id, "Hello there!")
+            .expect("update failed");
+        let updated = db.get_chat_messages(&session.id).expect("get failed");
+        assert_eq!(updated[0].content, "Hello there!");
+
+        db.delete_chat_messages_after(&session.id, messages[0].id)
+            .expect("delete_after failed");
+        let remaining = db.get_chat_messages(&session.id).expect("get failed");
+        assert_eq!(remaining.len(), 1);
+        assert_eq!(remaining[0].content, "Hello there!");
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn chat_messages_isolated_between_sessions() {
+        let (db, dir) = temp_db();
+        let s1 = db.create_chat_session().expect("create1 failed");
+        let s2 = db.create_chat_session().expect("create2 failed");
+
+        db.insert_chat_message(&s1.id, "user", "Session 1 msg")
+            .expect("insert failed");
+        db.insert_chat_message(&s2.id, "user", "Session 2 msg")
+            .expect("insert failed");
+
+        let m1 = db.get_chat_messages(&s1.id).expect("get failed");
+        let m2 = db.get_chat_messages(&s2.id).expect("get failed");
+        assert_eq!(m1.len(), 1);
+        assert_eq!(m2.len(), 1);
+        assert_eq!(m1[0].content, "Session 1 msg");
+        assert_eq!(m2[0].content, "Session 2 msg");
+        cleanup(&dir);
+    }
+
+    // ── Athlete Stats / Zones ──────────────────────────────────
+
+    #[test]
+    fn athlete_stats_round_trip() {
+        let (db, dir) = temp_db();
+        assert!(db.get_athlete_stats().expect("get failed").is_none());
+
+        db.save_athlete_stats(r#"{"recent_run_totals":{}}"#)
+            .expect("save failed");
+        let data = db
+            .get_athlete_stats()
+            .expect("get failed")
+            .expect("should exist");
+        assert!(data.contains("recent_run_totals"));
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn athlete_zones_round_trip() {
+        let (db, dir) = temp_db();
+        assert!(db.get_athlete_zones().expect("get failed").is_none());
+
+        db.save_athlete_zones(r#"{"heart_rate":{"zones":[]}}"#)
+            .expect("save failed");
+        let data = db
+            .get_athlete_zones()
+            .expect("get failed")
+            .expect("should exist");
+        assert!(data.contains("heart_rate"));
+        cleanup(&dir);
+    }
+
+    // ── Gear ───────────────────────────────────────────────────
+
+    #[test]
+    fn gear_save_and_get() {
+        let (db, dir) = temp_db();
+        let gear = GearData {
+            gear_id: "g-001".to_string(),
+            name: Some("Nike Vaporfly".to_string()),
+            distance: Some(350_000.0),
+            brand_name: Some("Nike".to_string()),
+            model_name: Some("Vaporfly Next%".to_string()),
+        };
+        db.save_gear(&gear).expect("save failed");
+
+        let all_gear = db.get_all_gear().expect("get failed");
+        assert_eq!(all_gear.len(), 1);
+        assert_eq!(all_gear[0].gear_id, "g-001");
+        assert_eq!(all_gear[0].name.as_deref(), Some("Nike Vaporfly"));
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn gear_upsert_updates_existing() {
+        let (db, dir) = temp_db();
+        let mut gear = GearData {
+            gear_id: "g-001".to_string(),
+            name: Some("Old Shoe".to_string()),
+            distance: Some(100_000.0),
+            brand_name: None,
+            model_name: None,
+        };
+        db.save_gear(&gear).expect("save1 failed");
+
+        gear.name = Some("Updated Shoe".to_string());
+        gear.distance = Some(200_000.0);
+        db.save_gear(&gear).expect("save2 failed");
+
+        let all_gear = db.get_all_gear().expect("get failed");
+        assert_eq!(all_gear.len(), 1);
+        assert_eq!(all_gear[0].name.as_deref(), Some("Updated Shoe"));
+        cleanup(&dir);
+    }
+
+    // ── Races ──────────────────────────────────────────────────
+
+    #[test]
+    fn race_create_and_list() {
+        let (db, dir) = temp_db();
+        let race = sample_race("race-1");
+        db.create_race(&race).expect("create failed");
+
+        let races = db.list_races().expect("list failed");
+        assert_eq!(races.len(), 1);
+        assert_eq!(races[0].name, "Spring Marathon");
+        assert!((races[0].distance_km - 42.195).abs() < f64::EPSILON);
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn race_update() {
+        let (db, dir) = temp_db();
+        let mut race = sample_race("race-1");
+        db.create_race(&race).expect("create failed");
+
+        race.name = "Autumn Marathon".to_string();
+        race.goal_time_s = Some(10500);
+        db.update_race(&race).expect("update failed");
+
+        let races = db.list_races().expect("list failed");
+        assert_eq!(races[0].name, "Autumn Marathon");
+        assert_eq!(races[0].goal_time_s, Some(10500));
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn race_delete_cascades_plans() {
+        let (db, dir) = temp_db();
+        let race = sample_race("race-1");
+        db.create_race(&race).expect("create race failed");
+
+        let plan = TrainingPlan {
+            id: "plan-1".to_string(),
+            race_id: "race-1".to_string(),
+            generated_at: chrono::Utc::now().to_rfc3339(),
+            llm_backend: "local".to_string(),
+            prompt_hash: "abc".to_string(),
+            is_active: true,
+        };
+        db.save_training_plan(&plan).expect("save plan failed");
+
+        let week = PlanWeek {
+            id: "week-1".to_string(),
+            plan_id: "plan-1".to_string(),
+            week_number: 1,
+            week_start: "2025-06-01".to_string(),
+        };
+        db.save_plan_week(&week).expect("save week failed");
+
+        let session = PlanSession {
+            id: "sess-1".to_string(),
+            week_id: "week-1".to_string(),
+            day_of_week: 1,
+            session_type: "Easy".to_string(),
+            duration_min: Some(45),
+            distance_km: Some(8.0),
+            hr_zone: Some(2),
+            pace_min_low: Some(5.5),
+            pace_min_high: Some(6.0),
+            notes: Some("Recovery run".to_string()),
+            status: "planned".to_string(),
+            actual_duration_min: None,
+            actual_distance_km: None,
+            completed_at: None,
+        };
+        db.save_plan_session(&session).expect("save session failed");
+
+        db.delete_race("race-1").expect("delete race failed");
+
+        let races = db.list_races().expect("list failed");
+        assert_eq!(races.len(), 0);
+        let plans = db.list_plans().expect("list plans failed");
+        assert_eq!(plans.len(), 0);
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn set_active_race_toggles_correctly() {
+        let (db, dir) = temp_db();
+        let r1 = sample_race("race-1");
+        let mut r2 = sample_race("race-2");
+        r2.name = "Fall Half Marathon".to_string();
+        r2.is_active = false;
+
+        db.create_race(&r1).expect("create1 failed");
+        db.create_race(&r2).expect("create2 failed");
+
+        db.set_active_race("race-2").expect("set active failed");
+
+        let races = db.list_races().expect("list failed");
+        let active: Vec<_> = races.iter().filter(|r| r.is_active).collect();
+        assert_eq!(active.len(), 1);
+        assert_eq!(active[0].id, "race-2");
+        cleanup(&dir);
+    }
+
+    // ── Training Plans ─────────────────────────────────────────
+
+    #[test]
+    fn training_plan_lifecycle() {
+        let (db, dir) = temp_db();
+        let race = sample_race("race-1");
+        db.create_race(&race).expect("create race failed");
+
+        let plan = TrainingPlan {
+            id: "plan-1".to_string(),
+            race_id: "race-1".to_string(),
+            generated_at: chrono::Utc::now().to_rfc3339(),
+            llm_backend: "local".to_string(),
+            prompt_hash: "hash123".to_string(),
+            is_active: true,
+        };
+        db.save_training_plan(&plan).expect("save plan failed");
+
+        let week = PlanWeek {
+            id: "week-1".to_string(),
+            plan_id: "plan-1".to_string(),
+            week_number: 1,
+            week_start: "2025-06-01".to_string(),
+        };
+        db.save_plan_week(&week).expect("save week failed");
+
+        let session = PlanSession {
+            id: "sess-1".to_string(),
+            week_id: "week-1".to_string(),
+            day_of_week: 1,
+            session_type: "Tempo".to_string(),
+            duration_min: Some(60),
+            distance_km: Some(12.0),
+            hr_zone: Some(3),
+            pace_min_low: Some(4.5),
+            pace_min_high: Some(5.0),
+            notes: Some("Tempo run".to_string()),
+            status: "planned".to_string(),
+            actual_duration_min: None,
+            actual_distance_km: None,
+            completed_at: None,
+        };
+        db.save_plan_session(&session).expect("save session failed");
+
+        let active = db
+            .get_active_plan()
+            .expect("get active failed")
+            .expect("should exist");
+        assert_eq!(active.id, "plan-1");
+        assert!(active.is_active);
+
+        let weeks = db.get_plan_weeks("plan-1").expect("get weeks failed");
+        assert_eq!(weeks.len(), 1);
+        assert_eq!(weeks[0].week.week_number, 1);
+        assert_eq!(weeks[0].sessions.len(), 1);
+        assert_eq!(weeks[0].sessions[0].session_type, "Tempo");
+
+        db.update_session_status("sess-1", "completed", Some(58), Some(11.8))
+            .expect("update status failed");
+        let weeks_after = db.get_plan_weeks("plan-1").expect("get weeks failed");
+        assert_eq!(weeks_after[0].sessions[0].status, "completed");
+        assert_eq!(weeks_after[0].sessions[0].actual_duration_min, Some(58));
+        assert!(weeks_after[0].sessions[0].completed_at.is_some());
+
+        let summaries = db.list_plans().expect("list plans failed");
+        assert_eq!(summaries.len(), 1);
+        assert_eq!(summaries[0].race_name, "Spring Marathon");
+        assert_eq!(summaries[0].total_sessions, 1);
+        assert_eq!(summaries[0].completed_sessions, 1);
+
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn set_active_plan_toggles() {
+        let (db, dir) = temp_db();
+        let race = sample_race("race-1");
+        db.create_race(&race).expect("create race failed");
+
+        let plan1 = TrainingPlan {
+            id: "plan-1".to_string(),
+            race_id: "race-1".to_string(),
+            generated_at: "2025-01-01T00:00:00Z".to_string(),
+            llm_backend: "local".to_string(),
+            prompt_hash: "h1".to_string(),
+            is_active: true,
+        };
+        let plan2 = TrainingPlan {
+            id: "plan-2".to_string(),
+            race_id: "race-1".to_string(),
+            generated_at: "2025-02-01T00:00:00Z".to_string(),
+            llm_backend: "local".to_string(),
+            prompt_hash: "h2".to_string(),
+            is_active: false,
+        };
+        db.save_training_plan(&plan1).expect("save1 failed");
+        db.save_training_plan(&plan2).expect("save2 failed");
+
+        db.set_active_plan("plan-2").expect("set active failed");
+
+        let active = db
+            .get_active_plan()
+            .expect("get failed")
+            .expect("should exist");
+        assert_eq!(active.id, "plan-2");
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn deactivate_all_plans() {
+        let (db, dir) = temp_db();
+        let race = sample_race("race-1");
+        db.create_race(&race).expect("create race failed");
+
+        let plan = TrainingPlan {
+            id: "plan-1".to_string(),
+            race_id: "race-1".to_string(),
+            generated_at: chrono::Utc::now().to_rfc3339(),
+            llm_backend: "local".to_string(),
+            prompt_hash: "h".to_string(),
+            is_active: true,
+        };
+        db.save_training_plan(&plan).expect("save failed");
+
+        db.deactivate_all_plans().expect("deactivate failed");
+        assert!(db.get_active_plan().expect("get failed").is_none());
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn delete_plan_removes_weeks_and_sessions() {
+        let (db, dir) = temp_db();
+        let race = sample_race("race-1");
+        db.create_race(&race).expect("create race failed");
+
+        let plan = TrainingPlan {
+            id: "plan-1".to_string(),
+            race_id: "race-1".to_string(),
+            generated_at: chrono::Utc::now().to_rfc3339(),
+            llm_backend: "local".to_string(),
+            prompt_hash: "h".to_string(),
+            is_active: true,
+        };
+        db.save_training_plan(&plan).expect("save plan failed");
+
+        let week = PlanWeek {
+            id: "w1".to_string(),
+            plan_id: "plan-1".to_string(),
+            week_number: 1,
+            week_start: "2025-06-01".to_string(),
+        };
+        db.save_plan_week(&week).expect("save week failed");
+
+        let sess = PlanSession {
+            id: "s1".to_string(),
+            week_id: "w1".to_string(),
+            day_of_week: 1,
+            session_type: "Easy".to_string(),
+            duration_min: None,
+            distance_km: None,
+            hr_zone: None,
+            pace_min_low: None,
+            pace_min_high: None,
+            notes: None,
+            status: "planned".to_string(),
+            actual_duration_min: None,
+            actual_distance_km: None,
+            completed_at: None,
+        };
+        db.save_plan_session(&sess).expect("save session failed");
+
+        db.delete_plan("plan-1").expect("delete plan failed");
+
+        let weeks = db.get_plan_weeks("plan-1").expect("get weeks failed");
+        assert_eq!(weeks.len(), 0);
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn delete_plans_for_race() {
+        let (db, dir) = temp_db();
+        let race = sample_race("race-1");
+        db.create_race(&race).expect("create race failed");
+
+        let plan = TrainingPlan {
+            id: "plan-1".to_string(),
+            race_id: "race-1".to_string(),
+            generated_at: chrono::Utc::now().to_rfc3339(),
+            llm_backend: "local".to_string(),
+            prompt_hash: "h".to_string(),
+            is_active: true,
+        };
+        db.save_training_plan(&plan).expect("save plan failed");
+
+        db.delete_plans_for_race("race-1").expect("delete failed");
+        let plans = db.list_plans().expect("list failed");
+        assert_eq!(plans.len(), 0);
+        cleanup(&dir);
+    }
+}

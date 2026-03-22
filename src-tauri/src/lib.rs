@@ -735,3 +735,79 @@ pub fn run() {
         .run(tauri::generate_context!())
         .unwrap_or_else(|e| eprintln!("Error while running tauri application: {e}"));
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn title_fallback_short_text_returned_as_is() {
+        assert_eq!(generate_session_title_fallback("Hello"), "Hello");
+    }
+
+    #[test]
+    fn title_fallback_exactly_50_chars_returned_as_is() {
+        let text = "a".repeat(50);
+        assert_eq!(generate_session_title_fallback(&text), text);
+    }
+
+    #[test]
+    fn title_fallback_long_text_truncates_at_word_boundary() {
+        let text = "This is a somewhat long message that exceeds the fifty character limit by a lot";
+        let result = generate_session_title_fallback(text);
+        assert!(result.ends_with("..."));
+        assert!(result.len() <= 53);
+        assert!(!result.contains("limit"));
+    }
+
+    #[test]
+    fn title_fallback_long_text_without_space_truncates_at_50() {
+        let text = "a".repeat(100);
+        let result = generate_session_title_fallback(&text);
+        assert_eq!(result, format!("{}...", "a".repeat(50)));
+    }
+
+    #[test]
+    fn title_fallback_trims_whitespace() {
+        assert_eq!(generate_session_title_fallback("  Hello  "), "Hello");
+    }
+
+    #[test]
+    fn title_fallback_empty_string() {
+        assert_eq!(generate_session_title_fallback(""), "");
+    }
+
+    #[test]
+    fn invalidate_context_cache_clears_cached_value() {
+        let db_dir = std::env::temp_dir().join(format!("coachlm_test_{}", uuid::Uuid::new_v4()));
+        let db = storage::Database::new(&db_dir).expect("db creation failed");
+        let state = AppState {
+            db: std::sync::Arc::new(db),
+            current_session_id: std::sync::Mutex::new(None),
+            cached_context: std::sync::Mutex::new(Some("cached".to_string())),
+        };
+
+        invalidate_context_cache(&state);
+
+        let cache = state.cached_context.lock().expect("lock failed");
+        assert!(cache.is_none());
+        std::fs::remove_dir_all(&db_dir).ok();
+    }
+
+    #[test]
+    fn get_or_build_context_caches_result() {
+        let db_dir = std::env::temp_dir().join(format!("coachlm_test_{}", uuid::Uuid::new_v4()));
+        let db = storage::Database::new(&db_dir).expect("db creation failed");
+        let state = AppState {
+            db: std::sync::Arc::new(db),
+            current_session_id: std::sync::Mutex::new(None),
+            cached_context: std::sync::Mutex::new(None),
+        };
+
+        let ctx1 = get_or_build_context(&state);
+        let ctx2 = get_or_build_context(&state);
+        assert_eq!(ctx1, ctx2);
+        assert!(state.cached_context.lock().expect("lock failed").is_some());
+        std::fs::remove_dir_all(&db_dir).ok();
+    }
+}
