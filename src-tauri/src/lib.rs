@@ -19,6 +19,31 @@ use tauri::{Emitter, Manager};
 pub struct AppState {
     pub db: Arc<Database>,
     pub current_session_id: std::sync::Mutex<Option<String>>,
+    pub cached_context: std::sync::Mutex<Option<String>>,
+}
+
+/// Returns the cached LLM context string, building and caching it if not present.
+/// Lock is never held across await points.
+fn get_or_build_context(state: &AppState) -> String {
+    if let Ok(cache) = state.cached_context.lock() {
+        if let Some(ref ctx) = *cache {
+            return ctx.clone();
+        }
+    }
+    let ctx = context::build_context(&state.db);
+    if let Ok(mut cache) = state.cached_context.lock() {
+        if cache.is_none() {
+            *cache = Some(ctx.clone());
+        }
+    }
+    ctx
+}
+
+/// Invalidates the context cache so the next request rebuilds it.
+fn invalidate_context_cache(state: &AppState) {
+    if let Ok(mut cache) = state.cached_context.lock() {
+        *cache = None;
+    }
 }
 
 #[tauri::command]
@@ -30,7 +55,9 @@ fn get_settings(state: tauri::State<'_, AppState>) -> Result<Option<SettingsData
 #[tauri::command]
 #[allow(clippy::needless_pass_by_value)]
 fn save_settings(state: tauri::State<'_, AppState>, data: SettingsData) -> Result<(), String> {
-    state.db.save_settings(&data).map_err(|e| e.to_string())
+    state.db.save_settings(&data).map_err(|e| e.to_string())?;
+    invalidate_context_cache(&state);
+    Ok(())
 }
 
 #[tauri::command]
@@ -69,7 +96,12 @@ async fn sync_strava_activities(
     state: tauri::State<'_, AppState>,
     app_handle: tauri::AppHandle,
 ) -> Result<(), String> {
-    strava::sync_activities(state.db.clone(), app_handle).await
+    strava::sync_activities(state.db.clone(), app_handle).await?;
+    let fresh_ctx = context::build_context(&state.db);
+    if let Ok(mut cache) = state.cached_context.lock() {
+        *cache = Some(fresh_ctx);
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -100,13 +132,15 @@ fn save_profile_data(
     state: tauri::State<'_, AppState>,
     data: ProfileData,
 ) -> Result<(), String> {
-    state.db.save_profile(&data).map_err(|e| e.to_string())
+    state.db.save_profile(&data).map_err(|e| e.to_string())?;
+    invalidate_context_cache(&state);
+    Ok(())
 }
 
 #[tauri::command]
 #[allow(clippy::needless_pass_by_value)]
 fn get_context_preview(state: tauri::State<'_, AppState>) -> String {
-    context::build_context(&state.db)
+    get_or_build_context(&state)
 }
 
 #[tauri::command]
@@ -123,7 +157,9 @@ fn save_pinned_insight(
     state
         .db
         .save_pinned_insight(&content, session_id.as_deref())
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+    invalidate_context_cache(&state);
+    Ok(())
 }
 
 #[tauri::command]
@@ -135,7 +171,9 @@ fn get_pinned_insights(state: tauri::State<'_, AppState>) -> Result<Vec<InsightD
 #[tauri::command]
 #[allow(clippy::needless_pass_by_value)]
 fn delete_pinned_insight(state: tauri::State<'_, AppState>, id: i64) -> Result<(), String> {
-    state.db.delete_pinned_insight(id).map_err(|e| e.to_string())
+    state.db.delete_pinned_insight(id).map_err(|e| e.to_string())?;
+    invalidate_context_cache(&state);
+    Ok(())
 }
 
 fn generate_session_title_fallback(content: &str) -> String {
@@ -186,6 +224,7 @@ async fn query_and_save_response(
     settings: &models::SettingsData,
     session_id: &str,
     user_content: &str,
+    llm_ctx: &str,
 ) -> Result<String, String> {
     let mut web_search_context = String::new();
     if settings.web_search_enabled {
@@ -201,10 +240,9 @@ async fn query_and_save_response(
     }
 
     emit_chat_progress(app_handle, "Gathering context...");
-    let llm_ctx = context::build_context(db);
     let history = db.get_chat_messages(session_id).map_err(|e| e.to_string())?;
 
-    let mut system_content = llm_ctx;
+    let mut system_content = llm_ctx.to_string();
     if !web_search_context.is_empty() {
         system_content = format!("{web_search_context}\n\n{system_content}");
     }
@@ -280,7 +318,8 @@ async fn send_message(
         });
     }
 
-    query_and_save_response(&state.db, &app_handle, &settings, &session_id, &content).await
+    let llm_ctx = get_or_build_context(&state);
+    query_and_save_response(&state.db, &app_handle, &settings, &session_id, &content, &llm_ctx).await
 }
 
 #[tauri::command]
@@ -309,7 +348,8 @@ async fn edit_and_resend(
         .map_err(|e| e.to_string())?
         .ok_or("Settings not configured. Complete the setup wizard first.")?;
 
-    query_and_save_response(&state.db, &app_handle, &settings, &session_id, &content).await
+    let llm_ctx = get_or_build_context(&state);
+    query_and_save_response(&state.db, &app_handle, &settings, &session_id, &content, &llm_ctx).await
 }
 
 #[tauri::command]
@@ -468,6 +508,7 @@ fn import_context(
         return Err(format!("Failed to import {failed_count} activities"));
     }
 
+    invalidate_context_cache(&state);
     Ok(())
 }
 
@@ -516,9 +557,10 @@ async fn generate_plan_cmd(
     race_id: String,
 ) -> Result<(), String> {
     let db = state.db.clone();
+    let llm_ctx = get_or_build_context(&state);
     app_handle.emit("plan:generate:start", ()).ok();
     tauri::async_runtime::spawn(async move {
-        match plan::generate_plan(db, &race_id, &app_handle).await {
+        match plan::generate_plan(db, &race_id, &app_handle, &llm_ctx).await {
             Ok(plan) => {
                 app_handle.emit("plan:generate:complete", &plan).ok();
             }
@@ -548,7 +590,9 @@ fn set_active_plan(
     state: tauri::State<'_, AppState>,
     plan_id: String,
 ) -> Result<(), String> {
-    state.db.set_active_plan(&plan_id).map_err(|e| e.to_string())
+    state.db.set_active_plan(&plan_id).map_err(|e| e.to_string())?;
+    invalidate_context_cache(&state);
+    Ok(())
 }
 
 #[tauri::command]
@@ -557,7 +601,9 @@ fn delete_plan(
     state: tauri::State<'_, AppState>,
     plan_id: String,
 ) -> Result<(), String> {
-    state.db.delete_plan(&plan_id).map_err(|e| e.to_string())
+    state.db.delete_plan(&plan_id).map_err(|e| e.to_string())?;
+    invalidate_context_cache(&state);
+    Ok(())
 }
 
 #[tauri::command]
@@ -637,6 +683,7 @@ pub fn run() {
             let state = AppState {
                 db: Arc::new(db),
                 current_session_id: std::sync::Mutex::new(None),
+                cached_context: std::sync::Mutex::new(None),
             };
             app.manage(state);
             Ok(())

@@ -8,6 +8,7 @@ pub async fn generate_plan(
     db: Arc<Database>,
     race_id: &str,
     app_handle: &tauri::AppHandle,
+    context: &str,
 ) -> Result<TrainingPlan, String> {
     let races = db.list_races().map_err(|e| e.to_string())?;
     let race = races.iter().find(|r| r.id == race_id)
@@ -39,9 +40,8 @@ pub async fn generate_plan(
 
     let prompt = build_plan_prompt(&profile, race, weeks_to_race);
 
-    let llm_context = crate::context::build_context(&db);
     let messages = vec![
-        OllamaMessage { role: "system".to_string(), content: llm_context },
+        OllamaMessage { role: "system".to_string(), content: context.to_string() },
         OllamaMessage { role: "user".to_string(), content: prompt },
     ];
 
