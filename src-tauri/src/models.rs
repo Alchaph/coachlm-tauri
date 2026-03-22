@@ -230,6 +230,30 @@ pub struct OpenAiChatResponse {
     pub choices: Vec<OpenAiChoice>,
 }
 
+// For Ollama streaming chunks (line-delimited JSON)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OllamaStreamChunk {
+    pub message: Option<OllamaMessage>,
+    pub done: bool,
+}
+
+// For OpenAI-compatible streaming chunks (SSE)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OpenAiStreamChoice {
+    pub delta: OpenAiDelta,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OpenAiDelta {
+    #[serde(default)]
+    pub content: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OpenAiStreamChunk {
+    pub choices: Vec<OpenAiStreamChoice>,
+}
+
 pub struct CloudProvider;
 
 impl CloudProvider {

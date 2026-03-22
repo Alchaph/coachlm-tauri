@@ -260,7 +260,7 @@ async fn query_and_save_response(
     }
 
     emit_chat_progress(app_handle, "Querying model...");
-    let response = llm::chat(settings, messages).await?;
+    let response = llm::chat_stream(settings, messages, app_handle).await?;
 
     emit_chat_progress(app_handle, "Saving response...");
     db.insert_chat_message(session_id, "assistant", &response)

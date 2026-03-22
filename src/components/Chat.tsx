@@ -114,6 +114,37 @@ export default function Chat({ onStatusChange }: ChatProps) {
     return () => { cleanup?.(); };
   }, [onStatusChange]);
 
+  useEffect(() => {
+    let cleanup: (() => void) | undefined;
+    void (async () => {
+      cleanup = await listen<{ content: string; done: boolean }>("chat:send:chunk", (event) => {
+        if (event.payload.done) {
+          return;
+        }
+        setMessages((prev) => {
+          const last = prev[prev.length - 1];
+          if (prev.length > 0 && last.role === "assistant" && last.id === -1) {
+            return [
+              ...prev.slice(0, -1),
+              { ...last, content: last.content + event.payload.content },
+            ];
+          }
+          return [
+            ...prev,
+            {
+              id: -1,
+              session_id: "",
+              role: "assistant",
+              content: event.payload.content,
+              created_at: new Date().toISOString(),
+            },
+          ];
+        });
+      });
+    })();
+    return () => { cleanup?.(); };
+  }, []);
+
   const loadSession = async (sessionId: string) => {
     try {
       const msgs = await invoke<Message[]>("get_chat_messages", { sessionId });
@@ -201,16 +232,19 @@ export default function Chat({ onStatusChange }: ChatProps) {
 
     try {
       const response = await invoke<string>("send_message", { content });
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: Date.now() + 1,
-          session_id: activeSessionId,
-          role: "assistant",
-          content: response,
-          created_at: new Date().toISOString(),
-        },
-      ]);
+      setMessages((prev) => {
+        const filtered = prev.filter((m) => m.id !== -1);
+        return [
+          ...filtered,
+          {
+            id: Date.now() + 1,
+            session_id: activeSessionId,
+            role: "assistant",
+            content: response,
+            created_at: new Date().toISOString(),
+          },
+        ];
+      });
       onStatusChange?.("replied");
       await refreshSessions();
     } catch (e) {
@@ -290,16 +324,19 @@ export default function Chat({ onStatusChange }: ChatProps) {
         messageId: msgId,
         content: newContent,
       });
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: Date.now(),
-          session_id: currentSessionId,
-          role: "assistant",
-          content: response,
-          created_at: new Date().toISOString(),
-        },
-      ]);
+      setMessages((prev) => {
+        const filtered = prev.filter((m) => m.id !== -1);
+        return [
+          ...filtered,
+          {
+            id: Date.now(),
+            session_id: currentSessionId,
+            role: "assistant",
+            content: response,
+            created_at: new Date().toISOString(),
+          },
+        ];
+      });
       onStatusChange?.("replied");
     } catch (e) {
       setError(String(e));
