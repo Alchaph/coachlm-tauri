@@ -179,6 +179,57 @@ fn emit_chat_progress(app_handle: &tauri::AppHandle, status: &str) {
         .ok();
 }
 
+async fn query_and_save_response(
+    db: &Database,
+    app_handle: &tauri::AppHandle,
+    settings: &models::SettingsData,
+    session_id: &str,
+    user_content: &str,
+) -> Result<String, String> {
+    let mut web_search_context = String::new();
+    if settings.web_search_enabled {
+        emit_chat_progress(app_handle, "Searching the web...");
+        match web_search::search_duckduckgo(user_content, 5).await {
+            Ok(results) => {
+                web_search_context = web_search::format_search_results(&results);
+            }
+            Err(e) => {
+                log::warn!("Web search failed, continuing without results: {e}");
+            }
+        }
+    }
+
+    emit_chat_progress(app_handle, "Gathering context...");
+    let llm_ctx = context::build_context(db);
+    let history = db.get_chat_messages(session_id).map_err(|e| e.to_string())?;
+
+    let mut system_content = llm_ctx;
+    if !web_search_context.is_empty() {
+        system_content = format!("{web_search_context}\n\n{system_content}");
+    }
+
+    let mut messages = vec![OllamaMessage {
+        role: "system".to_string(),
+        content: system_content,
+    }];
+
+    for msg in &history {
+        messages.push(OllamaMessage {
+            role: msg.role.clone(),
+            content: msg.content.clone(),
+        });
+    }
+
+    emit_chat_progress(app_handle, "Querying model...");
+    let response = llm::chat(settings, messages).await?;
+
+    emit_chat_progress(app_handle, "Saving response...");
+    db.insert_chat_message(session_id, "assistant", &response)
+        .map_err(|e| e.to_string())?;
+
+    Ok(response)
+}
+
 #[tauri::command]
 async fn send_message(
     state: tauri::State<'_, AppState>,
@@ -228,54 +279,7 @@ async fn send_message(
         });
     }
 
-    // Phase 2.5: Web search (if enabled)
-    let mut web_search_context = String::new();
-    if settings.web_search_enabled {
-        emit_chat_progress(&app_handle, "Searching the web...");
-        match web_search::search_duckduckgo(&content, 5).await {
-            Ok(results) => {
-                web_search_context = web_search::format_search_results(&results);
-            }
-            Err(e) => {
-                log::warn!("Web search failed, continuing without results: {e}");
-            }
-        }
-    }
-
-    // Phase 3: Gather context
-    emit_chat_progress(&app_handle, "Gathering context...");
-    let llm_ctx = context::build_context(&state.db);
-    let history = state.db.get_chat_messages(&session_id).map_err(|e| e.to_string())?;
-
-    let mut system_content = llm_ctx;
-    if !web_search_context.is_empty() {
-        system_content = format!("{web_search_context}\n\n{system_content}");
-    }
-
-    let mut messages = vec![OllamaMessage {
-        role: "system".to_string(),
-        content: system_content,
-    }];
-
-    for msg in &history {
-        messages.push(OllamaMessage {
-            role: msg.role.clone(),
-            content: msg.content.clone(),
-        });
-    }
-
-    // Phase 4: Query model
-    emit_chat_progress(&app_handle, "Querying model...");
-    let response = llm::chat(&settings, messages).await?;
-
-    // Phase 5: Save response
-    emit_chat_progress(&app_handle, "Saving response...");
-    state
-        .db
-        .insert_chat_message(&session_id, "assistant", &response)
-        .map_err(|e| e.to_string())?;
-
-    Ok(response)
+    query_and_save_response(&state.db, &app_handle, &settings, &session_id, &content).await
 }
 
 #[tauri::command]
@@ -304,53 +308,7 @@ async fn edit_and_resend(
         .map_err(|e| e.to_string())?
         .ok_or("Settings not configured. Complete the setup wizard first.")?;
 
-    let mut web_search_context = String::new();
-    if settings.web_search_enabled {
-        emit_chat_progress(&app_handle, "Searching the web...");
-        match web_search::search_duckduckgo(&content, 5).await {
-            Ok(results) => {
-                web_search_context = web_search::format_search_results(&results);
-            }
-            Err(e) => {
-                log::warn!("Web search failed, continuing without results: {e}");
-            }
-        }
-    }
-
-    emit_chat_progress(&app_handle, "Gathering context...");
-    let llm_ctx = context::build_context(&state.db);
-    let history = state
-        .db
-        .get_chat_messages(&session_id)
-        .map_err(|e| e.to_string())?;
-
-    let mut system_content = llm_ctx;
-    if !web_search_context.is_empty() {
-        system_content = format!("{web_search_context}\n\n{system_content}");
-    }
-
-    let mut messages = vec![OllamaMessage {
-        role: "system".to_string(),
-        content: system_content,
-    }];
-
-    for msg in &history {
-        messages.push(OllamaMessage {
-            role: msg.role.clone(),
-            content: msg.content.clone(),
-        });
-    }
-
-    emit_chat_progress(&app_handle, "Querying model...");
-    let response = llm::chat(&settings, messages).await?;
-
-    emit_chat_progress(&app_handle, "Saving response...");
-    state
-        .db
-        .insert_chat_message(&session_id, "assistant", &response)
-        .map_err(|e| e.to_string())?;
-
-    Ok(response)
+    query_and_save_response(&state.db, &app_handle, &settings, &session_id, &content).await
 }
 
 #[tauri::command]
