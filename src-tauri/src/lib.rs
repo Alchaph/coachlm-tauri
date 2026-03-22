@@ -77,8 +77,9 @@ async fn sync_strava_activities(
 fn get_recent_activities(
     state: tauri::State<'_, AppState>,
     limit: u32,
+    offset: u32,
 ) -> Result<Vec<ActivityData>, String> {
-    state.db.get_recent_activities(limit).map_err(|e| e.to_string())
+    state.db.get_recent_activities(limit, offset).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -401,7 +402,7 @@ fn export_context(
     file_path: String,
 ) -> Result<(), String> {
     let profile = state.db.get_profile().map_err(|e| e.to_string())?;
-    let activities = state.db.get_recent_activities(10000).map_err(|e| e.to_string())?;
+    let activities = state.db.get_recent_activities(10000, 0).map_err(|e| e.to_string())?;
     let insights = state.db.get_pinned_insights().map_err(|e| e.to_string())?;
     let settings = state.db.get_settings().map_err(|e| e.to_string())?;
 

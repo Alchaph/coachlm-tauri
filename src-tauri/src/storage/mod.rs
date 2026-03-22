@@ -510,15 +510,19 @@ impl Database {
         Ok(true)
     }
 
-    pub fn get_recent_activities(&self, limit: u32) -> SqlResult<Vec<super::models::ActivityData>> {
+    pub fn get_recent_activities(
+        &self,
+        limit: u32,
+        offset: u32,
+    ) -> SqlResult<Vec<super::models::ActivityData>> {
         let conn = self.conn();
         let mut stmt = conn.prepare(
             "SELECT activity_id, strava_id, name, type, start_date, distance, moving_time,
                     average_speed, average_heartrate, max_heartrate, average_cadence, gear_id,
                     elapsed_time, total_elevation_gain, max_speed, workout_type, sport_type, start_date_local
-             FROM activities ORDER BY start_date DESC LIMIT ?1",
+             FROM activities ORDER BY start_date DESC LIMIT ?1 OFFSET ?2",
         )?;
-        let rows = stmt.query_map(params![limit], |row| {
+        let rows = stmt.query_map(params![limit, offset], |row| {
             Ok(super::models::ActivityData {
                 activity_id: row.get(0)?,
                 strava_id: row.get(1)?,

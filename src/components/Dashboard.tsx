@@ -120,6 +120,7 @@ function computeWeeklyVolume(activities: ActivityItem[]): { label: string; km: n
 }
 
 export default function Dashboard() {
+  const PAGE_SIZE = 50;
   const [activities, setActivities] = useState<ActivityItem[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
   const [authStatus, setAuthStatus] = useState<AuthStatus>({ connected: false, expires_at: null });
@@ -127,6 +128,7 @@ export default function Dashboard() {
   const [syncProgress, setSyncProgress] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [typeFilter, setTypeFilter] = useState("All");
+  const [hasMore, setHasMore] = useState(true);
 
   useEffect(() => {
     void loadData();
@@ -160,19 +162,28 @@ export default function Dashboard() {
     return () => { unlisteners.forEach((u) => { u(); }); };
   }, []);
 
-  const loadData = async () => {
+  const loadData = async (offset = 0) => {
     try {
       const [acts, st, auth] = await Promise.all([
-        invoke<ActivityItem[]>("get_recent_activities", { limit: 50 }),
+        invoke<ActivityItem[]>("get_recent_activities", { limit: PAGE_SIZE, offset }),
         invoke<Stats>("get_activity_stats"),
         invoke<AuthStatus>("get_strava_auth_status"),
       ]);
-      setActivities(acts);
+      if (offset === 0) {
+        setActivities(acts);
+      } else {
+        setActivities((prev) => [...prev, ...acts]);
+      }
+      setHasMore(acts.length >= PAGE_SIZE);
       setStats(st);
       setAuthStatus(auth);
     } catch (e) {
       setError(String(e));
     }
+  };
+
+  const loadMore = () => {
+    void loadData(activities.length);
   };
 
   const handleSync = async () => {
@@ -397,6 +408,14 @@ export default function Dashboard() {
               </tbody>
             </table>
           </div>
+
+          {hasMore && (
+            <div style={{ textAlign: "center", marginBottom: 20 }}>
+              <button className="btn-primary" onClick={loadMore}>
+                Load More
+              </button>
+            </div>
+          )}
 
           {weeklyVolume.length > 0 && (
             <div className="card">
