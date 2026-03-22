@@ -130,5 +130,5 @@ jobs:
           prerelease: false
           includeRelease: true
           includeDebug: false
-          updater: true
+          includeUpdaterJson: true
           args: --target ${{ matrix.target }}

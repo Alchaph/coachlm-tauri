@@ -36,7 +36,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IHJzaWduIGVuY3J5cHRlZCBzZWNyZXQga2V5ClJXUlRZMEl5dGQ0bjUyeHozWEFtVk9aYnlqMXdEeGtvTkJjRjRWTGVkaGpOYVhraWhoVUFBQkFBQUFBQUFBQUFBQUlBQUFBQWRoWG0vd05tS2htWW1zQ2xDZ1FGR1RjeHkrN2N5em01Mm5VN21VR2hlUmVzMEM5eHAvUFBPa2pVZ1BLdFBIb0dFVnFRU1JDbXdWZDQ4SkVtN0pLUVZ3N1V1Nzdrb2RJaDVDRzgwZWE4QlJTbm1sa1JHclZCeWJ2eHJHODFLWUo2L3NhR2FGYXFzN1E9Cg==",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDY5NTBFQTk2OUM3Rjk2ODYKUldTR2xuK2NsdXBRYVpOWURKSUhEZ3BQY0gwUGorcU9kWDNIbTVTQW8yeUtXWEF4Rk1tUng5ZFcK",
       "endpoints": [
         "https://github.com/Alchaph/coachlm-tauri/releases/latest/download/latest.json"
       ],
