@@ -126,7 +126,6 @@ export default function Dashboard() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [authStatus, setAuthStatus] = useState<AuthStatus>({ connected: false, expires_at: null });
   const [syncing, setSyncing] = useState(false);
-  const [syncProgress, setSyncProgress] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [typeFilter, setTypeFilter] = useState("All");
   const [hasMore, setHasMore] = useState(true);
@@ -138,21 +137,13 @@ export default function Dashboard() {
     void (async () => {
       unlisteners.push(await listen("strava:sync:start", () => {
         setSyncing(true);
-        setSyncProgress("Starting sync...");
       }));
-      unlisteners.push(await listen<{ current: number; total: number }>("strava:sync:progress", (e) => {
-        setSyncProgress(`Syncing: ${String(e.payload.current)} activities`);
-      }));
-       unlisteners.push(await listen<{ new_count: number; total_count: number }>("strava:sync:complete", (e) => {
+       unlisteners.push(await listen("strava:sync:complete", () => {
          setSyncing(false);
-         setSyncProgress(`Done! ${String(e.payload.new_count)} new activities (${String(e.payload.total_count)} total)`);
          void loadData();
-         setTimeout(() => { setSyncProgress(null); }, 3000);
        }));
-       unlisteners.push(await listen<string>("strava:sync:context-ready", () => {
-         setSyncProgress("Context updated");
+       unlisteners.push(await listen("strava:sync:context-ready", () => {
          void loadData();
-         setTimeout(() => { setSyncProgress(null); }, 3000);
        }));
        unlisteners.push(await listen<{ message: string }>("strava:sync:error", (e) => {
          setSyncing(false);
@@ -325,12 +316,6 @@ export default function Dashboard() {
         </div>
       </div>
 
-       {syncProgress && (
-         <div style={{ padding: "8px 12px", background: "var(--bg-secondary)", borderRadius: 0, marginBottom: 16, color: "var(--accent)", fontSize: 13 }}>
-           {syncProgress}
-         </div>
-       )}
-
       {error && <div className="error-state" style={{ marginBottom: 16 }}>{error}</div>}
 
       {stats && stats.total_activities > 0 && (
@@ -398,9 +383,9 @@ export default function Dashboard() {
             </table>
             <div
               ref={tableContainerRef}
-              style={{ maxHeight: 600, overflow: "auto" }}
+              style={{ height: Math.min(filteredActivities.length * 44, 600), overflow: "auto" }}
             >
-              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", height: rowVirtualizer.getTotalSize() }}>
                 <tbody>
                   {(() => {
                     const virtualItems = rowVirtualizer.getVirtualItems();

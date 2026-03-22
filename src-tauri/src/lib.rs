@@ -212,9 +212,9 @@ async fn generate_session_title(settings: &models::SettingsData, content: &str) 
     }
 }
 
-fn emit_chat_progress(app_handle: &tauri::AppHandle, status: &str) {
+fn emit_chat_progress(app_handle: &tauri::AppHandle, session_id: &str, status: &str) {
     app_handle
-        .emit("chat:send:progress", serde_json::json!({ "status": status }))
+        .emit("chat:send:progress", serde_json::json!({ "session_id": session_id, "status": status }))
         .ok();
 }
 
@@ -228,7 +228,7 @@ async fn query_and_save_response(
 ) -> Result<String, String> {
     let mut web_search_context = String::new();
     if settings.web_search_enabled {
-        emit_chat_progress(app_handle, "Searching the web...");
+        emit_chat_progress(app_handle, session_id, "Searching the web...");
         match web_search::search_duckduckgo(user_content, 5).await {
             Ok(results) => {
                 web_search_context = web_search::format_search_results(&results);
@@ -239,7 +239,7 @@ async fn query_and_save_response(
         }
     }
 
-    emit_chat_progress(app_handle, "Gathering context...");
+    emit_chat_progress(app_handle, session_id, "Gathering context...");
     let history = db.get_chat_messages(session_id).map_err(|e| e.to_string())?;
 
     let mut system_content = llm_ctx.to_string();
@@ -259,10 +259,10 @@ async fn query_and_save_response(
         });
     }
 
-    emit_chat_progress(app_handle, "Querying model...");
-    let response = llm::chat_stream(settings, messages, app_handle).await?;
+    emit_chat_progress(app_handle, session_id, "Querying model...");
+    let response = llm::chat_stream(settings, messages, app_handle, session_id).await?;
 
-    emit_chat_progress(app_handle, "Saving response...");
+    emit_chat_progress(app_handle, session_id, "Saving response...");
     db.insert_chat_message(session_id, "assistant", &response)
         .map_err(|e| e.to_string())?;
 
@@ -276,7 +276,7 @@ async fn send_message(
     content: String,
 ) -> Result<String, String> {
     // Phase 1: Prepare session
-    emit_chat_progress(&app_handle, "Preparing session...");
+    emit_chat_progress(&app_handle, "", "Preparing session...");
     let session_id = {
         let mut sid = state
             .current_session_id
@@ -305,7 +305,7 @@ async fn send_message(
     let current = sessions.iter().find(|s| s.id == session_id);
     let needs_title = current.is_some_and(|s| s.title.is_none());
     if needs_title {
-        emit_chat_progress(&app_handle, "Generating title...");
+        emit_chat_progress(&app_handle, &session_id, "Generating title...");
         let title_settings = settings.clone();
         let title_content = content.clone();
         let title_db = state.db.clone();
@@ -330,7 +330,7 @@ async fn edit_and_resend(
     message_id: i64,
     content: String,
 ) -> Result<String, String> {
-    emit_chat_progress(&app_handle, "Updating message...");
+    emit_chat_progress(&app_handle, &session_id, "Updating message...");
 
     state
         .db

@@ -155,6 +155,7 @@ pub async fn chat_stream(
     settings: &SettingsData,
     messages: Vec<OllamaMessage>,
     app_handle: &tauri::AppHandle,
+    session_id: &str,
 ) -> Result<String, String> {
     match settings.active_llm.as_str() {
         "groq" | "openrouter" => {
@@ -164,10 +165,10 @@ pub async fn chat_stream(
                 .ok_or("API key not configured for cloud provider")?;
             let model = settings.cloud_model.as_deref()
                 .ok_or("Model not configured for cloud provider")?;
-            stream_cloud(base_url, api_key, model, messages, app_handle).await
+            stream_cloud(base_url, api_key, model, messages, app_handle, session_id).await
         }
         _ => {
-            stream_ollama(&settings.ollama_endpoint, &settings.ollama_model, messages, app_handle).await
+            stream_ollama(&settings.ollama_endpoint, &settings.ollama_model, messages, app_handle, session_id).await
         }
     }
 }
@@ -177,6 +178,7 @@ async fn stream_ollama(
     model: &str,
     messages: Vec<OllamaMessage>,
     app_handle: &tauri::AppHandle,
+    session_id: &str,
 ) -> Result<String, String> {
     let client = reqwest::Client::new();
     let url = format!("{}/api/chat", endpoint.trim_end_matches('/'));
@@ -226,6 +228,7 @@ async fn stream_ollama(
                         full_response.push_str(&msg.content);
                         app_handle
                             .emit("chat:send:chunk", serde_json::json!({
+                                "session_id": session_id,
                                 "content": msg.content,
                                 "done": false
                             }))
@@ -235,6 +238,7 @@ async fn stream_ollama(
                 if parsed.done {
                     app_handle
                         .emit("chat:send:chunk", serde_json::json!({
+                            "session_id": session_id,
                             "content": "",
                             "done": true
                         }))
@@ -257,6 +261,7 @@ async fn stream_cloud(
     model: &str,
     messages: Vec<OllamaMessage>,
     app_handle: &tauri::AppHandle,
+    session_id: &str,
 ) -> Result<String, String> {
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_mins(2))
@@ -311,6 +316,7 @@ async fn stream_cloud(
                 if line == "data: [DONE]" {
                     app_handle
                         .emit("chat:send:chunk", serde_json::json!({
+                            "session_id": session_id,
                             "content": "",
                             "done": true
                         }))
@@ -325,6 +331,7 @@ async fn stream_cloud(
                                     full_response.push_str(content);
                                     app_handle
                                         .emit("chat:send:chunk", serde_json::json!({
+                                            "session_id": session_id,
                                             "content": content,
                                             "done": false
                                         }))

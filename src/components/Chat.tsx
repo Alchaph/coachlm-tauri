@@ -36,14 +36,43 @@ interface ChatSettingsData {
   web_search_provider: string;
 }
 
+interface ProgressStep {
+  label: string;
+  startedAt: number;
+  completedAt?: number;
+}
+
+function ProgressStepRow({ step, isActive }: { step: ProgressStep; isActive: boolean }) {
+  const [, setTick] = useState(0);
+
+  useEffect(() => {
+    if (!isActive) return;
+    const interval = setInterval(() => { setTick((t) => t + 1); }, 100);
+    return () => { clearInterval(interval); };
+  }, [isActive]);
+
+  const elapsed = ((step.completedAt ?? Date.now()) - step.startedAt) / 1000;
+  const elapsedStr = elapsed < 10 ? elapsed.toFixed(1) : String(Math.round(elapsed));
+
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, lineHeight: "20px" }}>
+      <span>{step.label}</span>
+      <span style={{ color: "var(--text-muted)", fontSize: 11 }}>
+        {elapsedStr}s
+      </span>
+    </div>
+  );
+}
+
 export default function Chat({ onStatusChange }: ChatProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const [loadingStatus, setLoadingStatus] = useState("Thinking...");
+  const [progressSteps, setProgressSteps] = useState<ProgressStep[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  const currentSessionIdRef = useRef<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const shouldAutoScroll = useRef(true);
@@ -71,6 +100,11 @@ export default function Chat({ onStatusChange }: ChatProps) {
   }, []);
 
   useEffect(() => { scrollToBottom(); }, [messages, scrollToBottom]);
+
+  // Keep ref in sync with state for event listeners
+  useEffect(() => {
+    currentSessionIdRef.current = currentSessionId;
+  }, [currentSessionId]);
 
   const refreshSessions = useCallback(async () => {
     try {
@@ -106,8 +140,17 @@ export default function Chat({ onStatusChange }: ChatProps) {
   useEffect(() => {
     let cleanup: (() => void) | undefined;
     void (async () => {
-      cleanup = await listen<{ status: string }>("chat:send:progress", (event) => {
-        setLoadingStatus(event.payload.status);
+      cleanup = await listen<{ session_id: string; status: string }>("chat:send:progress", (event) => {
+        if (event.payload.session_id && event.payload.session_id !== currentSessionIdRef.current) {
+          return;
+        }
+        const now = Date.now();
+        setProgressSteps((prev) => {
+          const updated = prev.length > 0
+            ? prev.map((step, i) => i === prev.length - 1 && !step.completedAt ? { ...step, completedAt: now } : step)
+            : prev;
+          return [...updated, { label: event.payload.status, startedAt: now }];
+        });
         onStatusChange?.("thinking", event.payload.status);
       });
     })();
@@ -117,7 +160,10 @@ export default function Chat({ onStatusChange }: ChatProps) {
   useEffect(() => {
     let cleanup: (() => void) | undefined;
     void (async () => {
-      cleanup = await listen<{ content: string; done: boolean }>("chat:send:chunk", (event) => {
+      cleanup = await listen<{ session_id: string; content: string; done: boolean }>("chat:send:chunk", (event) => {
+        if (event.payload.session_id && event.payload.session_id !== currentSessionIdRef.current) {
+          return;
+        }
         if (event.payload.done) {
           return;
         }
@@ -199,7 +245,7 @@ export default function Chat({ onStatusChange }: ChatProps) {
     }
     setError(null);
     setLoading(true);
-    setLoadingStatus("Thinking...");
+    setProgressSteps([]);
     shouldAutoScroll.current = true;
     onStatusChange?.("thinking");
 
@@ -306,7 +352,7 @@ export default function Chat({ onStatusChange }: ChatProps) {
     setEditContent("");
     setError(null);
     setLoading(true);
-    setLoadingStatus("Thinking...");
+    setProgressSteps([]);
     shouldAutoScroll.current = true;
     onStatusChange?.("thinking");
 
@@ -609,7 +655,15 @@ export default function Chat({ onStatusChange }: ChatProps) {
                    color: "var(--text-muted)",
                  }}
                >
-                  {loadingStatus}
+                  {progressSteps.length === 0 ? (
+                    "Thinking..."
+                  ) : (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                      {progressSteps.map((step, i) => (
+                        <ProgressStepRow key={i} step={step} isActive={i === progressSteps.length - 1 && !step.completedAt} />
+                      ))}
+                    </div>
+                  )}
                </div>
             </div>
           )}
