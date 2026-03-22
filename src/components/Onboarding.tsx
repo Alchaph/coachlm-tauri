@@ -1,11 +1,7 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Check, ChevronRight, ChevronLeft, Zap, Globe, Settings } from "lucide-react";
-
-interface Toast {
-  message: string;
-  type: "success" | "error";
-}
+import { useToast } from "../hooks/useToast";
 
 export default function Onboarding({ onComplete }: { onComplete: () => void }) {
   const [step, setStep] = useState(1);
@@ -19,14 +15,7 @@ export default function Onboarding({ onComplete }: { onComplete: () => void }) {
   const [models, setModels] = useState<string[]>([]);
   const [fetchingModels, setFetchingModels] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [toast, setToast] = useState<Toast | null>(null);
-
-  const showToast = (message: string, type: "success" | "error") => {
-    setToast({ message, type });
-    setTimeout(() => {
-      setToast(null);
-    }, 3000);
-  };
+  const { showToast, toastElement } = useToast();
 
   useEffect(() => {
     const checkStrava = async () => {
@@ -38,7 +27,7 @@ export default function Onboarding({ onComplete }: { onComplete: () => void }) {
       }
     };
     void checkStrava();
-  }, []);
+  }, [showToast]);
 
   const handleConnectStrava = async () => {
     try {
@@ -334,11 +323,7 @@ export default function Onboarding({ onComplete }: { onComplete: () => void }) {
           </div>
         )}
       </div>
-      {toast && (
-        <div className={`toast toast-${toast.type}`}>
-          {toast.message}
-        </div>
-      )}
+      {toastElement}
     </div>
   );
 }

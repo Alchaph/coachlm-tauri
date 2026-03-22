@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { ask } from "@tauri-apps/plugin-dialog";
-import { Trash2, Eye, Save, Check, X } from "lucide-react";
+import { Trash2, Eye, Save } from "lucide-react";
+import { useToast } from "../hooks/useToast";
 
 interface ProfileData {
   age: number | null;
@@ -25,11 +26,6 @@ interface Insight {
   created_at: string;
 }
 
-interface Toast {
-  message: string;
-  type: "success" | "error";
-}
-
 export default function Context() {
   const [profile, setProfile] = useState<ProfileData>({
     age: null, max_hr: null, resting_hr: null, threshold_pace_secs: null,
@@ -42,17 +38,12 @@ export default function Context() {
   const [contextPreview, setContextPreview] = useState<string | null>(null);
   const [showPreview, setShowPreview] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [toast, setToast] = useState<Toast | null>(null);
+  const { showToast, toastElement } = useToast();
   const [tab, setTab] = useState<"profile" | "insights">("profile");
   const [paceMinutes, setPaceMinutes] = useState("");
   const [paceSeconds, setPaceSeconds] = useState("");
 
   useEffect(() => { void loadData(); }, []);
-
-  const showToast = (message: string, type: "success" | "error") => {
-    setToast({ message, type });
-    setTimeout(() => { setToast(null); }, 3000);
-  };
 
   const loadData = async () => {
     try {
@@ -330,12 +321,7 @@ export default function Context() {
         </div>
       )}
 
-      {toast && (
-        <div className={`toast toast-${toast.type}`}>
-          {toast.type === "success" ? <Check size={16} /> : <X size={16} />}
-          {toast.message}
-        </div>
-      )}
+      {toastElement}
     </div>
   );
 }

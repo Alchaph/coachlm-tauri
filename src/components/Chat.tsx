@@ -4,7 +4,8 @@ import { listen } from "@tauri-apps/api/event";
 import { ask } from "@tauri-apps/plugin-dialog";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Send, Pin, Plus, X, MessageSquare, PanelLeftClose, PanelLeftOpen, Check, Globe, Pencil } from "lucide-react";
+import { Send, Pin, Plus, X, MessageSquare, PanelLeftClose, PanelLeftOpen, Globe, Pencil } from "lucide-react";
+import { useToast } from "../hooks/useToast";
 
 interface Message {
   id: number;
@@ -35,11 +36,6 @@ interface ChatSettingsData {
   web_search_provider: string;
 }
 
-interface Toast {
-  message: string;
-  type: "success" | "error";
-}
-
 export default function Chat({ onStatusChange }: ChatProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
@@ -51,7 +47,7 @@ export default function Chat({ onStatusChange }: ChatProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const shouldAutoScroll = useRef(true);
-  const [toast, setToast] = useState<Toast | null>(null);
+  const { showToast, toastElement } = useToast();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [promptHistory, setPromptHistory] = useState<string[]>([]);
   const historyIndex = useRef(-1);
@@ -302,11 +298,6 @@ export default function Chat({ onStatusChange }: ChatProps) {
     } finally {
       setLoading(false);
     }
-  };
-
-  const showToast = (message: string, type: "success" | "error") => {
-    setToast({ message, type });
-    setTimeout(() => { setToast(null); }, 3000);
   };
 
   const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
@@ -617,12 +608,7 @@ export default function Chat({ onStatusChange }: ChatProps) {
         </div>
       </div>
 
-      {toast && (
-        <div className={`toast toast-${toast.type}`}>
-          {toast.type === "success" ? <Check size={16} /> : <X size={16} />}
-          {toast.message}
-        </div>
-      )}
+      {toastElement}
     </div>
   );
 }

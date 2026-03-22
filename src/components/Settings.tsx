@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { Save, RefreshCw, Plug, Unplug, Check, X, Globe } from "lucide-react";
+import { Save, RefreshCw, Plug, Unplug, Globe } from "lucide-react";
+import { useToast } from "../hooks/useToast";
 
 interface SettingsData {
   active_llm: string;
@@ -19,11 +20,6 @@ interface StravaAuthStatus {
   expires_at: number | null;
 }
 
-interface Toast {
-  message: string;
-  type: "success" | "error";
-}
-
 export default function SettingsPage() {
   const [settings, setSettings] = useState<SettingsData>({
     active_llm: "local",
@@ -38,7 +34,7 @@ export default function SettingsPage() {
   const [models, setModels] = useState<string[]>([]);
   const [fetchingModels, setFetchingModels] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [toast, setToast] = useState<Toast | null>(null);
+  const { showToast, toastElement } = useToast();
   const [stravaAuth, setStravaAuth] = useState<StravaAuthStatus>({ connected: false, expires_at: null });
   const [stravaAvailable, setStravaAvailable] = useState(false);
 
@@ -72,11 +68,6 @@ export default function SettingsPage() {
     } catch {
       showToast("Failed to load settings", "error");
     }
-  };
-
-  const showToast = (message: string, type: "success" | "error") => {
-    setToast({ message, type });
-    setTimeout(() => { setToast(null); }, 3000);
   };
 
   const saveSettings = async () => {
@@ -339,12 +330,7 @@ export default function SettingsPage() {
 
       </div>
 
-      {toast && (
-        <div className={`toast toast-${toast.type}`}>
-          {toast.type === "success" ? <Check size={16} /> : <X size={16} />}
-          {toast.message}
-        </div>
-      )}
+      {toastElement}
     </div>
   );
 }

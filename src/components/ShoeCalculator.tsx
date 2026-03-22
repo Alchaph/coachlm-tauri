@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { Plus, ChevronDown, ChevronUp, Zap, Search, BookOpen } from "lucide-react";
+import { useToast } from "../hooks/useToast";
 
 interface Shoe {
   id: string;
@@ -10,11 +11,6 @@ interface Shoe {
   speedBenefitPercent: number;
   tier: "supershoe" | "racer" | "trainer";
   isCustom?: boolean;
-}
-
-interface Toast {
-  message: string;
-  type: "success" | "error";
 }
 
 const BUILT_IN_SHOES: Shoe[] = [
@@ -276,7 +272,7 @@ export default function ShoeCalculator() {
   const [paceSeconds, setPaceSeconds] = useState("");
   const [shoes, setShoes] = useState<Shoe[]>(BUILT_IN_SHOES);
   const [showCustomForm, setShowCustomForm] = useState(false);
-  const [toast, setToast] = useState<Toast | null>(null);
+  const { showToast, toastElement } = useToast();
   const [customName, setCustomName] = useState("");
   const [customBrand, setCustomBrand] = useState("");
   const [customCarbon, setCustomCarbon] = useState(false);
@@ -288,11 +284,6 @@ export default function ShoeCalculator() {
   const [selectedBrands, setSelectedBrands] = useState<Set<string>>(new Set());
   const [selectedTier, setSelectedTier] = useState<"all" | "supershoe" | "racer" | "trainer">("all");
   const [showHowItWorks, setShowHowItWorks] = useState(false);
-
-  const showToast = (message: string, type: "success" | "error") => {
-    setToast({ message, type });
-    setTimeout(() => { setToast(null); }, 3000);
-  };
 
   const distanceKm: number | null = (() => {
     if (selectedDistanceKm !== null) return selectedDistanceKm;
@@ -428,14 +419,7 @@ export default function ShoeCalculator() {
 
   return (
     <div style={{ flex: 1, overflow: "auto", padding: "24px", background: "var(--bg-primary)" }}>
-      {toast !== null && (
-        <div
-          className={`toast toast-${toast.type}`}
-          style={{ position: "fixed", top: 24, right: 24, zIndex: 1000 }}
-        >
-          {toast.message}
-        </div>
-      )}
+      {toastElement}
 
       <div style={{ maxWidth: 960, margin: "0 auto" }}>
         <div style={{ marginBottom: 24 }}>
