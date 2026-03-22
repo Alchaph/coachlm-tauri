@@ -37,6 +37,7 @@ export default function SettingsPage() {
   const { showToast, toastElement } = useToast();
   const [stravaAuth, setStravaAuth] = useState<StravaAuthStatus>({ connected: false, expires_at: null });
   const [stravaAvailable, setStravaAvailable] = useState(false);
+  const [ollamaConnected, setOllamaConnected] = useState<boolean | null>(null);
 
   useEffect(() => {
     void loadData();
@@ -65,8 +66,20 @@ export default function SettingsPage() {
       });
       setStravaAuth(auth);
       setStravaAvailable(available);
+      if (s.active_llm === "ollama" || s.active_llm === "local" || !s.active_llm) {
+        void checkOllamaConnection(s.ollama_endpoint || "http://localhost:11434");
+      }
     } catch {
       showToast("Failed to load settings", "error");
+    }
+  };
+
+  const checkOllamaConnection = async (endpoint: string) => {
+    try {
+      const connected = await invoke<boolean>("check_ollama_status", { endpoint });
+      setOllamaConnected(connected);
+    } catch {
+      setOllamaConnected(false);
     }
   };
 
@@ -87,8 +100,10 @@ export default function SettingsPage() {
     try {
       const fetchedModels = await invoke<string[]>("get_ollama_models", { endpoint: settings.ollama_endpoint });
       setModels(fetchedModels);
+      setOllamaConnected(true);
     } catch {
       showToast("Failed to fetch models", "error");
+      setOllamaConnected(false);
     } finally {
       setFetchingModels(false);
     }
@@ -161,6 +176,17 @@ export default function SettingsPage() {
                     Fetch Models
                   </button>
                 </div>
+                {ollamaConnected !== null && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
+                    <div style={{
+                      width: 8, height: 8, borderRadius: "50%",
+                      background: ollamaConnected ? "var(--success)" : "var(--danger)",
+                    }} />
+                    <span style={{ fontSize: 12, color: ollamaConnected ? "var(--success)" : "var(--danger)" }}>
+                      {ollamaConnected ? "Connected" : "Not reachable"}
+                    </span>
+                  </div>
+                )}
               </div>
 
               <div style={{ marginBottom: 16 }}>

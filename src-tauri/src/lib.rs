@@ -366,6 +366,19 @@ async fn get_ollama_models(endpoint: String) -> Result<Vec<String>, String> {
 }
 
 #[tauri::command]
+async fn check_ollama_status(endpoint: String) -> Result<bool, String> {
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(3))
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {e}"))?;
+    let url = format!("{}/api/tags", endpoint.trim_end_matches('/'));
+    match client.get(&url).send().await {
+        Ok(resp) => Ok(resp.status().is_success()),
+        Err(_) => Ok(false),
+    }
+}
+
+#[tauri::command]
 #[allow(clippy::needless_pass_by_value)]
 fn import_fit_file(
     state: tauri::State<'_, AppState>,
@@ -652,6 +665,7 @@ pub fn run() {
             delete_chat_session,
             rename_chat_session,
             get_ollama_models,
+            check_ollama_status,
             import_fit_file,
             export_context,
             import_context,
