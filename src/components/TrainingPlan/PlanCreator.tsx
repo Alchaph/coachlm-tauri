@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { ask } from "@tauri-apps/plugin-dialog";
 import { Plus, Trash2, Trophy, Calendar, Pencil, Check } from "lucide-react";
 import type { Race, TrainingPlanSummary } from "./types";
 import { formatGoalTime, getWeeksToRace } from "./types";
@@ -183,7 +184,8 @@ export default function PlanCreator({ onPlanGenerated }: { onPlanGenerated: () =
   };
 
   const handleDeleteRace = async (id: string) => {
-    if (!window.confirm("Delete this race? This will also remove any associated training plans.")) return;
+    const confirmed = await ask("Delete this race? This will also remove any associated training plans.", { title: "CoachLM", kind: "warning" });
+    if (!confirmed) return;
     try {
       await invoke("delete_race", { id });
       void loadData();

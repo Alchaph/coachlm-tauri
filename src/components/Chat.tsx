@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { ask } from "@tauri-apps/plugin-dialog";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Send, Pin, Plus, X, MessageSquare, PanelLeftClose, PanelLeftOpen, Check, Globe, Pencil } from "lucide-react";
@@ -140,7 +141,8 @@ export default function Chat({ onStatusChange }: ChatProps) {
   };
 
   const closeSession = async (sessionId: string) => {
-    if (!window.confirm("Delete this chat session?")) return;
+    const confirmed = await ask("Delete this chat session?", { title: "CoachLM", kind: "warning" });
+    if (!confirmed) return;
     try {
       await invoke("delete_chat_session", { sessionId });
       const remaining = sessions.filter((s) => s.id !== sessionId);

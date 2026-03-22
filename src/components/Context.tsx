@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { ask } from "@tauri-apps/plugin-dialog";
 import { Trash2, Eye, Save, Check, X } from "lucide-react";
 
 interface ProfileData {
@@ -90,7 +91,8 @@ export default function Context() {
   };
 
   const deleteInsight = async (id: number) => {
-    if (!window.confirm("Unpin this insight?")) return;
+    const confirmed = await ask("Unpin this insight?", { title: "CoachLM", kind: "warning" });
+    if (!confirmed) return;
     try {
       await invoke("delete_pinned_insight", { id });
       setInsights((prev) => prev.filter((i) => i.id !== id));
