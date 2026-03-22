@@ -118,7 +118,9 @@ describe("App", () => {
 
     const chatButton = screen.getByRole("button", { name: "Chat" });
     expect(chatButton).toBeInTheDocument();
-    expect(vi.mocked(invoke)).toHaveBeenCalledWith("get_chat_sessions");
+    await waitFor(() => {
+      expect(vi.mocked(invoke)).toHaveBeenCalledWith("get_chat_sessions");
+    });
   });
 
   it("switches to Dashboard tab when Dashboard nav button is clicked", async () => {
