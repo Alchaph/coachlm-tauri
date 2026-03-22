@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Send, Pin, Plus, X, MessageSquare, PanelLeftClose, PanelLeftOpen, Check, Globe } from "lucide-react";
+import { Send, Pin, Plus, X, MessageSquare, PanelLeftClose, PanelLeftOpen, Check, Globe, Pencil } from "lucide-react";
 
 interface Message {
   id: number;
@@ -56,6 +56,8 @@ export default function Chat({ onStatusChange }: ChatProps) {
   const historyIndex = useRef(-1);
   const savedInput = useRef("");
   const [webSearchEnabled, setWebSearchEnabled] = useState(false);
+  const [editingMessageId, setEditingMessageId] = useState<number | null>(null);
+  const [editContent, setEditContent] = useState("");
 
   const scrollToBottom = useCallback(() => {
     if (shouldAutoScroll.current) {
@@ -244,6 +246,62 @@ export default function Chat({ onStatusChange }: ChatProps) {
     }
   };
 
+  const startEditing = (msg: Message) => {
+    setEditingMessageId(msg.id);
+    setEditContent(msg.content);
+  };
+
+  const cancelEditing = () => {
+    setEditingMessageId(null);
+    setEditContent("");
+  };
+
+  const submitEdit = async () => {
+    if (!editContent.trim() || loading || editingMessageId === null || !currentSessionId) return;
+
+    const msgId = editingMessageId;
+    const newContent = editContent.trim();
+    setEditingMessageId(null);
+    setEditContent("");
+    setError(null);
+    setLoading(true);
+    setLoadingStatus("Thinking...");
+    shouldAutoScroll.current = true;
+    onStatusChange?.("thinking");
+
+    setMessages((prev) => {
+      const idx = prev.findIndex((m) => m.id === msgId);
+      if (idx === -1) return prev;
+      const updated = prev.slice(0, idx + 1);
+      updated[idx] = { ...updated[idx], content: newContent };
+      return updated;
+    });
+
+    try {
+      const response = await invoke<string>("edit_and_resend", {
+        sessionId: currentSessionId,
+        messageId: msgId,
+        content: newContent,
+      });
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: Date.now(),
+          session_id: currentSessionId,
+          role: "assistant",
+          content: response,
+          created_at: new Date().toISOString(),
+        },
+      ]);
+      onStatusChange?.("replied");
+    } catch (e) {
+      setError(String(e));
+      onStatusChange?.("idle");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const showToast = (message: string, type: "success" | "error") => {
     setToast({ message, type });
     setTimeout(() => { setToast(null); }, 3000);
@@ -399,6 +457,7 @@ export default function Chat({ onStatusChange }: ChatProps) {
               }}
             >
               <div
+                className={msg.role === "user" ? "chat-message-user" : undefined}
                 style={{
                   maxWidth: "80%",
                   padding: "10px 14px",
@@ -420,6 +479,49 @@ export default function Chat({ onStatusChange }: ChatProps) {
                       {msg.content}
                     </ReactMarkdown>
                   </div>
+                ) : editingMessageId === msg.id ? (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 300 }}>
+                    <textarea
+                      value={editContent}
+                      onChange={(e) => { setEditContent(e.target.value); }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !e.shiftKey) {
+                          e.preventDefault();
+                          void submitEdit();
+                        }
+                        if (e.key === "Escape") {
+                          cancelEditing();
+                        }
+                      }}
+                      rows={3}
+                      style={{
+                        resize: "vertical",
+                        lineHeight: "20px",
+                        background: "var(--bg-tertiary)",
+                        border: "1px solid var(--accent)",
+                        borderRadius: 4,
+                        padding: "8px 12px",
+                      }}
+                      autoFocus
+                    />
+                    <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
+                      <button
+                        className="btn-ghost"
+                        onClick={cancelEditing}
+                        style={{ fontSize: 12, padding: "4px 10px" }}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        className="btn-primary"
+                        onClick={() => { void submitEdit(); }}
+                        disabled={!editContent.trim() || loading}
+                        style={{ fontSize: 12, padding: "4px 10px", display: "flex", alignItems: "center", gap: 4 }}
+                      >
+                        <Send size={12} /> Resend
+                      </button>
+                    </div>
+                  </div>
                 ) : (
                   <span>{msg.content}</span>
                 )}
@@ -432,6 +534,16 @@ export default function Chat({ onStatusChange }: ChatProps) {
                   title="Save as coaching insight"
                 >
                   <Pin size={12} /> Pin
+                </button>
+              )}
+              {msg.role === "user" && editingMessageId !== msg.id && !loading && (
+                <button
+                  className="btn-ghost chat-message-edit"
+                  onClick={() => { startEditing(msg); }}
+                  style={{ marginTop: 4, fontSize: 11, display: "flex", alignItems: "center", gap: 4 }}
+                  title="Edit and resend"
+                >
+                  <Pencil size={12} /> Edit
                 </button>
               )}
             </div>
@@ -464,46 +576,42 @@ export default function Chat({ onStatusChange }: ChatProps) {
 
         <div
           style={{
-            padding: "12px 16px",
+            padding: "12px 16px 0",
             borderTop: "1px solid var(--border)",
             background: "var(--bg-secondary)",
-            display: "flex",
-            gap: 8,
-            alignItems: "flex-end",
           }}
         >
-          <textarea
-            ref={textareaRef}
-            value={input}
-            onChange={(e) => { setInput(e.target.value); resizeTextarea(); }}
-            onKeyDown={handleKeyDown}
-            placeholder="Ask your coach..."
-            disabled={loading}
-            rows={1}
-            style={{ flex: 1, resize: "none", lineHeight: "20px" }}
-            id="chat-input"
-          />
-          <button
-            className="btn-ghost"
-            onClick={() => { void toggleWebSearch(); }}
-            title={webSearchEnabled ? "Web search enabled" : "Web search disabled"}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              padding: "6px",
-              color: webSearchEnabled ? "var(--accent)" : "var(--text-muted)",
-            }}
-          >
-            <Globe size={18} />
-          </button>
-          <button
-            className="btn-primary"
-            onClick={() => { void sendMessage(); }}
-            disabled={loading || !input.trim()}
-            style={{ display: "flex", alignItems: "center", gap: 4 }}
-          >
-            <Send size={16} />
-          </button>
+          <div style={{ display: "flex", alignItems: "center", marginBottom: 8 }}>
+            <button
+              className={`chat-toggle-chip${webSearchEnabled ? " chat-toggle-chip-active" : ""}`}
+              onClick={() => { void toggleWebSearch(); }}
+              title={webSearchEnabled ? "Disable web search" : "Enable web search"}
+            >
+              <Globe size={14} />
+              Web search
+            </button>
+          </div>
+          <div style={{ display: "flex", gap: 8, alignItems: "flex-end", paddingBottom: 12 }}>
+            <textarea
+              ref={textareaRef}
+              value={input}
+              onChange={(e) => { setInput(e.target.value); resizeTextarea(); }}
+              onKeyDown={handleKeyDown}
+              placeholder="Ask your coach..."
+              disabled={loading}
+              rows={1}
+              style={{ flex: 1, resize: "none", lineHeight: "20px" }}
+              id="chat-input"
+            />
+            <button
+              className="btn-primary"
+              onClick={() => { void sendMessage(); }}
+              disabled={loading || !input.trim()}
+              style={{ display: "flex", alignItems: "center", gap: 4 }}
+            >
+              <Send size={16} />
+            </button>
+          </div>
         </div>
       </div>
 

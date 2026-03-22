@@ -729,6 +729,29 @@ impl Database {
         rows.collect()
     }
 
+    pub fn update_chat_message_content(
+        &self,
+        session_id: &str,
+        message_id: i64,
+        content: &str,
+    ) -> SqlResult<()> {
+        let conn = self.conn();
+        conn.execute(
+            "UPDATE chat_messages SET content = ?1 WHERE id = ?2 AND session_id = ?3",
+            params![content, message_id, session_id],
+        )?;
+        Ok(())
+    }
+
+    pub fn delete_chat_messages_after(&self, session_id: &str, message_id: i64) -> SqlResult<()> {
+        let conn = self.conn();
+        conn.execute(
+            "DELETE FROM chat_messages WHERE session_id = ?1 AND id > ?2",
+            params![session_id, message_id],
+        )?;
+        Ok(())
+    }
+
     // ── Athlete Stats / Zones / Gear ───────────────────────────
     pub fn save_athlete_stats(&self, data: &str) -> SqlResult<()> {
         let conn = self.conn();

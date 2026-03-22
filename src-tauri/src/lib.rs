@@ -279,6 +279,81 @@ async fn send_message(
 }
 
 #[tauri::command]
+async fn edit_and_resend(
+    state: tauri::State<'_, AppState>,
+    app_handle: tauri::AppHandle,
+    session_id: String,
+    message_id: i64,
+    content: String,
+) -> Result<String, String> {
+    emit_chat_progress(&app_handle, "Updating message...");
+
+    state
+        .db
+        .update_chat_message_content(&session_id, message_id, &content)
+        .map_err(|e| e.to_string())?;
+
+    state
+        .db
+        .delete_chat_messages_after(&session_id, message_id)
+        .map_err(|e| e.to_string())?;
+
+    let settings = state
+        .db
+        .get_settings()
+        .map_err(|e| e.to_string())?
+        .ok_or("Settings not configured. Complete the setup wizard first.")?;
+
+    let mut web_search_context = String::new();
+    if settings.web_search_enabled {
+        emit_chat_progress(&app_handle, "Searching the web...");
+        match web_search::search_duckduckgo(&content, 5).await {
+            Ok(results) => {
+                web_search_context = web_search::format_search_results(&results);
+            }
+            Err(e) => {
+                log::warn!("Web search failed, continuing without results: {e}");
+            }
+        }
+    }
+
+    emit_chat_progress(&app_handle, "Gathering context...");
+    let llm_ctx = context::build_context(&state.db);
+    let history = state
+        .db
+        .get_chat_messages(&session_id)
+        .map_err(|e| e.to_string())?;
+
+    let mut system_content = llm_ctx;
+    if !web_search_context.is_empty() {
+        system_content = format!("{web_search_context}\n\n{system_content}");
+    }
+
+    let mut messages = vec![OllamaMessage {
+        role: "system".to_string(),
+        content: system_content,
+    }];
+
+    for msg in &history {
+        messages.push(OllamaMessage {
+            role: msg.role.clone(),
+            content: msg.content.clone(),
+        });
+    }
+
+    emit_chat_progress(&app_handle, "Querying model...");
+    let response = llm::chat(&settings, messages).await?;
+
+    emit_chat_progress(&app_handle, "Saving response...");
+    state
+        .db
+        .insert_chat_message(&session_id, "assistant", &response)
+        .map_err(|e| e.to_string())?;
+
+    Ok(response)
+}
+
+#[tauri::command]
 #[allow(clippy::needless_pass_by_value)]
 fn get_chat_sessions(state: tauri::State<'_, AppState>) -> Result<Vec<SessionData>, String> {
     state.db.get_chat_sessions().map_err(|e| e.to_string())
@@ -612,6 +687,7 @@ pub fn run() {
             get_pinned_insights,
             delete_pinned_insight,
             send_message,
+            edit_and_resend,
             get_chat_sessions,
             get_chat_messages,
             create_chat_session,

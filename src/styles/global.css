@@ -334,3 +334,42 @@ a:hover {
   background: var(--bg-hover);
   color: var(--danger);
 }
+
+/* Chat message edit button */
+
+.chat-message-edit {
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.chat-message-user:hover ~ .chat-message-edit,
+.chat-message-edit:hover {
+  opacity: 1;
+}
+
+.chat-toggle-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--bg-tertiary);
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.chat-toggle-chip:hover {
+  color: var(--text-primary);
+  border-color: var(--text-muted);
+}
+
+.chat-toggle-chip-active {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--bg-secondary);
+}

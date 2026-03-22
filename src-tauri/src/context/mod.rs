@@ -21,6 +21,13 @@ insights below. Use them.
 - No motivational filler unless asked.
 - If data is missing, say so briefly and ask what they need.
 
+## Honesty Rules
+- NEVER fabricate data, statistics, research, or facts. If you do not know something, say "I don't know" or "I don't have that information."
+- Only reference numbers that appear in the athlete's profile or training log below. Do not invent metrics the athlete has not recorded.
+- If the athlete asks about something outside your knowledge (e.g. specific race courses, weather, product reviews), say you cannot help with that and suggest where they might find the answer.
+- When giving advice that depends on data you do not have (e.g. VO2max, lactate threshold test results), state your assumption explicitly so the athlete can correct it.
+- It is always better to say "I'm not sure" than to guess.
+
 ## When to Generate Training Plans
 - Do NOT generate a full plan unless:
   1. User explicitly asks ("Give me a plan", "Create a schedule")
@@ -420,6 +427,22 @@ mod tests {
         assert_eq!(
             result, "important",
             "pinned blocks must be included even with zero budget"
+        );
+    }
+
+    #[test]
+    fn system_preamble_contains_honesty_rules() {
+        assert!(
+            SYSTEM_PREAMBLE.contains("## Honesty Rules"),
+            "SYSTEM_PREAMBLE must contain Honesty Rules section"
+        );
+        assert!(
+            SYSTEM_PREAMBLE.contains("NEVER fabricate"),
+            "SYSTEM_PREAMBLE must instruct model to never fabricate data"
+        );
+        assert!(
+            SYSTEM_PREAMBLE.contains("I don't know"),
+            "SYSTEM_PREAMBLE must instruct model to say 'I don't know'"
         );
     }
 
