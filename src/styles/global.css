@@ -123,8 +123,10 @@ button:disabled {
   background: #94a3b8;
 }
 
-scrollbar-width: thin;
-scrollbar-color: #475569 transparent;
+html {
+  scrollbar-width: thin;
+  scrollbar-color: #475569 transparent;
+}
 
 label {
   display: block;
