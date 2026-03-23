@@ -60,3 +60,6 @@ cast_possible_truncation = "warn"
 cast_sign_loss = "warn"
 cast_precision_loss = "warn"
 large_futures = "warn"
+
+[dev-dependencies]
+tempfile = "3"
