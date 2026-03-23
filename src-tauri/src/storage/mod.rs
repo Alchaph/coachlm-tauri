@@ -16,6 +16,11 @@ impl Database {
         std::fs::create_dir_all(app_data_dir).ok();
         let db_path = app_data_dir.join("coachlm.db");
         let conn = Connection::open(&db_path)?;
+        conn.execute_batch(
+            "PRAGMA journal_mode=WAL;
+             PRAGMA foreign_keys=ON;
+             PRAGMA busy_timeout=5000;",
+        )?;
 
         // Derive encryption key from data directory path
         let mut hasher = Sha256::new();

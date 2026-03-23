@@ -64,7 +64,8 @@ pub fn build_context(db: &Database) -> String {
             for insight in &insights {
                 let date = insight.created_at.chars().take(10).collect::<String>();
                 let content = if insight.content.len() > 500 {
-                    format!("{}...", &insight.content[..497])
+                    let boundary = insight.content.floor_char_boundary(497);
+                    format!("{}...", &insight.content[..boundary])
                 } else {
                     insight.content.clone()
                 };
@@ -127,7 +128,8 @@ fn assemble_within_budget(blocks: &[(String, bool)], budget_chars: usize) -> Str
             result.push_str(block);
             remaining = remaining.saturating_sub(block.len());
         } else if remaining > 100 {
-            result.push_str(&block[..remaining]);
+            let boundary = block.floor_char_boundary(remaining);
+            result.push_str(&block[..boundary]);
             break;
         }
     }

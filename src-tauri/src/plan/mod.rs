@@ -51,10 +51,16 @@ pub async fn generate_plan(
             "status": format!("Generating plan with AI... (attempt {}/3)", attempt + 1)
         })).ok();
 
-        let response = crate::llm::chat(
+        let response = match crate::llm::chat(
             &settings,
             messages.clone(),
-        ).await?;
+        ).await {
+            Ok(r) => r,
+            Err(e) => {
+                last_error = format!("LLM call failed: {e}");
+                continue;
+            }
+        };
 
         match parse_plan_response(&response, race, weeks_to_race) {
             Ok(parsed) => {
