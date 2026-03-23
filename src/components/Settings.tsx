@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { ask } from "@tauri-apps/plugin-dialog";
@@ -42,20 +42,16 @@ export default function SettingsPage() {
   const [initialSettings, setInitialSettings] = useState<SettingsData | null>(null);
   const isDirty = initialSettings !== null && JSON.stringify(settings) !== JSON.stringify(initialSettings);
 
-  useEffect(() => {
-    void loadData();
-
-    let unlisten: (() => void) | undefined;
-    void (async () => {
-      unlisten = await listen("strava:auth:complete", () => {
-        void loadData();
-      });
-    })();
-
-    return () => { unlisten?.(); };
+  const checkOllamaConnection = useCallback(async (endpoint: string) => {
+    try {
+      const connected = await invoke<boolean>("check_ollama_status", { endpoint });
+      setOllamaConnected(connected);
+    } catch {
+      setOllamaConnected(false);
+    }
   }, []);
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       const [s, auth, available] = await Promise.all([
         invoke<SettingsData>("get_settings"),
@@ -80,16 +76,20 @@ export default function SettingsPage() {
     } catch {
       showToast("Failed to load settings", "error");
     }
-  };
+  }, [showToast, checkOllamaConnection]);
 
-  const checkOllamaConnection = async (endpoint: string) => {
-    try {
-      const connected = await invoke<boolean>("check_ollama_status", { endpoint });
-      setOllamaConnected(connected);
-    } catch {
-      setOllamaConnected(false);
-    }
-  };
+  useEffect(() => {
+    void loadData();
+
+    let unlisten: (() => void) | undefined;
+    void (async () => {
+      unlisten = await listen("strava:auth:complete", () => {
+        void loadData();
+      });
+    })();
+
+    return () => { unlisten?.(); };
+  }, [loadData]);
 
   const saveSettings = async () => {
     setSaving(true);

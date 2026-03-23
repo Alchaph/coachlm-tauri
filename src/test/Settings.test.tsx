@@ -71,7 +71,13 @@ describe("SettingsPage", () => {
       expect(screen.getByRole("button", { name: /save settings/i })).toBeInTheDocument();
     });
 
+    // Save is disabled until settings are dirty — make a change first
+    const modelInput = screen.getByLabelText("Model Name");
+    await user.clear(modelInput);
+    await user.type(modelInput, "llama3-updated");
+
     const saveButton = screen.getByRole("button", { name: /save settings/i });
+    expect(saveButton).not.toBeDisabled();
     await user.click(saveButton);
 
     await waitFor(() => {
@@ -112,6 +118,6 @@ describe("SettingsPage", () => {
       expect(screen.getByText("Web Search")).toBeInTheDocument();
     });
 
-    expect(screen.getByRole("button", { name: /^off$/i })).toBeInTheDocument();
+    expect(screen.getByRole("switch", { name: /^off$/i })).toBeInTheDocument();
   });
 });

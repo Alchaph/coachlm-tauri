@@ -61,7 +61,8 @@ describe("App", () => {
 
     render(<App />);
 
-    expect(screen.getByText("Loading...")).toBeInTheDocument();
+    const skeletons = document.querySelectorAll(".skeleton");
+    expect(skeletons.length).toBeGreaterThan(0);
   });
 
   it("shows Onboarding when is_first_run returns true", async () => {

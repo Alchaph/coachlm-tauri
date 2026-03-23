@@ -50,15 +50,7 @@ export default function Context() {
     previewBtnRef.current?.focus();
   }, []);
 
-  useEffect(() => { void loadData(); }, []);
-
-  useEffect(() => {
-    if (showPreview) {
-      modalRef.current?.focus();
-    }
-  }, [showPreview]);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       const [p, ins] = await Promise.all([
         invoke<ProfileData | null>("get_profile_data"),
@@ -75,7 +67,9 @@ export default function Context() {
     } catch {
       showToast("Failed to load context data", "error");
     }
-  };
+  }, [showToast]);
+
+  useEffect(() => { void loadData(); }, [loadData]);
 
   const saveProfile = async () => {
     setSaving(true);
