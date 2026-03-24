@@ -82,14 +82,21 @@ export default function SettingsPage() {
   useEffect(() => {
     void loadData();
 
+    const state = { cancelled: false };
     let unlisten: (() => void) | undefined;
     void (async () => {
-      unlisten = await listen("strava:auth:complete", () => {
+      const fn = await listen("strava:auth:complete", () => {
+        if (state.cancelled) return;
         void loadData();
       });
+      if (state.cancelled) {
+        fn();
+      } else {
+        unlisten = fn;
+      }
     })();
 
-    return () => { unlisten?.(); };
+    return () => { state.cancelled = true; unlisten?.(); };
   }, [loadData]);
 
   const saveSettings = async () => {

@@ -41,31 +41,41 @@ export default function PlanCreator({ onPlanGenerated }: { onPlanGenerated: () =
   }, [loadData]);
 
   useEffect(() => {
+    const state = { cancelled: false };
     const cleanups: (() => void)[] = [];
     void (async () => {
-      cleanups.push(
-        await listen("plan:generate:start", () => {
+      const fns = await Promise.all([
+        listen("plan:generate:start", () => {
+          if (state.cancelled) return;
           setIsGenerating(true);
           setProgressMessage("Starting plan generation...");
           setError(null);
         }),
-        await listen<{ status: string }>("plan:generate:progress", (event) => {
+        listen<{ status: string }>("plan:generate:progress", (event) => {
+          if (state.cancelled) return;
           setProgressMessage(event.payload.status);
         }),
-        await listen("plan:generate:complete", () => {
+        listen("plan:generate:complete", () => {
+          if (state.cancelled) return;
           setIsGenerating(false);
           setProgressMessage("");
           void loadData();
           onPlanGenerated();
         }),
-        await listen<{ message: string }>("plan:generate:error", (event) => {
+        listen<{ message: string }>("plan:generate:error", (event) => {
+          if (state.cancelled) return;
           setIsGenerating(false);
           setProgressMessage("");
           setError(event.payload.message);
         }),
-      );
+      ]);
+      if (state.cancelled) {
+        for (const fn of fns) fn();
+      } else {
+        cleanups.push(...fns);
+      }
     })();
-    return () => { for (const fn of cleanups) fn(); };
+    return () => { state.cancelled = true; for (const fn of cleanups) fn(); };
   }, [loadData, onPlanGenerated]);
 
   const resetRaceForm = () => {
