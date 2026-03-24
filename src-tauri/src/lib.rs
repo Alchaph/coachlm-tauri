@@ -3,6 +3,7 @@ mod fit;
 mod llm;
 mod models;
 mod plan;
+mod research;
 mod storage;
 mod strava;
 mod web_search;
@@ -10,7 +11,7 @@ mod web_search;
 use models::{
     ActivityData, AuthStatus, ExportData, InsightData, MessageData, OllamaMessage, PlanWeekWithSessions,
     ProfileData, Race, SessionData, SessionStatus, SettingsData, SettingsMeta, StatsData, TrainingPlan,
-    TrainingPlanSummary,
+    TrainingPlanSummary, WebAugmentationMode,
 };
 use std::sync::Arc;
 use storage::Database;
@@ -219,7 +220,7 @@ fn emit_chat_progress(app_handle: &tauri::AppHandle, session_id: &str, status: &
 }
 
 async fn query_and_save_response(
-    db: &Database,
+    db: &Arc<Database>,
     app_handle: &tauri::AppHandle,
     settings: &models::SettingsData,
     session_id: &str,
@@ -227,14 +228,28 @@ async fn query_and_save_response(
     llm_ctx: &str,
 ) -> Result<String, String> {
     let mut web_search_context = String::new();
-    if settings.web_search_enabled {
-        emit_chat_progress(app_handle, session_id, "Searching the web...");
-        match web_search::search_duckduckgo(user_content, 5).await {
-            Ok(results) => {
-                web_search_context = web_search::format_search_results(&results);
+    match settings.effective_web_mode() {
+        WebAugmentationMode::Off => {}
+        WebAugmentationMode::Simple => {
+            emit_chat_progress(app_handle, session_id, "Searching the web...");
+            match web_search::search_duckduckgo(user_content, 5).await {
+                Ok(results) => {
+                    web_search_context = web_search::format_search_results(&results);
+                }
+                Err(e) => {
+                    log::warn!("Web search failed, continuing without results: {e}");
+                }
             }
-            Err(e) => {
-                log::warn!("Web search failed, continuing without results: {e}");
+        }
+        WebAugmentationMode::Agent => {
+            emit_chat_progress(app_handle, session_id, "Researching...");
+            match research::run_research(db, app_handle, settings, session_id, user_content).await {
+                Ok(result) => {
+                    web_search_context = result.brief;
+                }
+                Err(e) => {
+                    log::warn!("Research agent failed, continuing without results: {e}");
+                }
             }
         }
     }

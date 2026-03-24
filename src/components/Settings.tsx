@@ -12,8 +12,7 @@ interface SettingsData {
   custom_system_prompt: string;
   cloud_api_key: string | null;
   cloud_model: string | null;
-  web_search_enabled: boolean;
-  web_search_provider: string;
+  web_augmentation_mode: string;
 }
 
 interface StravaAuthStatus {
@@ -29,8 +28,7 @@ export default function SettingsPage() {
     custom_system_prompt: "",
     cloud_api_key: null,
     cloud_model: null,
-    web_search_enabled: false,
-    web_search_provider: "duckduckgo",
+    web_augmentation_mode: "off",
   });
   const [models, setModels] = useState<string[]>([]);
   const [fetchingModels, setFetchingModels] = useState(false);
@@ -81,14 +79,21 @@ export default function SettingsPage() {
   useEffect(() => {
     void loadData();
 
+    const state = { cancelled: false };
     let unlisten: (() => void) | undefined;
     void (async () => {
-      unlisten = await listen("strava:auth:complete", () => {
+      const fn = await listen("strava:auth:complete", () => {
+        if (state.cancelled) return;
         void loadData();
       });
+      if (state.cancelled) {
+        fn();
+      } else {
+        unlisten = fn;
+      }
     })();
 
-    return () => { unlisten?.(); };
+    return () => { state.cancelled = true; unlisten?.(); };
   }, [loadData]);
 
   const saveSettings = async () => {
@@ -335,34 +340,20 @@ export default function SettingsPage() {
             </span>
           </h2>
 
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-            <div>
-              <div style={{ fontWeight: 500 }}>Enable Web Search</div>
-              <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>
-                Search the web for context before generating responses. Uses DuckDuckGo (no API key required).
-              </p>
-            </div>
-            <button
-              className={settings.web_search_enabled ? "btn-primary" : "btn-secondary"}
-              onClick={() => { setSettings({ ...settings, web_search_enabled: !settings.web_search_enabled }); }}
-              role="switch"
-              aria-checked={settings.web_search_enabled}
-              style={{ minWidth: 64, textAlign: "center" }}
-            >
-              {settings.web_search_enabled ? "On" : "Off"}
-            </button>
-          </div>
-
           <div>
-            <label htmlFor="web-search-provider">Search Provider</label>
+            <label htmlFor="web-augmentation-mode">Web Augmentation Mode</label>
+            <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4, marginBottom: 8 }}>
+              Controls how the coach uses the web before answering. Simple injects a DuckDuckGo snippet. Agent runs an LLM-driven research loop.
+            </p>
             <select
-              id="web-search-provider"
-              value={settings.web_search_provider}
-              onChange={(e) => { setSettings({ ...settings, web_search_provider: e.target.value }); }}
+              id="web-augmentation-mode"
+              value={settings.web_augmentation_mode}
+              onChange={(e) => { setSettings({ ...settings, web_augmentation_mode: e.target.value }); }}
               style={{ width: "100%" }}
-              disabled={!settings.web_search_enabled}
             >
-              <option value="duckduckgo">DuckDuckGo</option>
+              <option value="off">Off</option>
+              <option value="simple">Simple (DuckDuckGo snippet)</option>
+              <option value="agent">Agent (LLM-driven research)</option>
             </select>
           </div>
         </div>

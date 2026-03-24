@@ -1,4 +1,34 @@
 use serde::{Deserialize, Serialize};
+use std::fmt;
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum WebAugmentationMode {
+    #[default]
+    Off,
+    Simple,
+    Agent,
+}
+
+impl WebAugmentationMode {
+    pub fn from_setting(value: &str) -> Self {
+        match value.to_lowercase().as_str() {
+            "simple" => Self::Simple,
+            "agent" => Self::Agent,
+            _ => Self::Off,
+        }
+    }
+}
+
+impl fmt::Display for WebAugmentationMode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Off => write!(f, "off"),
+            Self::Simple => write!(f, "simple"),
+            Self::Agent => write!(f, "agent"),
+        }
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SettingsData {
@@ -12,10 +42,33 @@ pub struct SettingsData {
     pub web_search_enabled: bool,
     #[serde(default = "default_web_search_provider")]
     pub web_search_provider: String,
+    #[serde(default = "default_web_augmentation_mode")]
+    pub web_augmentation_mode: String,
+}
+
+impl SettingsData {
+    /// Resolves the effective web mode, with backward compat for the old bool toggle.
+    #[must_use]
+    pub fn effective_web_mode(&self) -> WebAugmentationMode {
+        // If the new field is set to something other than "off", use it directly.
+        if !self.web_augmentation_mode.is_empty() && self.web_augmentation_mode != "off" {
+            return WebAugmentationMode::from_setting(&self.web_augmentation_mode);
+        }
+        // Backward compat: old bool toggle
+        if self.web_search_enabled {
+            WebAugmentationMode::Simple
+        } else {
+            WebAugmentationMode::from_setting(&self.web_augmentation_mode)
+        }
+    }
 }
 
 fn default_web_search_provider() -> String {
     "duckduckgo".to_string()
+}
+
+fn default_web_augmentation_mode() -> String {
+    "off".to_string()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
