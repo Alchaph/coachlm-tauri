@@ -581,7 +581,29 @@ export default function Chat({ onStatusChange }: ChatProps) {
             <div className="empty-state">
               <MessageSquare size={48} style={{ margin: "0 auto 16px", opacity: 0.3 }} />
               <p>Start a conversation with your AI running coach.</p>
-              <p style={{ fontSize: 12, marginTop: 8 }}>Ask about training, pacing, race prep, or anything running-related.</p>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "center", marginTop: 12 }}>
+                {["Review my last week of training", "Help me plan a tempo run", "What should my easy pace be?"].map((prompt) => (
+                  <button
+                    key={prompt}
+                    type="button"
+                    onClick={() => { setInput(prompt); }}
+                    style={{
+                      padding: "6px 12px",
+                      fontSize: 12,
+                      background: "var(--bg-tertiary)",
+                      border: "1px solid var(--border)",
+                      borderRadius: 0,
+                      color: "var(--text-secondary)",
+                      cursor: "pointer",
+                    }}
+                  >
+                    {prompt}
+                  </button>
+                ))}
+              </div>
+              <p style={{ fontSize: 11, marginTop: 12, color: "var(--text-muted)" }}>
+                Tip: Be specific with running terms for best results. LLMs can misinterpret ambiguous phrases.
+              </p>
             </div>
           )}
 

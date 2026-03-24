@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { ask } from "@tauri-apps/plugin-dialog";
-import { Save, RefreshCw, Plug, Unplug, Globe } from "lucide-react";
+import { Save, RefreshCw, Plug, Unplug, Globe, ChevronDown, ChevronRight, Info } from "lucide-react";
 import { useToast } from "../hooks/useToast";
 
 interface SettingsData {
@@ -40,6 +40,7 @@ export default function SettingsPage() {
   const [stravaAvailable, setStravaAvailable] = useState(false);
   const [ollamaConnected, setOllamaConnected] = useState<boolean | null>(null);
   const [initialSettings, setInitialSettings] = useState<SettingsData | null>(null);
+  const [tipsExpanded, setTipsExpanded] = useState(false);
   const isDirty = initialSettings !== null && JSON.stringify(settings) !== JSON.stringify(initialSettings);
 
   const checkOllamaConnection = useCallback(async (endpoint: string) => {
@@ -284,6 +285,55 @@ export default function SettingsPage() {
               style={{ width: "100%", resize: "vertical" }}
               placeholder="Add custom instructions for the coach..."
             />
+          </div>
+
+          <div style={{ marginTop: 16, border: "1px solid var(--border)", borderRadius: 0 }}>
+            <button
+              type="button"
+              onClick={() => { setTipsExpanded(!tipsExpanded); }}
+              style={{
+                width: "100%",
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                padding: "10px 12px",
+                background: "var(--bg-tertiary)",
+                border: "none",
+                cursor: "pointer",
+                color: "var(--text-secondary)",
+                fontSize: 13,
+                fontWeight: 500,
+              }}
+            >
+              <Info size={14} />
+              Getting better answers from your coach
+              <span style={{ marginLeft: "auto" }}>
+                {tipsExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+              </span>
+            </button>
+            {tipsExpanded && (
+              <div style={{ padding: "12px 16px", fontSize: 13, color: "var(--text-secondary)", lineHeight: 1.6 }}>
+                <p style={{ marginBottom: 12 }}>
+                  Local LLMs are powerful but have limitations. Smaller models (7B-8B parameters) may
+                  misinterpret domain-specific running terms. For example, asking about the
+                  &ldquo;Norwegian method&rdquo; might return information about Nordic walking instead of
+                  threshold-based interval training.
+                </p>
+                <p style={{ fontWeight: 600, marginBottom: 6, color: "var(--text-primary)" }}>Tips for better results:</p>
+                <ul style={{ paddingLeft: 20, marginBottom: 12 }}>
+                  <li style={{ marginBottom: 4 }}>Be specific: &ldquo;Norwegian 4x4 threshold interval training&rdquo; instead of just &ldquo;Norwegian method&rdquo;</li>
+                  <li style={{ marginBottom: 4 }}>Add context: &ldquo;For my marathon training, explain the Norwegian method of lactate threshold intervals&rdquo;</li>
+                  <li style={{ marginBottom: 4 }}>Use the custom system prompt above to anchor vocabulary, e.g. &ldquo;When I say Norwegian method, I mean threshold-based 4x4 minute intervals&rdquo;</li>
+                  <li style={{ marginBottom: 4 }}>If answers seem off-topic, rephrase with more running-specific terms</li>
+                </ul>
+                <p style={{ fontWeight: 600, marginBottom: 6, color: "var(--text-primary)" }}>Model recommendations:</p>
+                <ul style={{ paddingLeft: 20, marginBottom: 0 }}>
+                  <li style={{ marginBottom: 4 }}>For best local results, use 13B+ parameter models (e.g. llama3:13b, mistral-nemo)</li>
+                  <li style={{ marginBottom: 4 }}>Cloud providers (Groq, OpenRouter) offer larger models with better domain knowledge</li>
+                  <li style={{ marginBottom: 4 }}>Filling in your athlete profile and training history improves answer quality significantly</li>
+                </ul>
+              </div>
+            )}
           </div>
         </div>
 
