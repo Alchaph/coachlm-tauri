@@ -48,14 +48,21 @@ export default function PlanCalendar({ onPlanGenerated }: { onPlanGenerated: () 
   }, [loadData]);
 
   useEffect(() => {
+    const state = { cancelled: false };
     let cleanup: (() => void) | undefined;
     void (async () => {
-      cleanup = await listen("plan:generate:complete", () => {
+      const fn = await listen("plan:generate:complete", () => {
+        if (state.cancelled) return;
         void loadData();
         onPlanGenerated();
       });
+      if (state.cancelled) {
+        fn();
+      } else {
+        cleanup = fn;
+      }
     })();
-    return () => { cleanup?.(); };
+    return () => { state.cancelled = true; cleanup?.(); };
   }, [loadData, onPlanGenerated]);
 
   const handleUpdateSession = async (status: string) => {

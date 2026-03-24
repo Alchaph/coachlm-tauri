@@ -113,20 +113,24 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    const state = { cancelled: false };
     const unlisteners: (() => void)[] = [];
 
     void (async () => {
-      unlisteners.push(
-        await listen("strava:sync:start", () => {
+      const fns = await Promise.all([
+        listen("strava:sync:start", () => {
+          if (state.cancelled) return;
           setSyncActive(true);
           setSyncProgress("Starting sync...");
           setSyncResult(null);
           setSyncMessage("");
         }),
-        await listen<{ current: number; total: number }>("strava:sync:progress", (e) => {
+        listen<{ current: number; total: number }>("strava:sync:progress", (e) => {
+          if (state.cancelled) return;
           setSyncProgress(`Syncing: ${String(e.payload.current)} activities`);
         }),
-        await listen<{ new_count: number; total_count: number }>("strava:sync:complete", (e) => {
+        listen<{ new_count: number; total_count: number }>("strava:sync:complete", (e) => {
+          if (state.cancelled) return;
           setSyncActive(false);
           setSyncResult("success");
           setSyncMessage(
@@ -136,47 +140,63 @@ export default function App() {
           );
           setTimeout(() => { setSyncResult(null); }, 3000);
         }),
-        await listen<{ message: string }>("strava:sync:error", (e) => {
+        listen<{ message: string }>("strava:sync:error", (e) => {
+          if (state.cancelled) return;
           setSyncActive(false);
           setSyncResult("error");
           setSyncMessage(e.payload.message);
         }),
-      );
+      ]);
+      if (state.cancelled) {
+        for (const fn of fns) fn();
+      } else {
+        unlisteners.push(...fns);
+      }
     })();
 
-    return () => { for (const u of unlisteners) u(); };
+    return () => { state.cancelled = true; for (const u of unlisteners) u(); };
   }, []);
 
   useEffect(() => {
+    const state = { cancelled: false };
     const unlisteners: (() => void)[] = [];
 
     void (async () => {
-      unlisteners.push(
-        await listen("plan:generate:start", () => {
+      const fns = await Promise.all([
+        listen("plan:generate:start", () => {
+          if (state.cancelled) return;
           setPlanGenerating(true);
           setPlanProgress("Starting plan generation...");
           setPlanResult(null);
           setPlanError("");
         }),
-        await listen<{ status: string }>("plan:generate:progress", (event) => {
+        listen<{ status: string }>("plan:generate:progress", (event) => {
+          if (state.cancelled) return;
           setPlanProgress(event.payload.status);
         }),
-        await listen("plan:generate:complete", () => {
+        listen("plan:generate:complete", () => {
+          if (state.cancelled) return;
           setPlanGenerating(false);
           setPlanResult("success");
           setPlanProgress("Plan generated!");
           setTimeout(() => { setPlanResult(null); }, 3000);
         }),
-        await listen<{ message: string }>("plan:generate:error", (event) => {
+        listen<{ message: string }>("plan:generate:error", (event) => {
+          if (state.cancelled) return;
           setPlanGenerating(false);
           setPlanResult("error");
           setPlanError(event.payload.message);
           setPlanProgress("");
         }),
-      );
+      ]);
+      if (state.cancelled) {
+        for (const fn of fns) fn();
+      } else {
+        unlisteners.push(...fns);
+      }
     })();
 
-    return () => { for (const u of unlisteners) u(); };
+    return () => { state.cancelled = true; for (const u of unlisteners) u(); };
   }, []);
 
   useEffect(() => {

@@ -133,26 +133,38 @@ export default function Dashboard() {
 
   useEffect(() => {
     void loadData();
+    const state = { cancelled: false };
     const unlisteners: (() => void)[] = [];
 
     void (async () => {
-      unlisteners.push(await listen("strava:sync:start", () => {
-        setSyncing(true);
-      }));
-       unlisteners.push(await listen("strava:sync:complete", () => {
-         setSyncing(false);
-         void loadData();
-       }));
-       unlisteners.push(await listen("strava:sync:context-ready", () => {
-         void loadData();
-       }));
-       unlisteners.push(await listen<{ message: string }>("strava:sync:error", (e) => {
-         setSyncing(false);
-         setError(e.payload.message);
-       }));
+      const fns = await Promise.all([
+        listen("strava:sync:start", () => {
+          if (state.cancelled) return;
+          setSyncing(true);
+        }),
+        listen("strava:sync:complete", () => {
+          if (state.cancelled) return;
+          setSyncing(false);
+          void loadData();
+        }),
+        listen("strava:sync:context-ready", () => {
+          if (state.cancelled) return;
+          void loadData();
+        }),
+        listen<{ message: string }>("strava:sync:error", (e) => {
+          if (state.cancelled) return;
+          setSyncing(false);
+          setError(e.payload.message);
+        }),
+      ]);
+      if (state.cancelled) {
+        for (const fn of fns) fn();
+      } else {
+        unlisteners.push(...fns);
+      }
     })();
 
-    return () => { unlisteners.forEach((u) => { u(); }); };
+    return () => { state.cancelled = true; for (const u of unlisteners) u(); };
   }, []);
 
   const loadData = async (offset = 0) => {

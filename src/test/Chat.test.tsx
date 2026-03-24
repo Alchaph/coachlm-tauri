@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import Chat from "../components/Chat";
 
 const mockInvoke = vi.mocked(invoke);
@@ -177,5 +178,215 @@ describe("Chat component", () => {
         screen.getByText("Start a conversation with your AI running coach.")
       ).toBeInTheDocument();
     });
+  });
+});
+
+// Listener regression: prevents duplicate event bugs from React StrictMode double-mounting.
+
+type ListenCallback = (event: { event: string; id: number; payload: unknown }) => void;
+
+function setupListenCapture() {
+  const listeners = new Map<string, ListenCallback[]>();
+  let nextId = 1;
+
+  vi.mocked(listen).mockImplementation(
+    ((eventName: string, handler: ListenCallback): Promise<() => void> => {
+      if (!listeners.has(eventName)) listeners.set(eventName, []);
+      listeners.get(eventName)?.push(handler);
+      const unlisten = () => {
+        const current = listeners.get(eventName);
+        if (current) {
+          const idx = current.indexOf(handler);
+          if (idx >= 0) current.splice(idx, 1);
+        }
+      };
+      return Promise.resolve(unlisten);
+    }) as typeof listen,
+  );
+
+  function emit(eventName: string, payload: unknown) {
+    for (const cb of listeners.get(eventName) ?? []) {
+      cb({ event: eventName, id: nextId++, payload });
+    }
+  }
+
+  function listenerCount(eventName: string): number {
+    return listeners.get(eventName)?.length ?? 0;
+  }
+
+  return { emit, listenerCount, listeners };
+}
+
+describe("Chat event listener regression", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    setupInvokeMocks();
+    window.HTMLElement.prototype.scrollIntoView = vi.fn();
+  });
+
+  it("emitting chat:send:progress produces exactly one step per distinct status", async () => {
+    const { emit } = setupListenCapture();
+    setupInvokeMocks({ send_message: new Promise(() => {}) });
+    const user = userEvent.setup();
+
+    render(<Chat />);
+
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText("Ask your coach...")).toBeInTheDocument();
+    });
+
+    const textarea = screen.getByPlaceholderText("Ask your coach...");
+    await user.type(textarea, "test message");
+    await user.keyboard("{Enter}");
+
+    act(() => {
+      emit("chat:send:progress", { session_id: "sess-1", status: "Preparing context" });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("Preparing context")).toBeInTheDocument();
+    });
+
+    act(() => {
+      emit("chat:send:progress", { session_id: "sess-1", status: "Querying LLM" });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("Querying LLM")).toBeInTheDocument();
+    });
+
+    expect(screen.getAllByText("Preparing context")).toHaveLength(1);
+    expect(screen.getAllByText("Querying LLM")).toHaveLength(1);
+  });
+
+  it("deduplicates consecutive progress events with the same status label", async () => {
+    const { emit } = setupListenCapture();
+    setupInvokeMocks({ send_message: new Promise(() => {}) });
+    const user = userEvent.setup();
+
+    render(<Chat />);
+
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText("Ask your coach...")).toBeInTheDocument();
+    });
+
+    const textarea = screen.getByPlaceholderText("Ask your coach...");
+    await user.type(textarea, "test");
+    await user.keyboard("{Enter}");
+
+    act(() => {
+      emit("chat:send:progress", { session_id: "sess-1", status: "Preparing context" });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("Preparing context")).toBeInTheDocument();
+    });
+
+    act(() => {
+      emit("chat:send:progress", { session_id: "sess-1", status: "Preparing context" });
+    });
+
+    act(() => {
+      emit("chat:send:progress", { session_id: "sess-1", status: "Preparing context" });
+    });
+
+    await act(async () => {
+      await new Promise((resolve) => { setTimeout(resolve, 50); });
+    });
+
+    expect(screen.getAllByText("Preparing context")).toHaveLength(1);
+  });
+
+  it("chunk events do not produce doubled content", async () => {
+    const { emit } = setupListenCapture();
+    setupInvokeMocks({ send_message: new Promise(() => {}) });
+    const user = userEvent.setup();
+
+    render(<Chat />);
+
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText("Ask your coach...")).toBeInTheDocument();
+    });
+
+    const textarea = screen.getByPlaceholderText("Ask your coach...");
+    await user.type(textarea, "test");
+    await user.keyboard("{Enter}");
+
+    act(() => {
+      emit("chat:send:chunk", { session_id: "sess-1", content: "Hello ", done: false });
+    });
+    act(() => {
+      emit("chat:send:chunk", { session_id: "sess-1", content: "World", done: false });
+    });
+    act(() => {
+      emit("chat:send:chunk", { session_id: "sess-1", content: "!", done: false });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("Hello World!")).toBeInTheDocument();
+    });
+
+    expect(screen.getAllByText("Hello World!")).toHaveLength(1);
+  });
+
+  it("cancelled listeners do not process events after cleanup", async () => {
+    const { emit, listenerCount } = setupListenCapture();
+    setupInvokeMocks({ send_message: new Promise(() => {}) });
+
+    const { unmount } = render(<Chat />);
+
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText("Ask your coach...")).toBeInTheDocument();
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const progressCountBefore = listenerCount("chat:send:progress");
+    const chunkCountBefore = listenerCount("chat:send:chunk");
+    expect(progressCountBefore).toBeGreaterThan(0);
+    expect(chunkCountBefore).toBeGreaterThan(0);
+
+    unmount();
+
+    expect(listenerCount("chat:send:progress")).toBeLessThan(progressCountBefore);
+    expect(listenerCount("chat:send:chunk")).toBeLessThan(chunkCountBefore);
+
+    expect(() => {
+      emit("chat:send:progress", { session_id: "sess-1", status: "Ghost event" });
+      emit("chat:send:chunk", { session_id: "sess-1", content: "ghost", done: false });
+    }).not.toThrow();
+  });
+
+  it("events for a different session_id are ignored", async () => {
+    const { emit } = setupListenCapture();
+    setupInvokeMocks({ send_message: new Promise(() => {}) });
+    const user = userEvent.setup();
+
+    render(<Chat />);
+
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText("Ask your coach...")).toBeInTheDocument();
+    });
+
+    const textarea = screen.getByPlaceholderText("Ask your coach...");
+    await user.type(textarea, "test");
+    await user.keyboard("{Enter}");
+
+    act(() => {
+      emit("chat:send:progress", { session_id: "other-session", status: "Foreign step" });
+    });
+
+    act(() => {
+      emit("chat:send:chunk", { session_id: "other-session", content: "foreign content", done: false });
+    });
+
+    await act(async () => {
+      await new Promise((resolve) => { setTimeout(resolve, 50); });
+    });
+
+    expect(screen.queryByText("Foreign step")).not.toBeInTheDocument();
+    expect(screen.queryByText("foreign content")).not.toBeInTheDocument();
   });
 });

@@ -187,14 +187,19 @@ export default function Chat({ onStatusChange }: ChatProps) {
   }, [refreshSessions]);
 
   useEffect(() => {
-    let cleanup: (() => void) | undefined;
+    const state = { cancelled: false };
+    let unlisten: (() => void) | undefined;
     void (async () => {
-      cleanup = await listen<{ session_id: string; status: string }>("chat:send:progress", (event) => {
+      const fn = await listen<{ session_id: string; status: string }>("chat:send:progress", (event) => {
+        if (state.cancelled) return;
         if (event.payload.session_id && event.payload.session_id !== currentSessionIdRef.current) {
           return;
         }
         const now = Date.now();
         setProgressSteps((prev) => {
+          if (prev.length > 0 && prev[prev.length - 1].label === event.payload.status) {
+            return prev;
+          }
           const updated = prev.length > 0
             ? prev.map((step, i) => i === prev.length - 1 && !step.completedAt ? { ...step, completedAt: now } : step)
             : prev;
@@ -202,14 +207,21 @@ export default function Chat({ onStatusChange }: ChatProps) {
         });
         onStatusChange?.("thinking", event.payload.status);
       });
+      if (state.cancelled) {
+        fn();
+      } else {
+        unlisten = fn;
+      }
     })();
-    return () => { cleanup?.(); };
+    return () => { state.cancelled = true; unlisten?.(); };
   }, [onStatusChange]);
 
   useEffect(() => {
-    let cleanup: (() => void) | undefined;
+    const state = { cancelled: false };
+    let unlisten: (() => void) | undefined;
     void (async () => {
-      cleanup = await listen<{ session_id: string; content: string; done: boolean }>("chat:send:chunk", (event) => {
+      const fn = await listen<{ session_id: string; content: string; done: boolean }>("chat:send:chunk", (event) => {
+        if (state.cancelled) return;
         if (event.payload.session_id && event.payload.session_id !== currentSessionIdRef.current) {
           return;
         }
@@ -236,8 +248,13 @@ export default function Chat({ onStatusChange }: ChatProps) {
           ];
         });
       });
+      if (state.cancelled) {
+        fn();
+      } else {
+        unlisten = fn;
+      }
     })();
-    return () => { cleanup?.(); };
+    return () => { state.cancelled = true; unlisten?.(); };
   }, []);
 
   const loadSession = async (sessionId: string) => {
