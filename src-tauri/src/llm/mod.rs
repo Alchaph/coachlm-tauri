@@ -352,6 +352,65 @@ async fn stream_cloud(
     Ok(full_response)
 }
 
+fn extract_json_block(text: &str) -> &str {
+    if let Some(start) = text.find("```json") {
+        let after = &text[start + 7..];
+        if let Some(end) = after.find("```") {
+            return after[..end].trim();
+        }
+    }
+    if let Some(start) = text.find("```") {
+        let after = &text[start + 3..];
+        if let Some(end) = after.find("```") {
+            let inner = after[..end].trim();
+            if inner.starts_with('{') || inner.starts_with('[') {
+                return inner;
+            }
+        }
+    }
+    let trimmed = text.trim();
+    if trimmed.starts_with('{') || trimmed.starts_with('[') {
+        return trimmed;
+    }
+    if let Some(pos) = text.find('\n') {
+        let after_newline = text[pos + 1..].trim_start();
+        if after_newline.starts_with('{') || after_newline.starts_with('[') {
+            return after_newline;
+        }
+    }
+    text.trim()
+}
+
+const JSON_RETRY_LIMIT: u8 = 2;
+
+pub async fn chat_json<T: serde::de::DeserializeOwned>(
+    settings: &SettingsData,
+    messages: Vec<OllamaMessage>,
+) -> Result<T, String> {
+    let mut last_error = String::new();
+    for attempt in 0..=JSON_RETRY_LIMIT {
+        let raw = match chat(settings, messages.clone()).await {
+            Ok(r) => r,
+            Err(e) => {
+                last_error = format!("LLM call failed (attempt {attempt}): {e}");
+                continue;
+            }
+        };
+        let json_str = extract_json_block(&raw);
+        match serde_json::from_str::<T>(json_str) {
+            Ok(parsed) => return Ok(parsed),
+            Err(e) => {
+                last_error = format!(
+                    "JSON parse failed (attempt {attempt}): {e}\nRaw: {}",
+                    &raw[..raw.len().min(300)]
+                );
+                log::warn!("{last_error}");
+            }
+        }
+    }
+    Err(last_error)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -366,6 +425,7 @@ mod tests {
             cloud_model: None,
             web_search_enabled: false,
             web_search_provider: String::new(),
+            web_augmentation_mode: "off".to_string(),
         }
     }
 
@@ -379,6 +439,7 @@ mod tests {
             cloud_model: Some("llama-3.3-70b-versatile".to_string()),
             web_search_enabled: false,
             web_search_provider: String::new(),
+            web_augmentation_mode: "off".to_string(),
         }
     }
 
@@ -443,5 +504,27 @@ mod tests {
         assert!(result.is_err(), "should fail on connection, not validation");
         let err = result.expect_err("already checked is_err");
         assert!(!err.contains("API key"), "should not be a cloud validation error: {err}");
+    }
+
+    #[test]
+    fn extract_json_block_from_markdown() {
+        let input = "Here is the result:\n```json\n{\"action\": \"search\", \"query\": \"test\"}\n```\nDone.";
+        let extracted = extract_json_block(input);
+        assert!(extracted.starts_with('{'), "got: {extracted}");
+        let _: serde_json::Value = serde_json::from_str(extracted).expect("valid JSON");
+    }
+
+    #[test]
+    fn extract_json_block_raw_json() {
+        let input = "{\"action\": \"finish\", \"answer_outline\": \"done\"}";
+        let extracted = extract_json_block(input);
+        assert_eq!(extracted, input);
+    }
+
+    #[test]
+    fn extract_json_block_with_preamble() {
+        let input = "Sure! Here you go:\n{\"key\": \"value\"}";
+        let extracted = extract_json_block(input);
+        assert!(extracted.starts_with('{'), "got: {extracted}");
     }
 }

@@ -269,6 +269,7 @@ impl Database {
             ("cloud_model", "TEXT"),
             ("web_search_enabled", "INTEGER DEFAULT 0"),
             ("web_search_provider", "TEXT DEFAULT 'duckduckgo'"),
+            ("web_augmentation_mode", "TEXT DEFAULT 'off'"),
         ];
         for (col, col_type) in new_settings_cols {
             let exists: bool = conn
@@ -286,6 +287,8 @@ impl Database {
             conn.execute_batch("ALTER TABLE athlete_profile ADD COLUMN custom_notes TEXT")?;
         }
 
+        crate::research::cache::ResearchCache::init_tables(&conn)?;
+
         Ok(())
     }
 
@@ -293,7 +296,7 @@ impl Database {
     pub fn get_settings(&self) -> SqlResult<Option<super::models::SettingsData>> {
         let conn = self.conn();
         let mut stmt = conn.prepare(
-            "SELECT active_llm, ollama_endpoint, ollama_model, custom_system_prompt, cloud_api_key, cloud_model, web_search_enabled, web_search_provider FROM settings WHERE id = 1"
+            "SELECT active_llm, ollama_endpoint, ollama_model, custom_system_prompt, cloud_api_key, cloud_model, web_search_enabled, web_search_provider, web_augmentation_mode FROM settings WHERE id = 1"
         )?;
         let result = stmt.query_row([], |row| {
             Ok((
@@ -308,6 +311,9 @@ impl Database {
                     web_search_provider: row
                         .get::<_, Option<String>>(7)?
                         .unwrap_or_else(|| "duckduckgo".to_string()),
+                    web_augmentation_mode: row
+                        .get::<_, Option<String>>(8)?
+                        .unwrap_or_else(|| "off".to_string()),
                 },
                 row.get::<_, Option<String>>(4)?,
             ))
@@ -332,9 +338,9 @@ impl Database {
             .filter(|k| !k.is_empty())
             .and_then(|k| self.encrypt(k).ok());
         conn.execute(
-            "INSERT OR REPLACE INTO settings (id, active_llm, ollama_endpoint, ollama_model, custom_system_prompt, cloud_api_key, cloud_model, web_search_enabled, web_search_provider)
-             VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
-            params![data.active_llm, data.ollama_endpoint, data.ollama_model, data.custom_system_prompt, encrypted_key, data.cloud_model, i64::from(data.web_search_enabled), data.web_search_provider],
+            "INSERT OR REPLACE INTO settings (id, active_llm, ollama_endpoint, ollama_model, custom_system_prompt, cloud_api_key, cloud_model, web_search_enabled, web_search_provider, web_augmentation_mode)
+             VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            params![data.active_llm, data.ollama_endpoint, data.ollama_model, data.custom_system_prompt, encrypted_key, data.cloud_model, i64::from(data.web_search_enabled), data.web_search_provider, data.web_augmentation_mode],
         )?;
         Ok(())
     }
@@ -1184,6 +1190,7 @@ mod tests {
             cloud_model: None,
             web_search_enabled: false,
             web_search_provider: "duckduckgo".to_string(),
+            web_augmentation_mode: "off".to_string(),
         }
     }
 

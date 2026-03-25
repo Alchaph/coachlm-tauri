@@ -32,8 +32,7 @@ interface ChatSettingsData {
   custom_system_prompt: string;
   cloud_api_key: string | null;
   cloud_model: string | null;
-  web_search_enabled: boolean;
-  web_search_provider: string;
+  web_augmentation_mode: string;
 }
 
 interface ProgressStep {
@@ -115,7 +114,7 @@ export default function Chat({ onStatusChange }: ChatProps) {
    const historyIndex = useRef(-1);
    const savedInput = useRef("");
    const lastSentContentRef = useRef("");
-  const [webSearchEnabled, setWebSearchEnabled] = useState(false);
+  const [webAugmentationMode, setWebAugmentationMode] = useState("off");
   const [editingMessageId, setEditingMessageId] = useState<number | null>(null);
   const [editContent, setEditContent] = useState("");
   const [completedSteps, setCompletedSteps] = useState<ProgressStep[] | null>(null);
@@ -178,7 +177,7 @@ export default function Chat({ onStatusChange }: ChatProps) {
       }
       try {
         const settings = await invoke<ChatSettingsData>("get_settings");
-        setWebSearchEnabled(settings.web_search_enabled);
+        setWebAugmentationMode(settings.web_augmentation_mode);
       } catch {
         // Settings may not exist yet on first run
       }
@@ -215,6 +214,33 @@ export default function Chat({ onStatusChange }: ChatProps) {
     })();
     return () => { state.cancelled = true; unlisten?.(); };
   }, [onStatusChange]);
+
+  useEffect(() => {
+    const state = { cancelled: false };
+    let unlisten: (() => void) | undefined;
+    void (async () => {
+      const fn = await listen<{ step: string; detail: string; iteration: number }>("research:progress", (event) => {
+        if (state.cancelled) return;
+        const label = `Research: ${event.payload.step} — ${event.payload.detail}`;
+        const now = Date.now();
+        setProgressSteps((prev) => {
+          if (prev.length > 0 && prev[prev.length - 1].label === label) {
+            return prev;
+          }
+          const updated = prev.length > 0
+            ? prev.map((step, i) => i === prev.length - 1 && !step.completedAt ? { ...step, completedAt: now } : step)
+            : prev;
+          return [...updated, { label, startedAt: now }];
+        });
+      });
+      if (state.cancelled) {
+        fn();
+      } else {
+        unlisten = fn;
+      }
+    })();
+    return () => { state.cancelled = true; unlisten?.(); };
+  }, []);
 
   useEffect(() => {
     const state = { cancelled: false };
@@ -385,19 +411,6 @@ export default function Chat({ onStatusChange }: ChatProps) {
       showToast("Copied to clipboard", "success");
     } catch {
       showToast("Failed to copy", "error");
-    }
-  };
-
-  const toggleWebSearch = async () => {
-    const newValue = !webSearchEnabled;
-    setWebSearchEnabled(newValue);
-    try {
-      const settings = await invoke<ChatSettingsData>("get_settings");
-      await invoke("save_settings", {
-        data: { ...settings, web_search_enabled: newValue },
-      });
-    } catch {
-      setWebSearchEnabled(!newValue);
     }
   };
 
@@ -818,14 +831,15 @@ export default function Chat({ onStatusChange }: ChatProps) {
           }}
         >
           <div style={{ display: "flex", alignItems: "center", marginBottom: 8 }}>
-            <button
-              className={`chat-toggle-chip${webSearchEnabled ? " chat-toggle-chip-active" : ""}`}
-              onClick={() => { void toggleWebSearch(); }}
-              title={webSearchEnabled ? "Disable web search" : "Enable web search"}
-            >
-              <Globe size={14} />
-              Web search
-            </button>
+            {webAugmentationMode !== "off" && (
+              <span
+                className="chat-toggle-chip chat-toggle-chip-active"
+                title={webAugmentationMode === "agent" ? "Agent web research enabled" : "Simple web search enabled"}
+              >
+                <Globe size={14} />
+                {webAugmentationMode === "agent" ? "Research agent" : "Web search"}
+              </span>
+            )}
           </div>
           <div style={{ display: "flex", gap: 8, alignItems: "flex-end", paddingBottom: 12 }}>
              <textarea
