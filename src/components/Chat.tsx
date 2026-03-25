@@ -590,8 +590,8 @@ export default function Chat({ onStatusChange }: ChatProps) {
       <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
         <div
           style={{
-            padding: "8px 16px",
-            borderBottom: "1px solid var(--border)",
+            padding: "10px 20px",
+            borderBottom: "1px solid var(--border-subtle)",
             display: "flex",
             alignItems: "center",
             gap: 8,
@@ -622,7 +622,7 @@ export default function Chat({ onStatusChange }: ChatProps) {
          </div>
 
         <div
-          style={{ flex: 1, overflow: "auto", padding: "16px" }}
+          style={{ flex: 1, overflow: "auto", padding: "20px" }}
           onScroll={handleScroll}
         >
           {messages.length === 0 && !loading && (
@@ -636,13 +636,14 @@ export default function Chat({ onStatusChange }: ChatProps) {
                     type="button"
                     onClick={() => { setInput(prompt); }}
                     style={{
-                      padding: "6px 12px",
+                       padding: "8px 14px",
                       fontSize: 12,
                       background: "var(--bg-tertiary)",
                       border: "1px solid var(--border)",
-                      borderRadius: 0,
+                      borderRadius: "var(--radius-md)",
                       color: "var(--text-secondary)",
                       cursor: "pointer",
+                      transition: "border-color var(--transition-fast), color var(--transition-fast)",
                     }}
                   >
                     {prompt}
@@ -687,8 +688,8 @@ export default function Chat({ onStatusChange }: ChatProps) {
                 className={msg.role === "user" ? "chat-message-user" : undefined}
                 style={{
                   maxWidth: "80%",
-                  padding: "10px 14px",
-                  borderRadius: 6,
+                  padding: "12px 16px",
+                  borderRadius: "var(--radius-md)",
                   background: msg.role === "user" ? "var(--accent-dim)" : "var(--bg-secondary)",
                   border: msg.role === "user" ? "none" : "1px solid var(--border)",
                 }}
@@ -726,7 +727,7 @@ export default function Chat({ onStatusChange }: ChatProps) {
                         lineHeight: "20px",
                         background: "var(--bg-tertiary)",
                         border: "1px solid var(--accent)",
-                        borderRadius: 4,
+                        borderRadius: "var(--radius-sm)",
                         padding: "8px 12px",
                       }}
                       autoFocus
@@ -815,7 +816,7 @@ export default function Chat({ onStatusChange }: ChatProps) {
             )}
 
              {error && (
-               <div className="error-state" style={{ textAlign: "left", padding: "8px 14px", borderRadius: 6, background: "var(--bg-secondary)", border: "1px solid var(--danger)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                <div className="error-state" style={{ textAlign: "left", padding: "10px 16px", borderRadius: "var(--radius-md)", background: "var(--bg-secondary)", border: "1px solid var(--danger)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
                  <span>{error}</span>
                  {!loading && (
                    <button
@@ -835,8 +836,8 @@ export default function Chat({ onStatusChange }: ChatProps) {
 
         <div
           style={{
-            padding: "12px 16px 0",
-            borderTop: "1px solid var(--border)",
+            padding: "14px 20px 0",
+            borderTop: "1px solid var(--border-subtle)",
             background: "var(--bg-secondary)",
           }}
         >
@@ -875,7 +876,7 @@ export default function Chat({ onStatusChange }: ChatProps) {
               </span>
             )}
           </div>
-          <div style={{ display: "flex", gap: 8, alignItems: "flex-end", paddingBottom: 12 }}>
+          <div style={{ display: "flex", gap: 10, alignItems: "flex-end", paddingBottom: 14 }}>
              <textarea
                ref={textareaRef}
                value={input}

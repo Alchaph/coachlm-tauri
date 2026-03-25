@@ -232,7 +232,7 @@ export default function SettingsPage() {
                         }}
                         style={{
                           padding: "4px 12px",
-                          borderRadius: 0,
+                          borderRadius: "var(--radius-sm)",
                           fontSize: 12,
                           border: `1px solid var(--border)`,
                           background: settings.ollama_model === model ? "var(--accent)" : "var(--bg-tertiary)",
@@ -292,7 +292,7 @@ export default function SettingsPage() {
             />
           </div>
 
-          <div style={{ marginTop: 16, border: "1px solid var(--border)", borderRadius: 0 }}>
+          <div style={{ marginTop: 16, border: "1px solid var(--border)", borderRadius: "var(--radius-md)" }}>
             <button
               type="button"
               onClick={() => { setTipsExpanded(!tipsExpanded); }}
@@ -346,7 +346,7 @@ export default function SettingsPage() {
           <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 16 }}>Strava Integration</h2>
           
           {!stravaAvailable ? (
-            <div style={{ padding: 12, background: "var(--bg-tertiary)", borderRadius: 0, border: "1px solid var(--border)" }}>
+            <div style={{ padding: 12, background: "var(--bg-tertiary)", borderRadius: "var(--radius-md)", border: "1px solid var(--border)" }}>
               <p style={{ color: "var(--text-muted)", fontSize: 13 }}>
                 Strava credentials are not configured in the environment. Please set STRAVA_CLIENT_ID and STRAVA_CLIENT_SECRET.
               </p>

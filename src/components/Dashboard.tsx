@@ -57,7 +57,7 @@ function getWorkoutBadge(
   const badgeBase: React.CSSProperties = {
     display: "inline-block",
     padding: "2px 8px",
-    borderRadius: 0,
+    borderRadius: "var(--radius-sm)",
     fontSize: 11,
     fontWeight: 600,
     color: "white",
@@ -312,9 +312,9 @@ export default function Dashboard() {
                  background: "var(--bg-tertiary)",
                  border: "1px solid var(--border)",
                  color: "var(--text-primary)",
-                 borderRadius: 0,
-                 padding: "4px 8px",
-                 fontSize: 13,
+                  borderRadius: "var(--radius-sm)",
+                  padding: "4px 8px",
+                  fontSize: 13,
                }}
             >
               <option value="All">All Types</option>
@@ -503,15 +503,15 @@ export default function Dashboard() {
                     <span style={{ fontSize: 12, color: "var(--text-muted)", width: 50, flexShrink: 0, textAlign: "right" }}>
                       {w.label}
                     </span>
-                     <div style={{ flex: 1, background: "var(--bg-tertiary)", borderRadius: 0, height: 20, overflow: "hidden" }}>
+                     <div style={{ flex: 1, background: "var(--bg-tertiary)", borderRadius: "var(--radius-sm)", height: 20, overflow: "hidden" }}>
                        <div
                          style={{
-                           width: `${Math.max((w.km / maxWeekKm) * 100, 1).toString()}%`,
-                           height: "100%",
-                           background: "var(--accent)",
-                           borderRadius: 0,
-                           minWidth: w.km === 0 ? 2 : undefined,
-                           transition: "width 0.3s ease",
+                            width: `${Math.max((w.km / maxWeekKm) * 100, 1).toString()}%`,
+                            height: "100%",
+                            background: "var(--accent)",
+                            borderRadius: "var(--radius-sm)",
+                            minWidth: w.km === 0 ? 2 : undefined,
+                            transition: "width 0.3s ease",
                          }}
                       />
                     </div>

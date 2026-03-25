@@ -245,23 +245,23 @@ export default function App() {
           width: "var(--sidebar-width)",
           minWidth: "var(--sidebar-width)",
           background: "var(--bg-secondary)",
-          borderRight: "1px solid var(--border)",
-          padding: "12px 0",
+          borderRight: "1px solid var(--border-subtle)",
+          padding: "16px 0",
         }}>
-          <div style={{ padding: "8px 16px 20px" }}>
-            <div className="skeleton" style={{ width: 90, height: 20 }} />
+          <div style={{ padding: "4px 20px 24px" }}>
+            <div className="skeleton" style={{ width: 100, height: 20, borderRadius: "var(--radius-sm)" }} />
           </div>
           {Array.from({ length: 6 }, (_, i) => (
-            <div key={i} style={{ padding: "10px 16px", margin: "2px 8px" }}>
-              <div className="skeleton" style={{ width: "80%", height: 16 }} />
+            <div key={i} style={{ padding: "8px 22px", margin: "2px 0" }}>
+              <div className="skeleton" style={{ width: "75%", height: 16, borderRadius: "var(--radius-sm)" }} />
             </div>
           ))}
         </div>
-        <div style={{ flex: 1, padding: 24 }}>
-          <div className="skeleton" style={{ width: 200, height: 24, marginBottom: 20 }} />
-          <div className="skeleton" style={{ width: "100%", height: 120, marginBottom: 16 }} />
-          <div className="skeleton" style={{ width: "60%", height: 16, marginBottom: 10 }} />
-          <div className="skeleton" style={{ width: "40%", height: 16 }} />
+        <div style={{ flex: 1, padding: 28 }}>
+          <div className="skeleton" style={{ width: 200, height: 24, marginBottom: 24, borderRadius: "var(--radius-sm)" }} />
+          <div className="skeleton" style={{ width: "100%", height: 120, marginBottom: 20, borderRadius: "var(--radius-md)" }} />
+          <div className="skeleton" style={{ width: "60%", height: 16, marginBottom: 12, borderRadius: "var(--radius-sm)" }} />
+          <div className="skeleton" style={{ width: "40%", height: 16, borderRadius: "var(--radius-sm)" }} />
         </div>
       </div>
     );
@@ -271,13 +271,16 @@ export default function App() {
     return <Onboarding onComplete={handleOnboardingComplete} />;
   }
 
-  const navItems: NavItem[] = [
-    { id: "chat", label: "Chat", icon: <MessageSquare size={20} /> },
-    { id: "dashboard", label: "Dashboard", icon: <LayoutDashboard size={20} /> },
-    { id: "context", label: "Context", icon: <Brain size={20} /> },
-    { id: "plan", label: "Plans", icon: <Calendar size={20} /> },
-    { id: "shoes", label: "Shoes", icon: <Zap size={20} /> },
-    { id: "settings", label: "Settings", icon: <SettingsIcon size={20} /> },
+  const mainNavItems: NavItem[] = [
+    { id: "chat", label: "Chat", icon: <MessageSquare size={18} /> },
+    { id: "dashboard", label: "Dashboard", icon: <LayoutDashboard size={18} /> },
+    { id: "context", label: "Context", icon: <Brain size={18} /> },
+    { id: "plan", label: "Plans", icon: <Calendar size={18} /> },
+    { id: "shoes", label: "Shoes", icon: <Zap size={18} /> },
+  ];
+
+  const bottomNavItems: NavItem[] = [
+    { id: "settings", label: "Settings", icon: <SettingsIcon size={18} /> },
   ];
 
   const showBanner = activeTab !== "chat" && chatStatus !== "idle";
@@ -289,50 +292,134 @@ export default function App() {
           width: "var(--sidebar-width)",
           minWidth: "var(--sidebar-width)",
           background: "var(--bg-secondary)",
-          borderRight: "1px solid var(--border)",
+          borderRight: "1px solid var(--border-subtle)",
           display: "flex",
           flexDirection: "column",
-          padding: "12px 0",
+          padding: "16px 0 12px",
         }}
       >
         <div
           style={{
-            padding: "8px 16px 20px",
-            fontSize: "16px",
+            padding: "4px 20px 24px",
+            fontSize: "15px",
             fontWeight: 700,
             color: "var(--text-primary)",
-            letterSpacing: "-0.02em",
+            letterSpacing: "-0.03em",
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
           }}
         >
+          <div style={{
+            width: 26,
+            height: 26,
+            borderRadius: "var(--radius-sm)",
+            background: "var(--accent)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontSize: 13,
+            fontWeight: 800,
+            color: "white",
+            flexShrink: 0,
+          }}>C</div>
           CoachLM
         </div>
-        {navItems.map((item) => (
-            <button
-              key={item.id}
-              onClick={() => { setActiveTab(item.id); }}
-              aria-current={activeTab === item.id ? "page" : undefined}
-               style={{
-                 display: "flex",
-                 alignItems: "center",
-                 gap: 10,
-                 padding: "10px 16px",
-                 margin: "2px 8px",
-                 borderRadius: 4,
-                 background: activeTab === item.id ? "var(--bg-hover)" : "transparent",
-                 color: activeTab === item.id ? "var(--text-primary)" : "var(--text-secondary)",
-                 border: "none",
-                 cursor: "pointer",
-                 fontSize: 14,
-                 fontWeight: activeTab === item.id ? 600 : 400,
-                 textAlign: "left",
-                 width: "calc(100% - 16px)",
-                 transition: "background 0.15s, color 0.15s",
-               }}
-            >
-              {item.icon}
-              {item.label}
-            </button>
-          ))}
+
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2, padding: "0 10px" }}>
+          {mainNavItems.map((item) => {
+            const isActive = activeTab === item.id;
+            return (
+              <button
+                key={item.id}
+                onClick={() => { setActiveTab(item.id); }}
+                aria-current={isActive ? "page" : undefined}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                  padding: "8px 12px",
+                  borderRadius: "var(--radius-sm)",
+                  background: isActive ? "var(--bg-hover)" : "transparent",
+                  color: isActive ? "var(--text-primary)" : "var(--text-secondary)",
+                  border: "none",
+                  cursor: "pointer",
+                  fontSize: 13,
+                  fontWeight: isActive ? 600 : 450,
+                  textAlign: "left",
+                  width: "100%",
+                  transition: "background var(--transition-fast), color var(--transition-fast)",
+                  position: "relative",
+                }}
+              >
+                <div style={{
+                  width: 30,
+                  height: 30,
+                  borderRadius: "var(--radius-sm)",
+                  background: isActive ? "var(--accent-subtle)" : "transparent",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  transition: "background var(--transition-fast)",
+                  color: isActive ? "var(--accent)" : "inherit",
+                  flexShrink: 0,
+                }}>
+                  {item.icon}
+                </div>
+                {item.label}
+              </button>
+            );
+          })}
+        </div>
+
+        <div style={{
+          borderTop: "1px solid var(--border-subtle)",
+          margin: "0 10px",
+          paddingTop: 8,
+        }}>
+          {bottomNavItems.map((item) => {
+            const isActive = activeTab === item.id;
+            return (
+              <button
+                key={item.id}
+                onClick={() => { setActiveTab(item.id); }}
+                aria-current={isActive ? "page" : undefined}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                  padding: "8px 12px",
+                  borderRadius: "var(--radius-sm)",
+                  background: isActive ? "var(--bg-hover)" : "transparent",
+                  color: isActive ? "var(--text-primary)" : "var(--text-secondary)",
+                  border: "none",
+                  cursor: "pointer",
+                  fontSize: 13,
+                  fontWeight: isActive ? 600 : 450,
+                  textAlign: "left",
+                  width: "100%",
+                  transition: "background var(--transition-fast), color var(--transition-fast)",
+                }}
+              >
+                <div style={{
+                  width: 30,
+                  height: 30,
+                  borderRadius: "var(--radius-sm)",
+                  background: isActive ? "var(--accent-subtle)" : "transparent",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  transition: "background var(--transition-fast)",
+                  color: isActive ? "var(--accent)" : "inherit",
+                  flexShrink: 0,
+                }}>
+                  {item.icon}
+                </div>
+                {item.label}
+              </button>
+            );
+          })}
+        </div>
       </nav>
 
       <main style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
@@ -374,13 +461,14 @@ export default function App() {
           zIndex: 200,
           background: "var(--bg-secondary)",
           border: `1px solid ${planResult === "error" ? "var(--danger)" : planResult === "success" ? "var(--success)" : "var(--border)"}`,
+          borderRadius: "var(--radius-md)",
           padding: "14px 20px",
           minWidth: 280,
           maxWidth: 400,
           display: "flex",
           alignItems: "center",
           gap: 12,
-          boxShadow: "0 4px 24px #000000",
+          boxShadow: "var(--shadow-lg)",
         }}>
           {planGenerating && <RefreshCw size={18} className="spin" style={{ color: "var(--accent)", flexShrink: 0 }} />}
           {planResult === "success" && <Check size={18} style={{ color: "var(--success)", flexShrink: 0 }} />}
@@ -416,14 +504,15 @@ export default function App() {
           zIndex: 200,
           background: "var(--bg-secondary)",
           border: `1px solid ${syncResult === "error" ? "var(--danger)" : syncResult === "success" ? "var(--success)" : "var(--border)"}`,
+          borderRadius: "var(--radius-md)",
           padding: "14px 20px",
           minWidth: 280,
           maxWidth: 400,
           display: "flex",
           alignItems: "center",
           gap: 12,
-          boxShadow: "0 4px 24px #000000",
-          transition: "bottom 0.2s ease",
+          boxShadow: "var(--shadow-lg)",
+          transition: "bottom var(--transition-normal)",
         }}>
           {syncActive && <RefreshCw size={18} className="spin" style={{ color: "var(--accent)", flexShrink: 0 }} />}
           {syncResult === "success" && <Check size={18} style={{ color: "var(--success)", flexShrink: 0 }} />}
@@ -459,14 +548,15 @@ export default function App() {
           zIndex: 200,
           background: "var(--bg-secondary)",
           border: "1px solid var(--accent)",
+          borderRadius: "var(--radius-md)",
           padding: "14px 20px",
           minWidth: 280,
           maxWidth: 400,
           display: "flex",
           alignItems: "center",
           gap: 12,
-          boxShadow: "0 4px 24px #000000",
-          transition: "bottom 0.2s ease",
+          boxShadow: "var(--shadow-lg)",
+          transition: "bottom var(--transition-normal)",
         }}>
           {updateDownloading
             ? <RefreshCw size={18} className="spin" style={{ color: "var(--accent)", flexShrink: 0 }} />
@@ -480,15 +570,15 @@ export default function App() {
                 <div style={{
                   height: 4,
                   background: "var(--bg-primary)",
-                  borderRadius: 2,
+                  borderRadius: "var(--radius-sm)",
                   overflow: "hidden",
                 }}>
                   <div style={{
                     height: "100%",
                     width: `${String(updateProgress)}%`,
                     background: "var(--accent)",
-                    borderRadius: 2,
-                    transition: "width 0.2s ease",
+                    borderRadius: "var(--radius-sm)",
+                    transition: "width var(--transition-normal)",
                   }} />
                 </div>
                 <div style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 2 }}>

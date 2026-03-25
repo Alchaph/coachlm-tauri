@@ -316,8 +316,8 @@ export default function PlanCreator({ onPlanGenerated }: { onPlanGenerated: () =
                 <div>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
                     <h3 style={{ fontSize: 16, fontWeight: 600 }}>{race.name}</h3>
-                     {race.is_active && <span style={{ background: "var(--accent)", color: "white", padding: "2px 6px", borderRadius: 0, fontSize: 10, fontWeight: 600 }}>ACTIVE</span>}
-                     <span style={{ background: "var(--bg-tertiary)", padding: "2px 6px", borderRadius: 0, fontSize: 10 }}>{race.priority} Race</span>
+                     {race.is_active && <span style={{ background: "var(--accent)", color: "white", padding: "2px 6px", borderRadius: "var(--radius-sm)", fontSize: 10, fontWeight: 600 }}>ACTIVE</span>}
+                     <span style={{ background: "var(--bg-tertiary)", padding: "2px 6px", borderRadius: "var(--radius-sm)", fontSize: 10 }}>{race.priority} Race</span>
                   </div>
                   <div style={{ color: "var(--text-secondary)", fontSize: 13, display: "flex", gap: 16, marginBottom: 12 }}>
                     <span>{new Date(race.race_date).toLocaleDateString()} ({getWeeksToRace(race.race_date)} weeks)</span>
@@ -362,7 +362,7 @@ export default function PlanCreator({ onPlanGenerated }: { onPlanGenerated: () =
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                       <h3 style={{ fontSize: 15, fontWeight: 600 }}>{p.race_name}</h3>
-                       {p.is_active && <span style={{ background: "var(--accent)", color: "white", padding: "2px 6px", borderRadius: 0, fontSize: 10, fontWeight: 600 }}>ACTIVE</span>}
+                       {p.is_active && <span style={{ background: "var(--accent)", color: "white", padding: "2px 6px", borderRadius: "var(--radius-sm)", fontSize: 10, fontWeight: 600 }}>ACTIVE</span>}
                     </div>
                     <div style={{ display: "flex", gap: 8 }}>
                       {!p.is_active && (
@@ -377,8 +377,8 @@ export default function PlanCreator({ onPlanGenerated }: { onPlanGenerated: () =
                     Generated {new Date(p.generated_at).toLocaleDateString()}
                   </div>
                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                     <div style={{ flex: 1, height: 6, background: "var(--bg-tertiary)", borderRadius: 0, overflow: "hidden" }}>
-                       <div style={{ width: `${String(progress)}%`, height: "100%", background: "var(--success)", borderRadius: 0, transition: "width 0.3s" }} />
+                     <div style={{ flex: 1, height: 6, background: "var(--bg-tertiary)", borderRadius: "var(--radius-sm)", overflow: "hidden" }}>
+                       <div style={{ width: `${String(progress)}%`, height: "100%", background: "var(--success)", borderRadius: "var(--radius-sm)", transition: "width 0.3s" }} />
                     </div>
                     <div style={{ fontSize: 12, color: "var(--text-secondary)", whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: 4 }}>
                       <Check size={12} />

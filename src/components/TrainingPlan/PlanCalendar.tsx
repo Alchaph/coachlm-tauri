@@ -307,7 +307,7 @@ export default function PlanCalendar({ onPlanGenerated }: { onPlanGenerated: () 
                         style={{
                           background: isCompleted ? "var(--bg-tertiary)" : isSkipped ? "var(--bg-tertiary)" : "var(--bg-secondary)",
                           border: `1px solid ${isCompleted ? color : isSkipped ? "var(--border)" : "var(--border)"}`,
-                          borderRadius: 0,
+                          borderRadius: "var(--radius-sm)",
                           padding: 8,
                           cursor: "pointer",
                           height: "100%",
@@ -402,7 +402,7 @@ export default function PlanCalendar({ onPlanGenerated }: { onPlanGenerated: () 
                   <div>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
                       <span style={{ fontSize: 13, color: "var(--text-secondary)" }}>{DAY_NAMES[day - 1]}</span>
-                      <span style={{ background: "var(--bg-tertiary)", color, padding: "2px 8px", borderRadius: 0, fontSize: 11, fontWeight: 600, textTransform: "uppercase" }}>
+                      <span style={{ background: "var(--bg-tertiary)", color, padding: "2px 8px", borderRadius: "var(--radius-sm)", fontSize: 11, fontWeight: 600, textTransform: "uppercase" }}>
                          {session.session_type.replace("_", " ")}
                        </span>
                     </div>
@@ -485,7 +485,7 @@ export default function PlanCalendar({ onPlanGenerated }: { onPlanGenerated: () 
     return (
       <div style={{ marginBottom: 20, paddingTop: 16, borderTop: "1px solid var(--border)" }}>
         <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 10, color: "var(--text-secondary)" }}>Workout Structure</div>
-        <div style={{ display: "flex", height: 20, width: "100%", borderRadius: 0, overflow: "hidden" }}>
+        <div style={{ display: "flex", height: 20, width: "100%", borderRadius: "var(--radius-sm)", overflow: "hidden" }}>
           {segments.map((seg, i) => (
             <div
               key={i}
@@ -531,7 +531,7 @@ export default function PlanCalendar({ onPlanGenerated }: { onPlanGenerated: () 
             <button className="btn-ghost" onClick={() => { setSelectedSession(null); lastFocusedRef.current?.focus(); }} aria-label="Close"><X size={20} /></button>
            </div>
 
-           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 20, background: "var(--bg-tertiary)", padding: 12, borderRadius: 0 }}>
+           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 20, background: "var(--bg-tertiary)", padding: 12, borderRadius: "var(--radius-md)" }}>
              {selectedSession.distance_km && (
                <div>
                  <div style={{ fontSize: 11, color: "var(--text-muted)" }}>Planned Distance</div>
@@ -563,7 +563,7 @@ export default function PlanCalendar({ onPlanGenerated }: { onPlanGenerated: () 
           {selectedSession.notes && (
             <div style={{ marginBottom: 20 }}>
                <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 4 }}>Coach Notes</div>
-               <div style={{ fontSize: 13, color: "var(--text-secondary)", background: "var(--bg-tertiary)", padding: 12, borderRadius: 0 }}>
+               <div style={{ fontSize: 13, color: "var(--text-secondary)", background: "var(--bg-tertiary)", padding: 12, borderRadius: "var(--radius-md)" }}>
                  {selectedSession.notes}
               </div>
             </div>
