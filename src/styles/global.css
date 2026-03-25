@@ -376,6 +376,43 @@ a:hover {
   background: var(--bg-secondary);
 }
 
+/* Web search suggestion banner */
+
+.web-search-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  margin: 0 0 8px;
+  animation: banner-slide-in 0.2s ease-out;
+}
+
+.web-search-banner-text {
+  flex: 1;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.web-search-banner-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+@keyframes banner-slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 /* Focus-visible outlines for keyboard navigation */
 
 :focus-visible {

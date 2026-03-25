@@ -393,7 +393,7 @@ export default function SettingsPage() {
           <div>
             <label htmlFor="web-augmentation-mode">Web Augmentation Mode</label>
             <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4, marginBottom: 8 }}>
-              Controls how the coach uses the web before answering. Simple injects a DuckDuckGo snippet. Agent runs an LLM-driven research loop.
+              Controls how the coach uses the web before answering. Auto detects when a search would help and asks you first. Simple always injects a DuckDuckGo snippet. Agent runs an LLM-driven research loop.
             </p>
             <select
               id="web-augmentation-mode"
@@ -402,6 +402,7 @@ export default function SettingsPage() {
               style={{ width: "100%" }}
             >
               <option value="off">Off</option>
+              <option value="auto">Auto (asks before searching)</option>
               <option value="simple">Simple (DuckDuckGo snippet)</option>
               <option value="agent">Agent (LLM-driven research)</option>
             </select>

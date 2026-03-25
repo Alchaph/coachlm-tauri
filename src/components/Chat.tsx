@@ -98,6 +98,7 @@ export default function Chat({ onStatusChange }: ChatProps) {
    const savedInput = useRef("");
    const lastSentContentRef = useRef("");
   const [webAugmentationMode, setWebAugmentationMode] = useState("off");
+  const [webSearchSuggestion, setWebSearchSuggestion] = useState(false);
   const [editingMessageId, setEditingMessageId] = useState<number | null>(null);
   const [editContent, setEditContent] = useState("");
   const [completedSteps, setCompletedSteps] = useState<ProgressStep[] | null>(null);
@@ -265,6 +266,40 @@ export default function Chat({ onStatusChange }: ChatProps) {
     })();
     return () => { state.cancelled = true; unlisten?.(); };
   }, []);
+
+  useEffect(() => {
+    const state = { cancelled: false };
+    let unlisten: (() => void) | undefined;
+    void (async () => {
+      const fn = await listen<{ session_id: string }>("web-search:suggest", (event) => {
+        if (state.cancelled) return;
+        if (event.payload.session_id && event.payload.session_id !== currentSessionIdRef.current) {
+          return;
+        }
+        setWebSearchSuggestion(true);
+      });
+      if (state.cancelled) {
+        fn();
+      } else {
+        unlisten = fn;
+      }
+    })();
+    return () => { state.cancelled = true; unlisten?.(); };
+  }, []);
+
+  useEffect(() => {
+    if (!webSearchSuggestion) return;
+    const timer = setTimeout(() => {
+      setWebSearchSuggestion(false);
+      void invoke("respond_web_search_suggestion", { approved: false });
+    }, 30_000);
+    return () => { clearTimeout(timer); };
+  }, [webSearchSuggestion]);
+
+  const respondWebSearch = (approved: boolean) => {
+    setWebSearchSuggestion(false);
+    void invoke("respond_web_search_suggestion", { approved });
+  };
 
   const loadSession = async (sessionId: string) => {
     try {
@@ -805,14 +840,38 @@ export default function Chat({ onStatusChange }: ChatProps) {
             background: "var(--bg-secondary)",
           }}
         >
+          {webSearchSuggestion && (
+            <div className="web-search-banner">
+              <Globe size={16} style={{ color: "var(--accent)", flexShrink: 0 }} />
+              <span className="web-search-banner-text">
+                This question might benefit from a web search.
+              </span>
+              <div className="web-search-banner-actions">
+                <button
+                  className="btn-primary"
+                  onClick={() => { respondWebSearch(true); }}
+                  style={{ fontSize: 12, padding: "4px 12px" }}
+                >
+                  Search
+                </button>
+                <button
+                  className="btn-ghost"
+                  onClick={() => { respondWebSearch(false); }}
+                  style={{ fontSize: 12, padding: "4px 12px" }}
+                >
+                  Skip
+                </button>
+              </div>
+            </div>
+          )}
           <div style={{ display: "flex", alignItems: "center", marginBottom: 8 }}>
             {webAugmentationMode !== "off" && (
               <span
                 className="chat-toggle-chip chat-toggle-chip-active"
-                title={webAugmentationMode === "agent" ? "Agent web research enabled" : "Simple web search enabled"}
+                title={webAugmentationMode === "agent" ? "Agent web research enabled" : webAugmentationMode === "auto" ? "Auto web search enabled" : "Simple web search enabled"}
               >
                 <Globe size={14} />
-                {webAugmentationMode === "agent" ? "Research agent" : "Web search"}
+                {webAugmentationMode === "agent" ? "Research agent" : webAugmentationMode === "auto" ? "Auto search" : "Web search"}
               </span>
             )}
           </div>
