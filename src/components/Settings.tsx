@@ -2,7 +2,8 @@ import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { ask } from "@tauri-apps/plugin-dialog";
-import { Save, RefreshCw, Plug, Unplug, Globe, Info } from "lucide-react";
+import { useTheme } from "next-themes";
+import { Save, RefreshCw, Plug, Unplug, Globe, Info, Sun, Moon, Monitor } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -30,6 +31,7 @@ interface StravaAuthStatus {
 }
 
 export default function SettingsPage() {
+  const { theme, setTheme } = useTheme();
   const [settings, setSettings] = useState<SettingsData>({
     active_llm: "local",
     ollama_endpoint: "http://localhost:11434",
@@ -404,6 +406,39 @@ export default function SettingsPage() {
                 <SelectItem value="agent">Agent (LLM-driven research)</SelectItem>
               </SelectContent>
             </Select>
+          </CardContent>
+        </Card>
+
+        <Separator />
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Appearance</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-3">
+            <Label>Theme</Label>
+            <div className="flex gap-2">
+              {([
+                { value: "light", label: "Light", icon: <Sun size={16} /> },
+                { value: "dark", label: "Dark", icon: <Moon size={16} /> },
+                { value: "system", label: "System", icon: <Monitor size={16} /> },
+              ] as const).map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => { setTheme(option.value); }}
+                  className={cn(
+                    "flex flex-1 items-center justify-center gap-2 rounded-md border px-4 py-2.5 text-sm font-medium transition-colors",
+                    theme === option.value
+                      ? "bg-primary text-primary-foreground border-transparent"
+                      : "bg-secondary text-foreground border-border hover:bg-secondary/80"
+                  )}
+                >
+                  {option.icon}
+                  {option.label}
+                </button>
+              ))}
+            </div>
           </CardContent>
         </Card>
 

@@ -560,31 +560,33 @@ export default function Chat({ onStatusChange }: ChatProps) {
             <TooltipContent>New chat</TooltipContent>
           </Tooltip>
         </div>
-        <ScrollArea className="flex-1 p-1.5">
+        <ScrollArea className="flex-1 p-1.5 min-w-0">
           {sessions.map((s) => (
             <Tooltip key={s.id}>
-              <TooltipTrigger>
-                <button
-                  className={cn(
-                    "flex items-center gap-2 w-full text-left px-3 py-2.5 my-px rounded-sm text-[13px] font-sans cursor-pointer border-none whitespace-nowrap overflow-hidden transition-colors duration-150",
-                    s.id === currentSessionId
-                      ? "bg-accent text-foreground font-medium"
-                      : "bg-transparent text-muted-foreground hover:bg-secondary hover:text-foreground"
-                  )}
-                  onClick={() => { void loadSession(s.id); }}
+              <TooltipTrigger
+                render={
+                  <button
+                    className={cn(
+                      "flex items-center gap-2 w-full text-left px-3 py-2.5 my-px rounded-sm text-[13px] font-sans cursor-pointer border-none overflow-hidden transition-colors duration-150 min-w-0",
+                      s.id === currentSessionId
+                        ? "bg-accent text-foreground font-medium"
+                        : "bg-transparent text-muted-foreground hover:bg-secondary hover:text-foreground"
+                    )}
+                    onClick={() => { void loadSession(s.id); }}
+                  />
+                }
+              >
+                <MessageSquare size={14} className="shrink-0" />
+                <span className="flex-1 truncate min-w-0">{getSessionLabel(s)}</span>
+                <span
+                  className="flex items-center justify-center rounded-sm p-0.5 opacity-0 shrink-0 transition-opacity duration-150 hover:bg-accent hover:text-destructive [button:hover_&]:opacity-100"
+                  role="button"
+                  tabIndex={0}
+                  onClick={(e) => { e.stopPropagation(); void closeSession(s.id); }}
+                  onKeyDown={(e) => { if (e.key === "Enter") { e.stopPropagation(); void closeSession(s.id); } }}
                 >
-                  <MessageSquare size={14} className="shrink-0" />
-                  <span className="flex-1 overflow-hidden text-ellipsis">{getSessionLabel(s)}</span>
-                  <span
-                    className="flex items-center justify-center rounded-sm p-0.5 opacity-0 shrink-0 transition-opacity duration-150 hover:bg-accent hover:text-destructive [button:hover_&]:opacity-100"
-                    role="button"
-                    tabIndex={0}
-                    onClick={(e) => { e.stopPropagation(); void closeSession(s.id); }}
-                    onKeyDown={(e) => { if (e.key === "Enter") { e.stopPropagation(); void closeSession(s.id); } }}
-                  >
-                    <X size={12} />
-                  </span>
-                </button>
+                  <X size={12} />
+                </span>
               </TooltipTrigger>
               <TooltipContent>{getSessionLabel(s)}</TooltipContent>
             </Tooltip>

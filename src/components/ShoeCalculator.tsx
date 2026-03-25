@@ -229,7 +229,7 @@ export default function ShoeCalculator() {
 
   return (
     <div className="flex-1 overflow-auto p-6 bg-background">
-      <div className="max-w-[960px] mx-auto">
+      <div className="max-w-[960px]">
         <div className="mb-6">
           <h1 className="text-[22px] font-bold text-foreground m-0">Shoe Speed Calculator</h1>
           <p className="text-sm text-muted-foreground mt-1">
