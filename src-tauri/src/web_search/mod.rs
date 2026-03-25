@@ -1,3 +1,5 @@
+pub mod classifier;
+
 use std::fmt::Write;
 
 /// A single web search result.
