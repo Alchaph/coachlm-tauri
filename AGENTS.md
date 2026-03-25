@@ -220,11 +220,13 @@ To add a new backend, implement the same function signatures and add a story.
 - React components use `invoke()` from `@tauri-apps/api/core` for IPC.
 - Events use `listen()` from `@tauri-apps/api/event`.
 - Icons come from `lucide-react`.
-- Use inline styles with CSS variables from `global.css`.
-- The app uses a dark theme.
-- Use toast notifications for user feedback (save confirmations, errors), not button text changes. Toast pattern: local `useState<Toast | null>` with a `showToast(message, type)` helper that auto-clears after 3 seconds. Render a fixed-position `.toast.toast-{type}` element. CSS classes are in `global.css`.
-- Do not use dynamic text in buttons. Button labels must be static strings (e.g. always "Save Settings", never "Saving…" → "Save Settings"). Use the `disabled` attribute for loading states, not label swaps.
-- All backgrounds and colors must be fully opaque (alpha: 1). Do not use `rgba()` with alpha < 1, hex colors with alpha channel (e.g. `#ffffff80`), or any translucent/transparent overlays. Use solid CSS variable colors from `global.css` instead.
+- The app uses Tailwind CSS v4 with shadcn/ui components. All styling uses Tailwind utility classes and CSS variables defined in `src/index.css`.
+- The app uses a dark-only theme. Colors are mapped to OKLCH CSS variables consumed by shadcn's theming system.
+- **Always use shadcn components** when a matching component exists. Never build custom dropdowns, toggles, modals, tables, tooltips, or form controls from raw HTML. Check `src/components/ui/` for installed components before creating anything new. If a shadcn component is not installed yet, install it with `npx shadcn@latest add <component>`.
+- Use `cn()` from `@/lib/utils` for conditional class merging.
+- Use `@/` path aliases for all imports (maps to `./src/`).
+- Use `sonner` for toast notifications (`toast.success()`, `toast.error()`). Do not build custom toast/notification UI.
+- Do not use dynamic text in buttons. Button labels must be static strings (e.g. always "Save Settings", never "Saving..." then "Save Settings"). Use the `disabled` attribute for loading states, not label swaps.
 - Patch releases for bug fixes (`fix:` commits), minor releases for new features (`feat:` commits). See Release versioning above.
 
 ---

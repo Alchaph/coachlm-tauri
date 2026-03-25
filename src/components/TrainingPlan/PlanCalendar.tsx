@@ -1,9 +1,15 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { Check, X, Calendar, List, ChevronLeft, ChevronRight } from "lucide-react";
 import type { Race, TrainingPlan, PlanSession, PlanWeekWithSessions } from "./types";
 import { getSessionColor, formatPace, getWeeksToRace } from "./types";
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 
 const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
@@ -20,9 +26,6 @@ export default function PlanCalendar({ onPlanGenerated }: { onPlanGenerated: () 
   const [selectedSession, setSelectedSession] = useState<PlanSession | null>(null);
   const [actualDuration, setActualDuration] = useState("");
   const [actualDistance, setActualDistance] = useState("");
-
-  const sessionModalRef = useRef<HTMLDivElement>(null);
-  const lastFocusedRef = useRef<HTMLElement | null>(null);
 
   const loadData = useCallback(async () => {
     try {
@@ -86,45 +89,6 @@ export default function PlanCalendar({ onPlanGenerated }: { onPlanGenerated: () 
     }
   };
 
-  const openSessionModal = (session: PlanSession) => {
-    lastFocusedRef.current = document.activeElement as HTMLElement;
-    setSelectedSession(session);
-    setActualDuration(session.actual_duration_min?.toString() ?? "");
-    setActualDistance(session.actual_distance_km?.toString() ?? "");
-  };
-
-  useEffect(() => {
-    if (!selectedSession || !sessionModalRef.current) return;
-    const modal = sessionModalRef.current;
-    modal.focus();
-    const focusableElements = modal.querySelectorAll<HTMLElement>(
-      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-    );
-    const firstFocusable = focusableElements[0] as HTMLElement | undefined;
-    const lastFocusable = focusableElements[focusableElements.length - 1] as HTMLElement | undefined;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        setSelectedSession(null);
-        lastFocusedRef.current?.focus();
-        return;
-      }
-      if (e.key !== "Tab") return;
-      if (e.shiftKey) {
-        if (document.activeElement === firstFocusable) {
-          e.preventDefault();
-          lastFocusable?.focus();
-        }
-      } else {
-        if (document.activeElement === lastFocusable) {
-          e.preventDefault();
-          firstFocusable?.focus();
-        }
-      }
-    };
-    modal.addEventListener("keydown", handleKeyDown);
-    return () => { modal.removeEventListener("keydown", handleKeyDown); };
-  }, [selectedSession]);
-
   const getCurrentWeekIndex = (): number => {
     if (planWeeks.length === 0) return 0;
     const now = Date.now();
@@ -165,11 +129,11 @@ export default function PlanCalendar({ onPlanGenerated }: { onPlanGenerated: () 
 
   if (!plan) {
     return (
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", padding: 24 }}>
-        <div className="empty-state">
-          <Calendar size={48} style={{ margin: "0 auto 16px", opacity: 0.3 }} />
+      <div className="flex flex-col items-center justify-center h-full p-6">
+        <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+          <Calendar size={48} className="mx-auto mb-4 opacity-30" />
           <p>No active training plan.</p>
-          <p style={{ fontSize: 12, marginTop: 8 }}>Create one from the My Plans tab.</p>
+          <p className="text-xs mt-2">Create one from the My Plans tab.</p>
         </div>
       </div>
     );
@@ -180,23 +144,33 @@ export default function PlanCalendar({ onPlanGenerated }: { onPlanGenerated: () 
   const clampedMonthOffset = Math.min(monthOffset, Math.max(0, monthGroups.length - 1));
 
   const renderViewToggle = () => (
-    <div style={{ display: "flex", gap: 4 }}>
-      <button
-        className={calendarView === "calendar" ? "btn-primary" : "btn-secondary"}
-        onClick={() => { setCalendarView("calendar"); }}
-        style={{ display: "flex", alignItems: "center", gap: 4, padding: "8px 12px" }}
-        title="Calendar view"
-      >
-        <Calendar size={14} />
-      </button>
-      <button
-        className={calendarView === "week" ? "btn-primary" : "btn-secondary"}
-        onClick={() => { setCalendarView("week"); }}
-        style={{ display: "flex", alignItems: "center", gap: 4, padding: "8px 12px" }}
-        title="Weekly view"
-      >
-        <List size={14} />
-      </button>
+    <div className="flex gap-1">
+      <Tooltip>
+        <TooltipTrigger>
+          <Button
+            variant={calendarView === "calendar" ? "default" : "secondary"}
+            size="sm"
+            onClick={() => { setCalendarView("calendar"); }}
+            aria-label="Calendar view"
+          >
+            <Calendar size={14} />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>Calendar view</TooltipContent>
+      </Tooltip>
+      <Tooltip>
+        <TooltipTrigger>
+          <Button
+            variant={calendarView === "week" ? "default" : "secondary"}
+            size="sm"
+            onClick={() => { setCalendarView("week"); }}
+            aria-label="Weekly view"
+          >
+            <List size={14} />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>Weekly view</TooltipContent>
+      </Tooltip>
     </div>
   );
 
@@ -204,62 +178,82 @@ export default function PlanCalendar({ onPlanGenerated }: { onPlanGenerated: () 
     const currentIdx = selectedWeekIndex ?? getCurrentWeekIndex();
     const isAuto = selectedWeekIndex === null;
     return (
-      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-        <button
-          className="btn-secondary"
-          onClick={() => { setSelectedWeekIndex(Math.max(0, currentIdx - 1)); }}
-          disabled={currentIdx <= 0}
-          style={{ padding: "6px 10px" }}
-          title="Previous week"
-        >
-          <ChevronLeft size={14} />
-        </button>
-        <button
-          className={isAuto ? "btn-primary" : "btn-secondary"}
+      <div className="flex items-center gap-1.5">
+        <Tooltip>
+          <TooltipTrigger>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => { setSelectedWeekIndex(Math.max(0, currentIdx - 1)); }}
+              disabled={currentIdx <= 0}
+              aria-label="Previous week"
+            >
+              <ChevronLeft size={14} />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Previous week</TooltipContent>
+        </Tooltip>
+        <Button
+          variant={isAuto ? "default" : "secondary"}
+          size="sm"
           onClick={() => { setSelectedWeekIndex(null); }}
-          style={{ padding: "6px 12px", fontSize: 12 }}
         >
           Today
-        </button>
-        <button
-          className="btn-secondary"
-          onClick={() => { setSelectedWeekIndex(Math.min(planWeeks.length - 1, currentIdx + 1)); }}
-          disabled={currentIdx >= planWeeks.length - 1}
-          style={{ padding: "6px 10px" }}
-          title="Next week"
-        >
-          <ChevronRight size={14} />
-        </button>
+        </Button>
+        <Tooltip>
+          <TooltipTrigger>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => { setSelectedWeekIndex(Math.min(planWeeks.length - 1, currentIdx + 1)); }}
+              disabled={currentIdx >= planWeeks.length - 1}
+              aria-label="Next week"
+            >
+              <ChevronRight size={14} />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Next week</TooltipContent>
+        </Tooltip>
       </div>
     );
   };
 
   const renderMonthNav = () => {
     return (
-      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-        <button
-          className="btn-secondary"
-          onClick={() => { setMonthOffset(o => Math.max(0, o - 1)); }}
-          disabled={clampedMonthOffset <= 0}
-          style={{ padding: "6px 10px" }}
-          title="Previous month"
-        >
-          <ChevronLeft size={14} />
-        </button>
+      <div className="flex items-center gap-1.5">
+        <Tooltip>
+          <TooltipTrigger>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => { setMonthOffset(o => Math.max(0, o - 1)); }}
+              disabled={clampedMonthOffset <= 0}
+              aria-label="Previous month"
+            >
+              <ChevronLeft size={14} />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Previous month</TooltipContent>
+        </Tooltip>
         {monthGroups[clampedMonthOffset] && (
-          <span style={{ fontSize: 13, fontWeight: 600, minWidth: 130, textAlign: "center" }}>
+          <span className="text-[13px] font-semibold min-w-[130px] text-center">
             {monthGroups[clampedMonthOffset].label}
           </span>
         )}
-        <button
-          className="btn-secondary"
-          onClick={() => { setMonthOffset(o => Math.min(monthGroups.length - 1, o + 1)); }}
-          disabled={clampedMonthOffset >= monthGroups.length - 1}
-          style={{ padding: "6px 10px" }}
-          title="Next month"
-        >
-          <ChevronRight size={14} />
-        </button>
+        <Tooltip>
+          <TooltipTrigger>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => { setMonthOffset(o => Math.min(monthGroups.length - 1, o + 1)); }}
+              disabled={clampedMonthOffset >= monthGroups.length - 1}
+              aria-label="Next month"
+            >
+              <ChevronRight size={14} />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Next month</TooltipContent>
+        </Tooltip>
       </div>
     );
   };
@@ -268,12 +262,12 @@ export default function PlanCalendar({ onPlanGenerated }: { onPlanGenerated: () 
     const weeksToRender = monthGroups[clampedMonthOffset]?.weeks ?? [];
 
     return (
-      <div className="card" style={{ padding: 0, overflowX: "auto" }}>
-        <div style={{ minWidth: 800 }}>
-          <div style={{ display: "grid", gridTemplateColumns: "60px repeat(7, 1fr)", borderBottom: "1px solid var(--border)", background: "var(--bg-tertiary)" }}>
-            <div style={{ padding: 12, fontWeight: 600, fontSize: 12, color: "var(--text-muted)", textAlign: "center" }}>Wk</div>
+      <Card className="p-0 overflow-x-auto">
+        <div className="min-w-[800px]">
+          <div className="grid grid-cols-[60px_repeat(7,1fr)] border-b border-border bg-secondary">
+            <div className="p-3 font-semibold text-xs text-muted-foreground text-center">Wk</div>
             {DAY_NAMES.map(day => (
-              <div key={day} style={{ padding: 12, fontWeight: 600, fontSize: 12, color: "var(--text-muted)", textAlign: "center" }}>{day}</div>
+              <div key={day} className="p-3 font-semibold text-xs text-muted-foreground text-center">{day}</div>
             ))}
           </div>
 
@@ -283,46 +277,63 @@ export default function PlanCalendar({ onPlanGenerated }: { onPlanGenerated: () 
             const actualKm = pw.sessions.reduce((sum, s) => sum + (s.actual_distance_km ?? 0), 0);
 
             return (
-              <div key={pw.week.id} style={{ display: "grid", gridTemplateColumns: "60px repeat(7, 1fr)", borderBottom: "1px solid var(--border)", opacity: isPast ? 0.6 : 1 }}>
-                <div style={{ padding: 12, borderRight: "1px solid var(--border)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
-                  <div style={{ fontWeight: 700 }}>{pw.week.week_number}</div>
-                  <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 4 }}>{actualKm.toFixed(0)}/{plannedKm.toFixed(0)}km</div>
+              <div
+                key={pw.week.id}
+                className={cn(
+                  "grid grid-cols-[60px_repeat(7,1fr)] border-b border-border",
+                  isPast && "opacity-60"
+                )}
+              >
+                <div className="p-3 border-r border-border flex flex-col items-center justify-center">
+                  <div className="font-bold">{pw.week.week_number}</div>
+                  <div className="text-[10px] text-muted-foreground mt-1">{actualKm.toFixed(0)}/{plannedKm.toFixed(0)}km</div>
                 </div>
 
                 {[1, 2, 3, 4, 5, 6, 7].map(day => {
                   const session = pw.sessions.find(s => s.day_of_week === day);
-                  if (!session) return <div key={day} style={{ padding: 8, borderRight: "1px solid var(--border)" }} />;
+                  if (!session) return <div key={day} className="p-2 border-r border-border" />;
 
                   const color = getSessionColor(session.session_type);
                   const isCompleted = session.status === "completed";
                   const isSkipped = session.status === "skipped";
 
                   return (
-                    <div key={day} style={{ padding: 8, borderRight: "1px solid var(--border)" }}>
+                    <div key={day} className="p-2 border-r border-border">
                       <div
                         role="button"
                         tabIndex={0}
-                        onClick={() => { openSessionModal(session); }}
-                        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openSessionModal(session); } }}
-                        style={{
-                          background: isCompleted ? "var(--bg-tertiary)" : isSkipped ? "var(--bg-tertiary)" : "var(--bg-secondary)",
-                          border: `1px solid ${isCompleted ? color : isSkipped ? "var(--border)" : "var(--border)"}`,
-                          borderRadius: "var(--radius-sm)",
-                          padding: 8,
-                          cursor: "pointer",
-                          height: "100%",
-                          opacity: isSkipped ? 0.5 : 1,
-                          position: "relative",
+                        onClick={() => {
+                          setSelectedSession(session);
+                          setActualDuration(session.actual_duration_min?.toString() ?? "");
+                          setActualDistance(session.actual_distance_km?.toString() ?? "");
                         }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            setSelectedSession(session);
+                            setActualDuration(session.actual_duration_min?.toString() ?? "");
+                            setActualDistance(session.actual_distance_km?.toString() ?? "");
+                          }
+                        }}
+                        className={cn(
+                          "rounded-sm p-2 cursor-pointer h-full relative",
+                          "border",
+                          isCompleted ? "bg-secondary border-current" : isSkipped ? "bg-secondary border-border" : "bg-card border-border",
+                          isSkipped && "opacity-50"
+                        )}
+                        style={{ borderColor: isCompleted ? color : undefined }}
                       >
-                        <div style={{ fontSize: 11, fontWeight: 600, color: isSkipped ? "var(--text-muted)" : color, textTransform: "uppercase", marginBottom: 4 }}>
-                          {session.session_type.replace("_", " ")}
+                        <div
+                          className="text-[11px] font-semibold uppercase mb-1"
+                          style={{ color: isSkipped ? undefined : color }}
+                        >
+                          {isSkipped ? <span className="text-muted-foreground">{session.session_type.replace("_", " ")}</span> : session.session_type.replace("_", " ")}
                         </div>
-                        {session.distance_km && <div style={{ fontSize: 13, fontWeight: 500 }}>{session.distance_km} km</div>}
-                        {session.duration_min && <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>{session.duration_min} min</div>}
+                        {session.distance_km && <div className="text-[13px] font-medium">{session.distance_km} km</div>}
+                        {session.duration_min && <div className="text-xs text-muted-foreground">{session.duration_min} min</div>}
 
-                        {isCompleted && <Check size={14} style={{ position: "absolute", top: 6, right: 6, color }} />}
-                        {isSkipped && <X size={14} style={{ position: "absolute", top: 6, right: 6, color: "var(--text-muted)" }} />}
+                        {isCompleted && <Check size={14} className="absolute top-1.5 right-1.5" style={{ color }} />}
+                        {isSkipped && <X size={14} className="absolute top-1.5 right-1.5 text-muted-foreground" />}
                       </div>
                     </div>
                   );
@@ -332,12 +343,12 @@ export default function PlanCalendar({ onPlanGenerated }: { onPlanGenerated: () 
           })}
 
           {weeksToRender.length === 0 && (
-            <div style={{ padding: 32, textAlign: "center", color: "var(--text-muted)", fontSize: 13 }}>
+            <div className="p-8 text-center text-muted-foreground text-[13px]">
               No training weeks in this month.
             </div>
           )}
         </div>
-      </div>
+      </Card>
     );
   };
 
@@ -345,7 +356,7 @@ export default function PlanCalendar({ onPlanGenerated }: { onPlanGenerated: () 
     const currentWeek = getCurrentWeek();
     if (!currentWeek) {
       return (
-        <div className="empty-state">
+        <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
           <p>No weeks in this plan.</p>
         </div>
       );
@@ -359,23 +370,23 @@ export default function PlanCalendar({ onPlanGenerated }: { onPlanGenerated: () 
 
     return (
       <div>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+        <div className="flex justify-between items-center mb-4">
           <div>
-            <h2 style={{ fontSize: 16, fontWeight: 600 }}>Week {currentWeek.week.week_number}</h2>
-            <div style={{ fontSize: 13, color: "var(--text-secondary)" }}>
+            <h2 className="text-base font-semibold">Week {currentWeek.week.week_number}</h2>
+            <div className="text-[13px] text-muted-foreground">
               {formatDateShort(weekStart)} - {formatDateShort(weekEnd)} &bull; {plannedKm.toFixed(1)} km planned
             </div>
           </div>
         </div>
 
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        <div className="flex flex-col gap-2.5">
           {[1, 2, 3, 4, 5, 6, 7].map(day => {
             const session = currentWeek.sessions.find(s => s.day_of_week === day);
             if (!session) {
               return (
-                <div key={day} className="card" style={{ padding: "12px 16px", opacity: 0.5 }}>
-                  <div style={{ fontSize: 13, color: "var(--text-muted)" }}>{DAY_NAMES[day - 1]} &mdash; Rest</div>
-                </div>
+                <Card key={day} className="px-4 py-3 opacity-50">
+                  <div className="text-[13px] text-muted-foreground">{DAY_NAMES[day - 1]} &mdash; Rest</div>
+                </Card>
               );
             }
 
@@ -384,58 +395,70 @@ export default function PlanCalendar({ onPlanGenerated }: { onPlanGenerated: () 
             const isSkipped = session.status === "skipped";
 
             return (
-              <div
+              <Card
                 key={day}
-                className="card"
                 role="button"
                 tabIndex={0}
-                onClick={() => { openSessionModal(session); }}
-                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openSessionModal(session); } }}
-                style={{
-                  borderLeft: `4px solid ${color}`,
-                  cursor: "pointer",
-                  opacity: isSkipped ? 0.5 : 1,
-                  transition: "background 0.15s",
+                onClick={() => {
+                  setSelectedSession(session);
+                  setActualDuration(session.actual_duration_min?.toString() ?? "");
+                  setActualDistance(session.actual_distance_km?.toString() ?? "");
                 }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    setSelectedSession(session);
+                    setActualDuration(session.actual_duration_min?.toString() ?? "");
+                    setActualDistance(session.actual_distance_km?.toString() ?? "");
+                  }
+                }}
+                className={cn(
+                  "px-4 py-3 cursor-pointer transition-colors",
+                  isSkipped && "opacity-50"
+                )}
+                style={{ borderLeft: `4px solid ${color}` }}
               >
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                <div className="flex justify-between items-start">
                   <div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-                      <span style={{ fontSize: 13, color: "var(--text-secondary)" }}>{DAY_NAMES[day - 1]}</span>
-                      <span style={{ background: "var(--bg-tertiary)", color, padding: "2px 8px", borderRadius: "var(--radius-sm)", fontSize: 11, fontWeight: 600, textTransform: "uppercase" }}>
-                         {session.session_type.replace("_", " ")}
-                       </span>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-[13px] text-muted-foreground">{DAY_NAMES[day - 1]}</span>
+                      <span
+                        className="bg-secondary px-2 py-0.5 rounded-sm text-[11px] font-semibold uppercase"
+                        style={{ color }}
+                      >
+                        {session.session_type.replace("_", " ")}
+                      </span>
                     </div>
-                    <div style={{ display: "flex", gap: 16, fontSize: 13, marginTop: 6 }}>
-                      {session.distance_km && <span style={{ fontWeight: 500 }}>{session.distance_km} km</span>}
-                      {session.duration_min && <span style={{ color: "var(--text-secondary)" }}>{session.duration_min} min</span>}
-                      {session.hr_zone && <span style={{ color: "var(--text-secondary)" }}>Z{session.hr_zone}</span>}
+                    <div className="flex gap-4 text-sm mt-1.5">
+                      {session.distance_km && <span className="font-medium">{session.distance_km} km</span>}
+                      {session.duration_min && <span className="text-muted-foreground">{session.duration_min} min</span>}
+                      {session.hr_zone && <span className="text-muted-foreground">Z{session.hr_zone}</span>}
                       {(session.pace_min_low ?? session.pace_min_high) && (
-                        <span style={{ color: "var(--text-secondary)" }}>{formatPace(session.pace_min_low, session.pace_min_high)}</span>
+                        <span className="text-muted-foreground">{formatPace(session.pace_min_low, session.pace_min_high)}</span>
                       )}
                     </div>
                     {session.notes && (
-                      <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 6, lineHeight: 1.4 }}>
+                      <div className="text-xs text-muted-foreground mt-1.5 leading-snug">
                         {session.notes}
                       </div>
                     )}
                   </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
+                  <div className="flex items-center gap-1 shrink-0">
                     {isCompleted && (
                       <>
-                        <Check size={14} style={{ color: "var(--success)" }} />
-                        <span style={{ fontSize: 11, color: "var(--success)", fontWeight: 500 }}>Completed</span>
+                        <Check size={14} className="text-success" />
+                        <span className="text-[11px] text-success font-medium">Completed</span>
                       </>
                     )}
                     {isSkipped && (
                       <>
-                        <X size={14} style={{ color: "var(--text-muted)" }} />
-                        <span style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 500 }}>Skipped</span>
+                        <X size={14} className="text-muted-foreground" />
+                        <span className="text-[11px] text-muted-foreground font-medium">Skipped</span>
                       </>
                     )}
                   </div>
                 </div>
-              </div>
+              </Card>
             );
           })}
         </div>
@@ -449,7 +472,7 @@ export default function PlanCalendar({ onPlanGenerated }: { onPlanGenerated: () 
 
     if (session.session_type === "rest") {
       return (
-        <div style={{ padding: "12px 0", marginBottom: 20, color: "var(--text-muted)", fontSize: 13, textAlign: "center", borderTop: "1px solid var(--border)", borderBottom: "1px solid var(--border)" }}>
+        <div className="py-3 mb-5 text-muted-foreground text-[13px] text-center border-t border-b border-border">
           Rest Day
         </div>
       );
@@ -483,32 +506,26 @@ export default function PlanCalendar({ onPlanGenerated }: { onPlanGenerated: () 
     }
 
     return (
-      <div style={{ marginBottom: 20, paddingTop: 16, borderTop: "1px solid var(--border)" }}>
-        <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 10, color: "var(--text-secondary)" }}>Workout Structure</div>
-        <div style={{ display: "flex", height: 20, width: "100%", borderRadius: "var(--radius-sm)", overflow: "hidden" }}>
+      <div className="mb-5 pt-4 border-t border-border">
+        <div className="text-xs font-semibold mb-2.5 text-muted-foreground">Workout Structure</div>
+        <div className="flex h-5 w-full rounded-sm overflow-hidden">
           {segments.map((seg, i) => (
             <div
               key={i}
               style={{
                 width: `${String(seg.pct)}%`,
                 background: seg.color,
-                borderRight: i < segments.length - 1 ? "1px solid var(--bg-primary)" : "none",
+                borderRight: i < segments.length - 1 ? "1px solid var(--background)" : "none",
               }}
             />
           ))}
         </div>
-        <div style={{ display: "flex", marginTop: 6 }}>
+        <div className="flex mt-1.5">
           {segments.map((seg, i) => (
             <div
               key={i}
-              style={{
-                width: `${String(seg.pct)}%`,
-                fontSize: 10,
-                color: "var(--text-muted)",
-                textAlign: "center",
-                whiteSpace: "pre-line",
-                lineHeight: 1.3,
-              }}
+              className="text-[10px] text-muted-foreground text-center leading-snug"
+              style={{ width: `${String(seg.pct)}%` }}
             >
               {seg.label.split("\n")[1]}
             </div>
@@ -518,85 +535,124 @@ export default function PlanCalendar({ onPlanGenerated }: { onPlanGenerated: () 
     );
   };
 
-  const renderSessionModal = () => {
-    if (!selectedSession) return null;
-
-    return (
-      <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "var(--bg-primary)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 }} onClick={() => { setSelectedSession(null); lastFocusedRef.current?.focus(); }}>
-        <div ref={sessionModalRef} role="dialog" aria-modal="true" aria-labelledby="session-modal-title" tabIndex={-1} className="card" style={{ width: 420, maxWidth: "90%", maxHeight: "90%", overflow: "auto" }} onClick={(e) => { e.stopPropagation(); }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-            <h2 id="session-modal-title" style={{ fontSize: 18, fontWeight: 600, color: getSessionColor(selectedSession.session_type), textTransform: "capitalize" }}>
-              {selectedSession.session_type.replace("_", " ")}
-            </h2>
-            <button className="btn-ghost" onClick={() => { setSelectedSession(null); lastFocusedRef.current?.focus(); }} aria-label="Close"><X size={20} /></button>
-           </div>
-
-           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 20, background: "var(--bg-tertiary)", padding: 12, borderRadius: "var(--radius-md)" }}>
-             {selectedSession.distance_km && (
-               <div>
-                 <div style={{ fontSize: 11, color: "var(--text-muted)" }}>Planned Distance</div>
-                <div style={{ fontWeight: 500 }}>{selectedSession.distance_km} km</div>
-              </div>
-            )}
-            {selectedSession.duration_min && (
-              <div>
-                <div style={{ fontSize: 11, color: "var(--text-muted)" }}>Planned Duration</div>
-                <div style={{ fontWeight: 500 }}>{selectedSession.duration_min} min</div>
-              </div>
-            )}
-            {selectedSession.hr_zone && (
-              <div>
-                <div style={{ fontSize: 11, color: "var(--text-muted)" }}>HR Zone</div>
-                <div style={{ fontWeight: 500 }}>Z{selectedSession.hr_zone}</div>
-              </div>
-            )}
-            {(selectedSession.pace_min_low ?? selectedSession.pace_min_high) && (
-              <div>
-                <div style={{ fontSize: 11, color: "var(--text-muted)" }}>Target Pace</div>
-                <div style={{ fontWeight: 500 }}>{formatPace(selectedSession.pace_min_low, selectedSession.pace_min_high)}</div>
-              </div>
-            )}
-          </div>
-
-          {renderTrainingVisualization(selectedSession)}
-
-          {selectedSession.notes && (
-            <div style={{ marginBottom: 20 }}>
-               <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 4 }}>Coach Notes</div>
-               <div style={{ fontSize: 13, color: "var(--text-secondary)", background: "var(--bg-tertiary)", padding: 12, borderRadius: "var(--radius-md)" }}>
-                 {selectedSession.notes}
-              </div>
+  return (
+    <div className="p-6 overflow-auto h-full">
+      <div className="flex justify-between items-center mb-5">
+        <div>
+          <h1 className="text-xl font-bold">Training Plan</h1>
+          {activeRace && (
+            <div className="text-[13px] text-muted-foreground">
+              {activeRace.name} &bull; {getWeeksToRace(activeRace.race_date)} weeks to go
             </div>
           )}
-
-          <div style={{ display: "flex", gap: 8 }}>
-            <button className="btn-secondary" onClick={() => { void handleUpdateSession("skipped"); }} style={{ flex: 1 }}>Mark Skipped</button>
-            <button className="btn-primary" onClick={() => { void handleUpdateSession("completed"); }} style={{ flex: 2, background: "var(--success)" }}>Mark Completed</button>
-          </div>
         </div>
-      </div>
-    );
-  };
-
-  return (
-    <div style={{ padding: 24, overflow: "auto", height: "100%" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-        <div>
-          <h1 style={{ fontSize: 20, fontWeight: 700 }}>Training Plan</h1>
-          {activeRace && <div style={{ fontSize: 13, color: "var(--text-secondary)" }}>{activeRace.name} &bull; {getWeeksToRace(activeRace.race_date)} weeks to go</div>}
-        </div>
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        <div className="flex gap-2 items-center">
           {calendarView === "week" && renderWeekNav()}
           {calendarView === "calendar" && renderMonthNav()}
           {renderViewToggle()}
         </div>
       </div>
 
-      {error && <div className="error-state" style={{ marginBottom: 16 }}>{error}</div>}
+      {error && (
+        <div className="mb-4 p-3 rounded-md bg-destructive/10 text-destructive text-sm">
+          {error}
+        </div>
+      )}
 
       {calendarView === "calendar" && renderCalendarGrid()}
       {calendarView === "week" && renderWeeklyOverview()}
-      {renderSessionModal()}
+
+      <Dialog open={selectedSession !== null} onOpenChange={(open) => { if (!open) setSelectedSession(null); }}>
+        <DialogContent className="max-w-md">
+          {selectedSession && (
+            <>
+              <DialogHeader>
+                <DialogTitle
+                  className="capitalize text-lg font-semibold"
+                  style={{ color: getSessionColor(selectedSession.session_type) }}
+                >
+                  {selectedSession.session_type.replace("_", " ")}
+                </DialogTitle>
+              </DialogHeader>
+
+              <div className="grid grid-cols-2 gap-3 bg-secondary p-3 rounded-lg mb-5">
+                {selectedSession.distance_km && (
+                  <div>
+                    <div className="text-xs text-muted-foreground">Planned Distance</div>
+                    <div className="font-medium">{selectedSession.distance_km} km</div>
+                  </div>
+                )}
+                {selectedSession.duration_min && (
+                  <div>
+                    <div className="text-xs text-muted-foreground">Planned Duration</div>
+                    <div className="font-medium">{selectedSession.duration_min} min</div>
+                  </div>
+                )}
+                {selectedSession.hr_zone && (
+                  <div>
+                    <div className="text-xs text-muted-foreground">HR Zone</div>
+                    <div className="font-medium">Z{selectedSession.hr_zone}</div>
+                  </div>
+                )}
+                {(selectedSession.pace_min_low ?? selectedSession.pace_min_high) && (
+                  <div>
+                    <div className="text-xs text-muted-foreground">Target Pace</div>
+                    <div className="font-medium">{formatPace(selectedSession.pace_min_low, selectedSession.pace_min_high)}</div>
+                  </div>
+                )}
+              </div>
+
+              {renderTrainingVisualization(selectedSession)}
+
+              {selectedSession.notes && (
+                <div className="mb-5">
+                  <div className="text-xs font-semibold mb-1">Coach Notes</div>
+                  <div className="bg-secondary p-3 rounded-lg text-sm text-muted-foreground">
+                    {selectedSession.notes}
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-3 mb-5">
+                <div>
+                  <div className="text-xs text-muted-foreground mb-1">Actual Distance (km)</div>
+                  <Input
+                    type="number"
+                    value={actualDistance}
+                    onChange={(e) => { setActualDistance(e.target.value); }}
+                    placeholder="km"
+                  />
+                </div>
+                <div>
+                  <div className="text-xs text-muted-foreground mb-1">Actual Duration (min)</div>
+                  <Input
+                    type="number"
+                    value={actualDuration}
+                    onChange={(e) => { setActualDuration(e.target.value); }}
+                    placeholder="min"
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-2">
+                <Button
+                  variant="secondary"
+                  className="flex-1"
+                  onClick={() => { void handleUpdateSession("skipped"); }}
+                >
+                  Mark Skipped
+                </Button>
+                <Button
+                  className="flex-[2] bg-success hover:bg-success/90"
+                  onClick={() => { void handleUpdateSession("completed"); }}
+                >
+                  Mark Completed
+                </Button>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

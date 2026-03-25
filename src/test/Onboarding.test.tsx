@@ -70,7 +70,7 @@ describe("Onboarding", () => {
       expect(screen.getByText("CoachLM")).toBeInTheDocument();
     });
 
-    const stepDots = container.querySelectorAll("div[style*='border-radius: 50%']");
+    const stepDots = container.querySelectorAll(".rounded-full.size-3");
     expect(stepDots.length).toBeGreaterThanOrEqual(4);
   });
 

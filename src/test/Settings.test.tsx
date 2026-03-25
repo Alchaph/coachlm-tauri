@@ -48,7 +48,7 @@ describe("SettingsPage", () => {
       expect(screen.getByText("LLM Configuration")).toBeInTheDocument();
     });
 
-    expect(screen.getByLabelText("Provider")).toBeInTheDocument();
+    expect(screen.getByText("Provider")).toBeInTheDocument();
   });
 
   it("displays Save Settings button", async () => {
@@ -118,6 +118,6 @@ describe("SettingsPage", () => {
       expect(screen.getByText("Web Search")).toBeInTheDocument();
     });
 
-    expect(screen.getByRole("switch", { name: /^off$/i })).toBeInTheDocument();
+    expect(screen.getByText("Web Augmentation Mode")).toBeInTheDocument();
   });
 });

@@ -3,6 +3,13 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { RefreshCw, Activity, Mountain, Timer, TrendingUp, BarChart3 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
+import { TableHeader, TableHead, TableRow, TableCell, TableBody } from "@/components/ui/table";
+import { cn } from "@/lib/utils";
 
 interface ActivityItem {
   activity_id: string;
@@ -37,43 +44,22 @@ interface AuthStatus {
   expires_at: number | null;
 }
 
-const thStyle: React.CSSProperties = {
-  padding: "10px 14px",
-  fontSize: 12,
-  fontWeight: 600,
-  color: "var(--text-muted)",
-};
-
-const tdStyle: React.CSSProperties = {
-  padding: "10px 14px",
-  fontSize: 13,
-};
-
 function getWorkoutBadge(
   workoutType: number | null,
   sportType: string | null,
   activityType: string | null,
 ): React.ReactNode {
-  const badgeBase: React.CSSProperties = {
-    display: "inline-block",
-    padding: "2px 8px",
-    borderRadius: "var(--radius-sm)",
-    fontSize: 11,
-    fontWeight: 600,
-    color: "white",
-  };
-
   if (workoutType === 1 || workoutType === 11) {
-    return <span style={{ ...badgeBase, background: "var(--danger)" }}>Race</span>;
+    return <Badge variant="destructive">Race</Badge>;
   }
   if (workoutType === 2 || workoutType === 12) {
-    return <span style={{ ...badgeBase, background: "var(--accent)" }}>Long Run</span>;
+    return <Badge variant="default">Long Run</Badge>;
   }
   if (workoutType === 3 || workoutType === 13) {
-    return <span style={{ ...badgeBase, background: "var(--warning)" }}>Workout</span>;
+    return <Badge variant="secondary">{sportType ?? activityType ?? "Workout"}</Badge>;
   }
   return (
-    <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>
+    <span className="text-xs text-muted-foreground">
       {sportType ?? activityType ?? "Run"}
     </span>
   );
@@ -300,118 +286,126 @@ export default function Dashboard() {
   const maxWeekKm = useMemo(() => Math.max(...weeklyVolume.map((w) => w.km), 1), [weeklyVolume]);
 
   return (
-    <div style={{ padding: 24, overflow: "auto", height: "100%" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-        <h1 style={{ fontSize: 20, fontWeight: 700 }}>Dashboard</h1>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+    <div className="p-6 overflow-auto h-full">
+      <div className="flex justify-between items-center mb-5">
+        <h1 className="text-xl font-bold">Dashboard</h1>
+        <div className="flex items-center gap-2.5">
           {activities.length > 0 && (
-            <select
-              value={typeFilter}
-              onChange={(e) => { setTypeFilter(e.target.value); }}
-               style={{
-                 background: "var(--bg-tertiary)",
-                 border: "1px solid var(--border)",
-                 color: "var(--text-primary)",
-                  borderRadius: "var(--radius-sm)",
-                  padding: "4px 8px",
-                  fontSize: 13,
-               }}
-            >
-              <option value="All">All Types</option>
-              {activityTypes.map((t) => (
-                <option key={t} value={t}>{t}</option>
-              ))}
-            </select>
+            <Select value={typeFilter} onValueChange={(v) => { if (v !== null) setTypeFilter(v); }}>
+              <SelectTrigger size="sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="All">All Types</SelectItem>
+                {activityTypes.map((t) => (
+                  <SelectItem key={t} value={t}>{t}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           )}
           {authStatus.connected && (
-            <button className="btn-primary" onClick={() => void handleSync()} disabled={syncing} style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <RefreshCw size={16} className={syncing ? "spin" : ""} />
+            <Button onClick={() => void handleSync()} disabled={syncing} className="flex items-center gap-1.5">
+              <RefreshCw size={16} className={cn(syncing && "animate-spin")} />
               Sync Activities
-            </button>
+            </Button>
           )}
         </div>
       </div>
 
-      {error && <div className="error-state" style={{ marginBottom: 16 }}>{error}</div>}
+      {error && <div className="mb-4 text-sm text-destructive bg-destructive/10 border border-destructive/30 rounded-md px-3 py-2">{error}</div>}
 
       {!dataLoaded && (
         <div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 12, marginBottom: 20 }}>
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(140px,1fr))] gap-3 mb-5">
             {Array.from({ length: 6 }, (_, i) => (
-              <div key={i} className="card" style={{ textAlign: "center", padding: 16 }}>
-                <div className="skeleton" style={{ width: 16, height: 16, margin: "0 auto 8px", borderRadius: "50%" }} />
-                <div className="skeleton" style={{ width: 60, height: 28, margin: "0 auto 6px" }} />
-                <div className="skeleton" style={{ width: 80, height: 14, margin: "0 auto" }} />
-              </div>
+              <Card key={i} className="text-center">
+                <CardContent className="flex flex-col items-center pt-4">
+                  <Skeleton className="w-4 h-4 rounded-full mb-2" />
+                  <Skeleton className="w-[60px] h-7 mb-1.5" />
+                  <Skeleton className="w-20 h-3.5" />
+                </CardContent>
+              </Card>
             ))}
           </div>
-          <div className="card" style={{ padding: 0, overflow: "hidden" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead>
-                <tr style={{ borderBottom: "1px solid var(--border)" }}>
+          <Card className="p-0 overflow-hidden">
+            <table className="w-full border-collapse">
+              <TableHeader>
+                <TableRow>
                   {["Date", "Type", "Name", "Distance", "Duration", "Pace", "Elevation", "Max Speed", "Avg HR"].map((h) => (
-                    <th key={h} style={{ padding: "10px 14px", textAlign: "left" }}>
-                      <div className="skeleton" style={{ width: 60, height: 12 }} />
-                    </th>
+                    <TableHead key={h} className="px-3.5 py-2.5 text-left">
+                      <Skeleton className="w-[60px] h-3" />
+                    </TableHead>
                   ))}
-                </tr>
-              </thead>
-              <tbody>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {Array.from({ length: 8 }, (_, i) => (
-                  <tr key={i} style={{ borderBottom: "1px solid var(--border)" }}>
+                  <TableRow key={i} className="border-b border-border">
                     {Array.from({ length: 9 }, (_, j) => (
-                      <td key={j} style={{ padding: "10px 14px" }}>
-                        <div className="skeleton" style={{ width: j === 2 ? 120 : 60, height: 14 }} />
-                      </td>
+                      <TableCell key={j} className="px-3.5 py-2.5">
+                        <Skeleton className={cn("h-3.5", j === 2 ? "w-[120px]" : "w-[60px]")} />
+                      </TableCell>
                     ))}
-                  </tr>
+                  </TableRow>
                 ))}
-              </tbody>
+              </TableBody>
             </table>
-          </div>
+          </Card>
         </div>
       )}
 
       {dataLoaded && stats && stats.total_activities > 0 && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 12, marginBottom: 20 }}>
-          <div className="card" style={{ textAlign: "center" }}>
-            <Activity size={16} style={{ color: "var(--accent)", marginBottom: 4 }} />
-            <div style={{ fontSize: 24, fontWeight: 700 }}>{stats.total_activities}</div>
-            <div style={{ fontSize: 12, color: "var(--text-muted)" }}>Activities</div>
-          </div>
-          <div className="card" style={{ textAlign: "center" }}>
-            <TrendingUp size={16} style={{ color: "var(--accent)", marginBottom: 4 }} />
-            <div style={{ fontSize: 24, fontWeight: 700 }}>{stats.total_distance_km.toFixed(0)}</div>
-            <div style={{ fontSize: 12, color: "var(--text-muted)" }}>Total km</div>
-          </div>
-          <div className="card" style={{ textAlign: "center" }}>
-            <Mountain size={16} style={{ color: "var(--accent)", marginBottom: 4 }} />
-            <div style={{ fontSize: 24, fontWeight: 700 }}>{formatElevation(totalElevation)}</div>
-            <div style={{ fontSize: 12, color: "var(--text-muted)" }}>Total Elevation</div>
-          </div>
-          <div className="card" style={{ textAlign: "center" }}>
-            <Timer size={16} style={{ color: "var(--accent)", marginBottom: 4 }} />
-            <div style={{ fontSize: 24, fontWeight: 700 }}>{formatDuration(totalTime)}</div>
-            <div style={{ fontSize: 12, color: "var(--text-muted)" }}>Total Time</div>
-          </div>
-          <div className="card" style={{ textAlign: "center" }}>
-            <TrendingUp size={16} style={{ color: "var(--accent)", marginBottom: 4 }} />
-            <div style={{ fontSize: 24, fontWeight: 700 }}>{avgPace}</div>
-            <div style={{ fontSize: 12, color: "var(--text-muted)" }}>Avg Pace</div>
-          </div>
-          <div className="card" style={{ textAlign: "center" }}>
-            <BarChart3 size={16} style={{ color: "var(--accent)", marginBottom: 4 }} />
-            <div style={{ fontSize: 24, fontWeight: 700 }}>{thisWeekKm}</div>
-            <div style={{ fontSize: 12, color: "var(--text-muted)" }}>This Week km</div>
-          </div>
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(140px,1fr))] gap-3 mb-5">
+          <Card className="text-center">
+            <CardContent className="flex flex-col items-center pt-4">
+              <Activity size={16} className="text-primary mb-1" />
+              <div className="text-2xl font-bold">{stats.total_activities}</div>
+              <div className="text-xs text-muted-foreground">Activities</div>
+            </CardContent>
+          </Card>
+          <Card className="text-center">
+            <CardContent className="flex flex-col items-center pt-4">
+              <TrendingUp size={16} className="text-primary mb-1" />
+              <div className="text-2xl font-bold">{stats.total_distance_km.toFixed(0)}</div>
+              <div className="text-xs text-muted-foreground">Total km</div>
+            </CardContent>
+          </Card>
+          <Card className="text-center">
+            <CardContent className="flex flex-col items-center pt-4">
+              <Mountain size={16} className="text-primary mb-1" />
+              <div className="text-2xl font-bold">{formatElevation(totalElevation)}</div>
+              <div className="text-xs text-muted-foreground">Total Elevation</div>
+            </CardContent>
+          </Card>
+          <Card className="text-center">
+            <CardContent className="flex flex-col items-center pt-4">
+              <Timer size={16} className="text-primary mb-1" />
+              <div className="text-2xl font-bold">{formatDuration(totalTime)}</div>
+              <div className="text-xs text-muted-foreground">Total Time</div>
+            </CardContent>
+          </Card>
+          <Card className="text-center">
+            <CardContent className="flex flex-col items-center pt-4">
+              <TrendingUp size={16} className="text-primary mb-1" />
+              <div className="text-2xl font-bold">{avgPace}</div>
+              <div className="text-xs text-muted-foreground">Avg Pace</div>
+            </CardContent>
+          </Card>
+          <Card className="text-center">
+            <CardContent className="flex flex-col items-center pt-4">
+              <BarChart3 size={16} className="text-primary mb-1" />
+              <div className="text-2xl font-bold">{thisWeekKm}</div>
+              <div className="text-xs text-muted-foreground">This Week km</div>
+            </CardContent>
+          </Card>
         </div>
       )}
 
       {dataLoaded && filteredActivities.length === 0 && activities.length === 0 ? (
-        <div className="empty-state">
-          <Activity size={48} style={{ margin: "0 auto 16px", opacity: 0.3 }} />
+        <div className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">
+          <Activity size={48} className="mb-4 opacity-30" />
           <p>No activities yet.</p>
-          <p style={{ fontSize: 12, marginTop: 8 }}>
+          <p className="text-xs mt-2">
             {authStatus.connected
               ? 'Click "Sync Activities" to fetch from Strava.'
               : "Connect Strava in Settings to sync your runs."}
@@ -419,28 +413,29 @@ export default function Dashboard() {
         </div>
       ) : (
         <>
-          <div className="card" style={{ padding: 0, overflow: "hidden", marginBottom: 20 }}>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead>
-                <tr style={{ borderBottom: "1px solid var(--border)" }}>
-                  <th style={{ ...thStyle, textAlign: "left" }}>Date</th>
-                  <th style={{ ...thStyle, textAlign: "left" }}>Type</th>
-                  <th style={{ ...thStyle, textAlign: "left" }}>Name</th>
-                  <th style={{ ...thStyle, textAlign: "right" }}>Distance</th>
-                  <th style={{ ...thStyle, textAlign: "right" }}>Duration</th>
-                  <th style={{ ...thStyle, textAlign: "right" }}>Pace</th>
-                  <th style={{ ...thStyle, textAlign: "right" }}>Elevation</th>
-                  <th style={{ ...thStyle, textAlign: "right" }}>Max Speed</th>
-                  <th style={{ ...thStyle, textAlign: "right" }}>Avg HR</th>
-                </tr>
-              </thead>
+          <Card className="p-0 overflow-hidden mb-5">
+            <table className="w-full border-collapse">
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="px-3.5 py-2.5 text-[12px] font-semibold text-muted-foreground text-left">Date</TableHead>
+                  <TableHead className="px-3.5 py-2.5 text-[12px] font-semibold text-muted-foreground text-left">Type</TableHead>
+                  <TableHead className="px-3.5 py-2.5 text-[12px] font-semibold text-muted-foreground text-left">Name</TableHead>
+                  <TableHead className="px-3.5 py-2.5 text-[12px] font-semibold text-muted-foreground text-right">Distance</TableHead>
+                  <TableHead className="px-3.5 py-2.5 text-[12px] font-semibold text-muted-foreground text-right">Duration</TableHead>
+                  <TableHead className="px-3.5 py-2.5 text-[12px] font-semibold text-muted-foreground text-right">Pace</TableHead>
+                  <TableHead className="px-3.5 py-2.5 text-[12px] font-semibold text-muted-foreground text-right">Elevation</TableHead>
+                  <TableHead className="px-3.5 py-2.5 text-[12px] font-semibold text-muted-foreground text-right">Max Speed</TableHead>
+                  <TableHead className="px-3.5 py-2.5 text-[12px] font-semibold text-muted-foreground text-right">Avg HR</TableHead>
+                </TableRow>
+              </TableHeader>
             </table>
             <div
               ref={tableContainerRef}
-              style={{ height: Math.min(filteredActivities.length * 44, 600), overflow: "auto" }}
+              style={{ height: Math.min(filteredActivities.length * 44, 600) }}
+              className="overflow-auto"
             >
-              <table style={{ width: "100%", borderCollapse: "collapse", height: rowVirtualizer.getTotalSize() }}>
-                <tbody>
+              <table className="w-full border-collapse" style={{ height: rowVirtualizer.getTotalSize() }}>
+                <TableBody>
                   {(() => {
                     const virtualItems = rowVirtualizer.getVirtualItems();
                     const topHeight = virtualItems.length > 0 ? virtualItems[0].start : 0;
@@ -451,77 +446,76 @@ export default function Dashboard() {
                     return (
                       <>
                         {virtualItems.length > 0 && (
-                          <tr style={{ height: `${String(topHeight)}px` }} />
+                          <TableRow style={{ height: `${String(topHeight)}px` }} />
                         )}
                         {virtualItems.map((virtualRow) => {
                           const a = filteredActivities[virtualRow.index];
                           return (
-                            <tr key={a.activity_id} style={{ borderBottom: "1px solid var(--border)" }}>
-                              <td style={{ ...tdStyle, color: "var(--text-secondary)" }}>
+                            <TableRow key={a.activity_id} className="border-b border-border">
+                              <TableCell className="px-3.5 py-2.5 text-[13px] text-muted-foreground">
                                 {a.start_date ? new Date(a.start_date).toLocaleDateString() : "\u2014"}
-                              </td>
-                              <td style={tdStyle}>
+                              </TableCell>
+                              <TableCell className="px-3.5 py-2.5 text-[13px]">
                                 {getWorkoutBadge(a.workout_type, a.sport_type, a.type)}
-                              </td>
-                              <td style={tdStyle}>{a.name ?? "Untitled"}</td>
-                              <td style={{ ...tdStyle, textAlign: "right" }}>{formatDistance(a.distance)}</td>
-                              <td style={{ ...tdStyle, textAlign: "right" }}>{formatDuration(a.moving_time)}</td>
-                              <td style={{ ...tdStyle, textAlign: "right" }}>{formatPace(a.distance, a.moving_time)}</td>
-                              <td style={{ ...tdStyle, textAlign: "right" }}>{formatElevation(a.total_elevation_gain)}</td>
-                              <td style={{ ...tdStyle, textAlign: "right" }}>{formatMaxSpeedPace(a.max_speed)}</td>
-                              <td style={{ ...tdStyle, textAlign: "right" }}>
+                              </TableCell>
+                              <TableCell className="px-3.5 py-2.5 text-[13px]">{a.name ?? "Untitled"}</TableCell>
+                              <TableCell className="px-3.5 py-2.5 text-[13px] text-right">{formatDistance(a.distance)}</TableCell>
+                              <TableCell className="px-3.5 py-2.5 text-[13px] text-right">{formatDuration(a.moving_time)}</TableCell>
+                              <TableCell className="px-3.5 py-2.5 text-[13px] text-right">{formatPace(a.distance, a.moving_time)}</TableCell>
+                              <TableCell className="px-3.5 py-2.5 text-[13px] text-right">{formatElevation(a.total_elevation_gain)}</TableCell>
+                              <TableCell className="px-3.5 py-2.5 text-[13px] text-right">{formatMaxSpeedPace(a.max_speed)}</TableCell>
+                              <TableCell className="px-3.5 py-2.5 text-[13px] text-right">
                                 {a.average_heartrate ? String(Math.round(a.average_heartrate)) : "\u2014"}
-                              </td>
-                            </tr>
+                              </TableCell>
+                            </TableRow>
                           );
                         })}
                         {virtualItems.length > 0 && (
-                          <tr style={{ height: `${String(bottomHeight)}px` }} />
+                          <TableRow style={{ height: `${String(bottomHeight)}px` }} />
                         )}
                       </>
                     );
                   })()}
-                </tbody>
+                </TableBody>
               </table>
             </div>
-          </div>
+          </Card>
 
           {hasMore && (
-            <div style={{ textAlign: "center", marginBottom: 20 }}>
-              <button className="btn-primary" onClick={loadMore}>
+            <div className="text-center mb-5">
+              <Button variant="secondary" onClick={loadMore}>
                 Load More
-              </button>
+              </Button>
             </div>
           )}
 
           {weeklyVolume.length > 0 && (
-            <div className="card">
-              <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>Weekly Volume</h3>
-              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm font-semibold">Weekly Volume</CardTitle>
+              </CardHeader>
+              <CardContent className="flex flex-col gap-1.5">
                 {weeklyVolume.map((w) => (
-                  <div key={w.label} style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <span style={{ fontSize: 12, color: "var(--text-muted)", width: 50, flexShrink: 0, textAlign: "right" }}>
+                  <div key={w.label} className="flex items-center gap-2.5">
+                    <span className="text-xs text-muted-foreground w-[50px] shrink-0 text-right">
                       {w.label}
                     </span>
-                     <div style={{ flex: 1, background: "var(--bg-tertiary)", borderRadius: "var(--radius-sm)", height: 20, overflow: "hidden" }}>
-                       <div
-                         style={{
-                            width: `${Math.max((w.km / maxWeekKm) * 100, 1).toString()}%`,
-                            height: "100%",
-                            background: "var(--accent)",
-                            borderRadius: "var(--radius-sm)",
-                            minWidth: w.km === 0 ? 2 : undefined,
-                            transition: "width 0.3s ease",
-                         }}
+                    <div className="flex-1 bg-secondary rounded-sm h-5 overflow-hidden">
+                      <div
+                        className="h-full bg-primary rounded-sm transition-[width] duration-300 ease-in-out"
+                        style={{
+                          width: `${Math.max((w.km / maxWeekKm) * 100, 1).toString()}%`,
+                          minWidth: w.km === 0 ? 2 : undefined,
+                        }}
                       />
                     </div>
-                    <span style={{ fontSize: 12, color: "var(--text-secondary)", width: 55, flexShrink: 0, textAlign: "right" }}>
+                    <span className="text-xs text-muted-foreground w-[55px] shrink-0 text-right">
                       {w.km === 0 ? "0 km" : `${String(w.km)} km`}
                     </span>
                   </div>
                 ))}
-              </div>
-            </div>
+              </CardContent>
+            </Card>
           )}
         </>
       )}

@@ -1,5 +1,7 @@
 import { Component } from "react";
 import type { ErrorInfo, ReactNode } from "react";
+import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface ErrorBoundaryProps {
   children: ReactNode;
@@ -31,67 +33,25 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   render(): ReactNode {
     if (this.state.hasError) {
       return (
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            height: "100vh",
-            background: "var(--bg-primary)",
-            color: "var(--text-primary)",
-            fontFamily: "inherit",
-            gap: "16px",
-            padding: "24px",
-            textAlign: "center",
-          }}
-        >
-          <h1 style={{ fontSize: "20px", fontWeight: 600 }}>
+        <div className="flex flex-col items-center justify-center h-screen bg-background text-foreground gap-4 p-6 text-center">
+          <h1 className="text-xl font-semibold">
             Something went wrong
           </h1>
-          <p
-            style={{
-              color: "var(--text-secondary)",
-              maxWidth: "400px",
-              lineHeight: 1.5,
-            }}
-          >
+          <p className="text-muted-foreground max-w-[400px] leading-relaxed">
             The app encountered an unexpected error. Reloading usually fixes it.
           </p>
-          {this.state.error ? (
-            <pre
-              style={{
-                background: "var(--bg-tertiary)",
-                padding: "12px 16px",
-                borderRadius: "6px",
-                fontSize: "12px",
-                color: "var(--danger)",
-                maxWidth: "500px",
-                overflow: "auto",
-                whiteSpace: "pre-wrap",
-                wordBreak: "break-word",
-              }}
-            >
-              {this.state.error.message}
-            </pre>
-          ) : null}
-          <button
-            type="button"
-            onClick={this.handleReload}
-            style={{
-              marginTop: "8px",
-              padding: "10px 24px",
-              background: "var(--accent)",
-              color: "#fff",
-              border: "none",
-              borderRadius: "6px",
-              cursor: "pointer",
-              fontSize: "14px",
-              fontWeight: 500,
-            }}
-          >
+           {this.state.error ? (
+             <Alert variant="destructive" className="max-w-[500px] w-full">
+               <AlertDescription>
+                 <pre className="text-xs whitespace-pre-wrap break-words overflow-auto">
+                   {this.state.error.message}
+                 </pre>
+               </AlertDescription>
+             </Alert>
+           ) : null}
+          <Button onClick={this.handleReload} className="mt-2">
             Reload App
-          </button>
+          </Button>
         </div>
       );
     }

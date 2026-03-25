@@ -1,8 +1,18 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { ask } from "@tauri-apps/plugin-dialog";
 import { Trash2, Eye, Save } from "lucide-react";
-import { useToast } from "../hooks/useToast";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 
 interface ProfileData {
   age: number | null;
@@ -38,23 +48,9 @@ export default function Context() {
   const [contextPreview, setContextPreview] = useState<string | null>(null);
   const [showPreview, setShowPreview] = useState(false);
   const [saving, setSaving] = useState(false);
-  const { showToast, toastElement } = useToast();
   const [tab, setTab] = useState<"profile" | "insights">("profile");
   const [paceMinutes, setPaceMinutes] = useState("");
   const [paceSeconds, setPaceSeconds] = useState("");
-  const previewBtnRef = useRef<HTMLButtonElement>(null);
-  const modalRef = useRef<HTMLDivElement>(null);
-
-  const closePreview = useCallback(() => {
-    setShowPreview(false);
-    previewBtnRef.current?.focus();
-  }, []);
-
-  useEffect(() => {
-    if (showPreview) {
-      modalRef.current?.focus();
-    }
-  }, [showPreview]);
 
   const loadData = useCallback(async () => {
     try {
@@ -71,9 +67,9 @@ export default function Context() {
       }
       setInsights(ins);
     } catch {
-      showToast("Failed to load context data", "error");
+      toast.error("Failed to load context data");
     }
-  }, [showToast]);
+  }, []);
 
   useEffect(() => { void loadData(); }, [loadData]);
 
@@ -86,9 +82,9 @@ export default function Context() {
       await invoke("save_profile_data", {
         data: { ...profile, threshold_pace_secs: paceSecs },
       });
-      showToast("Profile saved", "success");
+      toast.success("Profile saved");
     } catch {
-      showToast("Failed to save profile", "error");
+      toast.error("Failed to save profile");
     } finally {
       setSaving(false);
     }
@@ -100,9 +96,9 @@ export default function Context() {
     try {
       await invoke("delete_pinned_insight", { id });
       setInsights((prev) => prev.filter((i) => i.id !== id));
-      showToast("Insight unpinned", "success");
+      toast.success("Insight unpinned");
     } catch {
-      showToast("Failed to delete insight", "error");
+      toast.error("Failed to delete insight");
     }
   };
 
@@ -112,14 +108,14 @@ export default function Context() {
       setContextPreview(preview);
       setShowPreview(true);
     } catch {
-      showToast("Failed to load preview", "error");
+      toast.error("Failed to load preview");
     }
   };
 
   const numberField = (label: string, field: keyof ProfileData, htmlFor: string, min?: number, max?: number) => (
-    <div style={{ marginBottom: 12 }}>
-      <label htmlFor={htmlFor}>{label}</label>
-      <input
+    <div className="mb-3">
+      <Label htmlFor={htmlFor} className="mb-1.5">{label}</Label>
+      <Input
         id={htmlFor}
         type="number"
         value={profile[field] !== null ? String(profile[field]) : ""}
@@ -128,239 +124,199 @@ export default function Context() {
         }
         min={min}
         max={max}
-        style={{ width: "100%" }}
       />
     </div>
   );
 
   return (
-    <div style={{ padding: 24, overflow: "auto", height: "100%" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-        <h1 style={{ fontSize: 20, fontWeight: 700 }}>Context</h1>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button ref={previewBtnRef} className="btn-secondary" onClick={() => void loadPreview()} style={{ display: "flex", alignItems: "center", gap: 4 }}>
-            <Eye size={16} /> Preview Prompt
-          </button>
-        </div>
+    <div className="p-6 overflow-auto h-full">
+      <div className="flex justify-between items-center mb-5">
+        <h1 className="text-xl font-bold">Context</h1>
+        <Button variant="secondary" size="sm" onClick={() => void loadPreview()}>
+          <Eye className="size-4" /> Preview Prompt
+        </Button>
       </div>
 
-      <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
-        <button
-          className={tab === "profile" ? "btn-primary" : "btn-secondary"}
-          onClick={() => { setTab("profile"); }}
-        >
-          Athlete Profile
-        </button>
-        <button
-          className={tab === "insights" ? "btn-primary" : "btn-secondary"}
-          onClick={() => { setTab("insights"); }}
-        >
-          Pinned Insights ({insights.length})
-        </button>
-      </div>
+      <Tabs
+        value={tab}
+        onValueChange={(v) => { setTab(v as "profile" | "insights"); }}
+        className="gap-0"
+      >
+        <TabsList className="mb-5">
+          <TabsTrigger value="profile">Athlete Profile</TabsTrigger>
+          <TabsTrigger value="insights">Pinned Insights ({insights.length})</TabsTrigger>
+        </TabsList>
 
-      {tab === "profile" && (
-        <div className="card" style={{ maxWidth: 600 }}>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 16px" }}>
-            {numberField("Age", "age", "profile-age", 1, 120)}
-            {numberField("Max HR (bpm)", "max_hr", "profile-max-hr", 100, 220)}
-            {numberField("Resting HR (bpm)", "resting_hr", "profile-resting-hr", 30, 120)}
-            {numberField("Training days / week", "training_days_per_week", "profile-days", 1, 7)}
-          </div>
+        <TabsContent value="profile">
+          <Card className="max-w-[600px]">
+            <CardContent className="pt-4">
+              <div className="grid grid-cols-2 gap-x-4">
+                {numberField("Age", "age", "profile-age", 1, 120)}
+                {numberField("Max HR (bpm)", "max_hr", "profile-max-hr", 100, 220)}
+                {numberField("Resting HR (bpm)", "resting_hr", "profile-resting-hr", 30, 120)}
+                {numberField("Training days / week", "training_days_per_week", "profile-days", 1, 7)}
+              </div>
 
-          <div style={{ marginBottom: 12 }}>
-            <label htmlFor="profile-pace">Threshold pace (min:sec/km)</label>
-            <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
-              <input
-                id="profile-pace"
-                type="number"
-                value={paceMinutes}
-                onChange={(e) => { setPaceMinutes(e.target.value); }}
-                placeholder="min"
-                min={2}
-                max={15}
-                style={{ width: 70 }}
-              />
-              <span style={{ color: "var(--text-muted)" }}>:</span>
-              <input
-                id="profile-pace-sec"
-                type="number"
-                value={paceSeconds}
-                onChange={(e) => { setPaceSeconds(e.target.value); }}
-                placeholder="sec"
-                min={0}
-                max={59}
-                style={{ width: 70 }}
-              />
-            </div>
-          </div>
+              <div className="mb-3">
+                <Label htmlFor="profile-pace" className="mb-1.5">Threshold pace (min:sec/km)</Label>
+                <div className="flex gap-1.5 items-center">
+                  <Input
+                    id="profile-pace"
+                    type="number"
+                    value={paceMinutes}
+                    onChange={(e) => { setPaceMinutes(e.target.value); }}
+                    placeholder="min"
+                    min={2}
+                    max={15}
+                    className="w-[70px]"
+                  />
+                  <span className="text-muted-foreground">:</span>
+                  <Input
+                    id="profile-pace-sec"
+                    type="number"
+                    value={paceSeconds}
+                    onChange={(e) => { setPaceSeconds(e.target.value); }}
+                    placeholder="sec"
+                    min={0}
+                    max={59}
+                    className="w-[70px]"
+                  />
+                </div>
+              </div>
 
-          <div style={{ marginBottom: 12 }}>
-            <label htmlFor="profile-mileage">Weekly mileage target (km)</label>
-            <input
-              id="profile-mileage"
-              type="number"
-              value={profile.weekly_mileage_target ?? ""}
-              onChange={(e) =>
-                { setProfile({ ...profile, weekly_mileage_target: e.target.value ? parseFloat(e.target.value) : null }); }
-              }
-              style={{ width: "100%" }}
-            />
-          </div>
+              <div className="mb-3">
+                <Label htmlFor="profile-mileage" className="mb-1.5">Weekly mileage target (km)</Label>
+                <Input
+                  id="profile-mileage"
+                  type="number"
+                  value={profile.weekly_mileage_target ?? ""}
+                  onChange={(e) =>
+                    { setProfile({ ...profile, weekly_mileage_target: e.target.value ? parseFloat(e.target.value) : null }); }
+                  }
+                />
+              </div>
 
-          <div style={{ marginBottom: 12 }}>
-            <label htmlFor="profile-exp">Experience level</label>
-            <select
-              id="profile-exp"
-              value={profile.experience_level ?? ""}
-              onChange={(e) => { setProfile({ ...profile, experience_level: e.target.value || null }); }}
-              style={{ width: "100%" }}
-            >
-              <option value="">—</option>
-              <option value="beginner">Beginner</option>
-              <option value="intermediate">Intermediate</option>
-              <option value="advanced">Advanced</option>
-              <option value="elite">Elite</option>
-            </select>
-          </div>
+              <div className="mb-3">
+                <Label className="mb-1.5">Experience level</Label>
+                <Select value={profile.experience_level ?? ""} onValueChange={(v) => { setProfile({ ...profile, experience_level: v ?? null }); }}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="—" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="beginner">Beginner</SelectItem>
+                    <SelectItem value="intermediate">Intermediate</SelectItem>
+                    <SelectItem value="advanced">Advanced</SelectItem>
+                    <SelectItem value="elite">Elite</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
 
-          <div style={{ marginBottom: 12 }}>
-            <label htmlFor="profile-terrain">Preferred terrain</label>
-            <select
-              id="profile-terrain"
-              value={profile.preferred_terrain ?? ""}
-              onChange={(e) => { setProfile({ ...profile, preferred_terrain: e.target.value || null }); }}
-              style={{ width: "100%" }}
-            >
-              <option value="">—</option>
-              <option value="road">Road</option>
-              <option value="trail">Trail</option>
-              <option value="track">Track</option>
-              <option value="mixed">Mixed</option>
-            </select>
-          </div>
+              <div className="mb-3">
+                <Label className="mb-1.5">Preferred terrain</Label>
+                <Select value={profile.preferred_terrain ?? ""} onValueChange={(v) => { setProfile({ ...profile, preferred_terrain: v ?? null }); }}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="—" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="road">Road</SelectItem>
+                    <SelectItem value="trail">Trail</SelectItem>
+                    <SelectItem value="track">Track</SelectItem>
+                    <SelectItem value="mixed">Mixed</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
 
-          <div style={{ marginBottom: 12 }}>
-            <label htmlFor="profile-goals">Race goals</label>
-            <textarea
-              id="profile-goals"
-              value={profile.race_goals ?? ""}
-              onChange={(e) => { setProfile({ ...profile, race_goals: e.target.value || null }); }}
-              rows={2}
-              style={{ width: "100%", resize: "vertical" }}
-            />
-          </div>
+              <div className="mb-3">
+                <Label htmlFor="profile-goals" className="mb-1.5">Race goals</Label>
+                <Textarea
+                  id="profile-goals"
+                  value={profile.race_goals ?? ""}
+                  onChange={(e) => { setProfile({ ...profile, race_goals: e.target.value || null }); }}
+                  rows={2}
+                  className="resize-y"
+                />
+              </div>
 
-          <div style={{ marginBottom: 16 }}>
-            <label htmlFor="profile-injuries">Injury history</label>
-            <textarea
-              id="profile-injuries"
-              value={profile.injury_history ?? ""}
-              onChange={(e) => { setProfile({ ...profile, injury_history: e.target.value || null }); }}
-              rows={2}
-              style={{ width: "100%", resize: "vertical" }}
-            />
-          </div>
+              <div className="mb-4">
+                <Label htmlFor="profile-injuries" className="mb-1.5">Injury history</Label>
+                <Textarea
+                  id="profile-injuries"
+                  value={profile.injury_history ?? ""}
+                  onChange={(e) => { setProfile({ ...profile, injury_history: e.target.value || null }); }}
+                  rows={2}
+                  className="resize-y"
+                />
+              </div>
 
-          <div style={{ marginBottom: 16 }}>
-            <label htmlFor="profile-notes">Custom notes</label>
-            <textarea
-              id="profile-notes"
-              value={profile.custom_notes ?? ""}
-              onChange={(e) => { setProfile({ ...profile, custom_notes: e.target.value || null }); }}
-              rows={4}
-              style={{ width: "100%", resize: "vertical" }}
-              placeholder="Add any training context here — weekly schedule, preferred workouts, limitations, or anything else the coach should know."
-            />
-          </div>
+              <div className="mb-4">
+                <Label htmlFor="profile-notes" className="mb-1.5">Custom notes</Label>
+                <Textarea
+                  id="profile-notes"
+                  value={profile.custom_notes ?? ""}
+                  onChange={(e) => { setProfile({ ...profile, custom_notes: e.target.value || null }); }}
+                  rows={4}
+                  className="resize-y"
+                  placeholder="Add any training context here — weekly schedule, preferred workouts, limitations, or anything else the coach should know."
+                />
+              </div>
 
-          <button className="btn-primary" onClick={() => void saveProfile()} disabled={saving} style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <Save size={16} />
-            Save Profile
-          </button>
-        </div>
-      )}
+              <Button onClick={() => void saveProfile()} disabled={saving}>
+                <Save className="size-4" />
+                Save Profile
+              </Button>
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-      {tab === "insights" && (
-        <div>
+        <TabsContent value="insights">
           {insights.length === 0 ? (
-            <div className="empty-state">
+            <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
               <p>No pinned insights yet.</p>
-              <p style={{ fontSize: 12, marginTop: 8 }}>
+              <p className="text-xs mt-2">
                 Pin messages from the chat to save coaching insights here.
               </p>
             </div>
           ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <div className="flex flex-col gap-2">
               {insights.map((insight) => (
-                <div key={insight.id} className="card" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
-                  <div style={{ flex: 1 }}>
-                    <p style={{ fontSize: 13 }}>{insight.content.length > 500 ? insight.content.slice(0, 497) + "..." : insight.content}</p>
-                    <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 6 }}>
-                      {new Date(insight.created_at).toLocaleDateString()}
-                    </p>
-                  </div>
-                  <button className="btn-ghost" onClick={() => void deleteInsight(insight.id)} title="Delete insight">
-                    <Trash2 size={14} />
-                  </button>
-                </div>
+                <Card key={insight.id}>
+                  <CardContent className="pt-4">
+                    <div className="flex justify-between items-start gap-3">
+                      <div className="flex-1">
+                        <p className="text-sm">{insight.content.length > 500 ? insight.content.slice(0, 497) + "..." : insight.content}</p>
+                        <p className="text-xs text-muted-foreground mt-1.5">
+                          {new Date(insight.created_at).toLocaleDateString()}
+                        </p>
+                      </div>
+                      <Tooltip>
+                        <TooltipTrigger>
+                          <Button variant="ghost" size="icon-sm" onClick={() => void deleteInsight(insight.id)} aria-label="Delete insight">
+                            <Trash2 className="size-3.5" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Delete insight</TooltipContent>
+                      </Tooltip>
+                    </div>
+                  </CardContent>
+                </Card>
               ))}
             </div>
           )}
-        </div>
-      )}
+        </TabsContent>
+      </Tabs>
 
-      {showPreview && contextPreview && (
-        <div
-          style={{
-            position: "fixed", inset: 0, background: "var(--bg-primary)",
-            display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100,
-          }}
-          onClick={() => { closePreview(); }}
-        >
-          <div
-            ref={modalRef}
-            className="card"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="context-preview-title"
-            tabIndex={-1}
-            onClick={(e) => { e.stopPropagation(); }}
-            onKeyDown={(e) => {
-              if (e.key === "Escape") {
-                closePreview();
-                return;
-              }
-              if (e.key === "Tab") {
-                const focusable = modalRef.current?.querySelectorAll<HTMLElement>(
-                  'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-                );
-                if (!focusable?.length) return;
-                const first = focusable[0];
-                const last = focusable[focusable.length - 1];
-                if (e.shiftKey && document.activeElement === first) {
-                  e.preventDefault();
-                  last.focus();
-                } else if (!e.shiftKey && document.activeElement === last) {
-                  e.preventDefault();
-                  first.focus();
-                }
-              }
-            }}
-            style={{ maxWidth: 700, maxHeight: "80vh", overflow: "auto", width: "90%", padding: 20 }}
-          >
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
-              <h2 id="context-preview-title" style={{ fontSize: 16, fontWeight: 600 }}>Context Preview</h2>
-              <button className="btn-ghost" onClick={() => { closePreview(); }} aria-label="Close preview">&#10005;</button>
-            </div>
-            <pre style={{ fontSize: 12, whiteSpace: "pre-wrap", fontFamily: "monospace", lineHeight: 1.6, color: "var(--text-secondary)" }}>
+      <Dialog open={showPreview} onOpenChange={setShowPreview}>
+        <DialogContent className="max-w-[700px] max-h-[80vh] w-[90vw]">
+          <DialogHeader>
+            <DialogTitle>Context Preview</DialogTitle>
+          </DialogHeader>
+          <ScrollArea className="max-h-[60vh]">
+            <pre className="text-xs whitespace-pre-wrap font-mono leading-relaxed text-muted-foreground">
               {contextPreview}
             </pre>
-          </div>
-        </div>
-      )}
-
-      {toastElement}
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

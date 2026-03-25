@@ -39,8 +39,8 @@ describe("TrainingPlanPage", () => {
 
     render(<TrainingPlanPage />);
 
-    expect(screen.getByRole("button", { name: /my plans/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /schedule/i })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /my plans/i })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /schedule/i })).toBeInTheDocument();
   });
 
   it("defaults to My Plans tab when no active plan exists", async () => {
@@ -88,7 +88,7 @@ describe("TrainingPlanPage", () => {
     });
 
     const user = userEvent.setup();
-    const scheduleTab = screen.getByRole("button", { name: /schedule/i });
+    const scheduleTab = screen.getByRole("tab", { name: /schedule/i });
     await user.click(scheduleTab);
 
     await waitFor(() => {
@@ -103,14 +103,14 @@ describe("TrainingPlanPage", () => {
 
     const user = userEvent.setup();
 
-    const scheduleTab = screen.getByRole("button", { name: /schedule/i });
+    const scheduleTab = screen.getByRole("tab", { name: /schedule/i });
     await user.click(scheduleTab);
 
     await waitFor(() => {
       expect(screen.queryByText("Race Goals")).not.toBeInTheDocument();
     });
 
-    const plansTab = screen.getByRole("button", { name: /my plans/i });
+    const plansTab = screen.getByRole("tab", { name: /my plans/i });
     await user.click(plansTab);
 
     await waitFor(() => {

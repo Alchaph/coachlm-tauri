@@ -99,7 +99,7 @@ describe("Chat component", () => {
     setupInvokeMocks({ get_chat_sessions: [] });
     render(<Chat />);
 
-    const newChatButton = await screen.findByTitle("New chat");
+    const newChatButton = await screen.findByRole("button", { name: /new chat/i });
     await user.click(newChatButton);
 
     await waitFor(() => {
@@ -112,19 +112,19 @@ describe("Chat component", () => {
     render(<Chat />);
 
     await waitFor(() => {
-      expect(screen.getByTitle("Close sidebar")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /close sidebar/i })).toBeInTheDocument();
     });
 
-    await user.click(screen.getByTitle("Close sidebar"));
+    await user.click(screen.getByRole("button", { name: /close sidebar/i }));
 
     await waitFor(() => {
-      expect(screen.getByTitle("Open sidebar")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /open sidebar/i })).toBeInTheDocument();
     });
 
-    await user.click(screen.getByTitle("Open sidebar"));
+    await user.click(screen.getByRole("button", { name: /open sidebar/i }));
 
     await waitFor(() => {
-      expect(screen.getByTitle("Close sidebar")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /close sidebar/i })).toBeInTheDocument();
     });
   });
 
@@ -136,15 +136,14 @@ describe("Chat component", () => {
     });
   });
 
-  it("web search toggle is active when settings have web_search_enabled: true", async () => {
+  it("web search indicator is visible when settings have web_augmentation_mode set", async () => {
     setupInvokeMocks({
-      get_settings: { ...DEFAULT_SETTINGS, web_search_enabled: true },
+      get_settings: { ...DEFAULT_SETTINGS, web_augmentation_mode: "simple" },
     });
     render(<Chat />);
 
     await waitFor(() => {
-      const toggleBtn = screen.getByText("Web search").closest("button");
-      expect(toggleBtn).toHaveClass("chat-toggle-chip-active");
+      expect(screen.getByText("Web search")).toBeInTheDocument();
     });
   });
 
@@ -152,7 +151,7 @@ describe("Chat component", () => {
     render(<Chat />);
 
     await waitFor(() => {
-      expect(screen.getByTitle("Copy message")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /copy message/i })).toBeInTheDocument();
     });
   });
 
@@ -161,7 +160,7 @@ describe("Chat component", () => {
     const writeTextSpy = vi.spyOn(navigator.clipboard, "writeText").mockResolvedValue();
     render(<Chat />);
 
-    const copyBtn = await screen.findByTitle("Copy message");
+    const copyBtn = await screen.findByRole("button", { name: /copy message/i });
     await user.click(copyBtn);
 
     await waitFor(() => {

@@ -1,7 +1,13 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Check, ChevronRight, ChevronLeft, Zap, Globe, Settings } from "lucide-react";
-import { useToast } from "../hooks/useToast";
+import { toast } from "sonner";
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 
 export default function Onboarding({ onComplete }: { onComplete: () => void }) {
   const [step, setStep] = useState(1);
@@ -15,7 +21,6 @@ export default function Onboarding({ onComplete }: { onComplete: () => void }) {
   const [models, setModels] = useState<string[]>([]);
   const [fetchingModels, setFetchingModels] = useState(false);
   const [saving, setSaving] = useState(false);
-  const { showToast, toastElement } = useToast();
 
   useEffect(() => {
     const checkStrava = async () => {
@@ -23,18 +28,18 @@ export default function Onboarding({ onComplete }: { onComplete: () => void }) {
         const available = await invoke<boolean>("get_strava_credentials_available");
         setStravaAvailable(available);
       } catch {
-        showToast("Failed to check Strava status", "error");
+        toast.error("Failed to check Strava status");
       }
     };
     void checkStrava();
-  }, [showToast]);
+  }, []);
 
   const handleConnectStrava = async () => {
     try {
       await invoke("start_strava_auth");
       setStravaConnected(true);
     } catch {
-      showToast("Failed to connect Strava", "error");
+      toast.error("Failed to connect Strava");
     }
   };
 
@@ -47,7 +52,7 @@ export default function Onboarding({ onComplete }: { onComplete: () => void }) {
         setOllamaModel(fetchedModels[0]);
       }
     } catch {
-      showToast("Failed to fetch models", "error");
+      toast.error("Failed to fetch models");
     } finally {
       setFetchingModels(false);
     }
@@ -68,274 +73,279 @@ export default function Onboarding({ onComplete }: { onComplete: () => void }) {
       });
       onComplete();
     } catch {
-      showToast("Failed to save settings", "error");
+      toast.error("Failed to save settings");
     } finally {
       setSaving(false);
     }
   };
 
   return (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", background: "var(--bg-primary)" }}>
-      <div className="card" style={{ width: "100%", maxWidth: 520, padding: 32, display: "flex", flexDirection: "column", gap: 24 }}>
-        <div style={{ display: "flex", justifyContent: "center", gap: 8, marginBottom: 8 }}>
-          {[1, 2, 3, 4].map(s => (
-            <div key={s} role="img" aria-label={`Step ${String(s)} of 4${s === step ? ", current" : s < step ? ", completed" : ""}`} style={{
-              width: 12, height: 12, borderRadius: "50%",
-              background: s === step ? "var(--accent)" : s < step ? "var(--success)" : "var(--bg-tertiary)",
-              transition: "background 0.3s"
-            }} />
-          ))}
-        </div>
-
-        {step === 1 && (
-          <div style={{ textAlign: "center", display: "flex", flexDirection: "column", gap: 16 }}>
-            <div style={{ display: "flex", justifyContent: "center", marginBottom: 8 }}>
-              <Zap size={48} color="var(--accent)" />
-            </div>
-            <h1 style={{ fontSize: 28, fontWeight: 700, margin: 0 }}>CoachLM</h1>
-            <p style={{ fontSize: 18, color: "var(--text-secondary)", margin: 0 }}>Your personal AI running coach</p>
-             <div style={{ background: "var(--bg-tertiary)", padding: 16, borderRadius: "var(--radius-md)", textAlign: "left", marginTop: 16 }}>
-               <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: 12 }}>
-                <li style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                  <Globe size={20} color="var(--accent)" />
-                  <span>Connects to your Strava account</span>
-                </li>
-                <li style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                  <Zap size={20} color="var(--accent)" />
-                  <span>Uses local or cloud LLMs</span>
-                </li>
-                <li style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                  <Settings size={20} color="var(--accent)" />
-                  <span>Stores all your data locally</span>
-                </li>
-              </ul>
-            </div>
-            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 24 }}>
-              <button className="btn-primary" onClick={() => { setStep(2); }} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                Get Started <ChevronRight size={16} />
-              </button>
-            </div>
+    <div className="flex items-center justify-center h-screen bg-background">
+      <Card className="w-full max-w-[520px]">
+        <CardContent className="flex flex-col gap-6 p-8">
+          <div className="flex justify-center gap-2 mb-2">
+            {[1, 2, 3, 4].map(s => (
+              <div
+                key={s}
+                role="img"
+                aria-label={`Step ${String(s)} of 4${s === step ? ", current" : s < step ? ", completed" : ""}`}
+                className={cn(
+                  "size-3 rounded-full transition-colors duration-300",
+                  s === step ? "bg-primary" : s < step ? "bg-success" : "bg-secondary"
+                )}
+              />
+            ))}
           </div>
-        )}
 
-        {step === 2 && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            <h2 style={{ fontSize: 22, fontWeight: 600, margin: 0 }}>Connect Strava</h2>
-            <p style={{ color: "var(--text-secondary)", margin: 0 }}>
-              Sync your running activities automatically to get personalized coaching insights.
-            </p>
-            
-             <div style={{ background: "var(--bg-tertiary)", padding: 24, borderRadius: "var(--radius-md)", display: "flex", flexDirection: "column", alignItems: "center", gap: 16, marginTop: 8 }}>
-               {!stravaAvailable ? (
-                <div style={{ textAlign: "center", color: "var(--text-muted)" }}>
-                  <p>Strava integration not available (no credentials configured).</p>
-                </div>
-              ) : stravaConnected ? (
-                <div style={{ display: "flex", alignItems: "center", gap: 8, color: "var(--success)", fontWeight: 500 }}>
-                  <Check size={20} /> Strava Connected
-                </div>
-              ) : (
-                <button className="btn-primary" onClick={() => void handleConnectStrava()} style={{ width: "100%", padding: 12, fontSize: 16 }}>
-                  Connect Strava
-                </button>
-              )}
-            </div>
-
-            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 24 }}>
-              <button className="btn-ghost" onClick={() => { setStep(1); }} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <ChevronLeft size={16} /> Back
-              </button>
-              <div style={{ display: "flex", gap: 8 }}>
-                <button className="btn-ghost" onClick={() => { setStep(3); }}>
-                  Skip for now
-                </button>
-                <button className="btn-secondary" onClick={() => { setStep(3); }} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  Next <ChevronRight size={16} />
-                </button>
+          {step === 1 && (
+            <div className="text-center flex flex-col gap-4">
+              <div className="flex justify-center mb-2">
+                <Zap size={48} className="text-primary" />
+              </div>
+              <h1 className="text-2xl font-bold m-0">CoachLM</h1>
+              <p className="text-lg text-muted-foreground m-0">Your personal AI running coach</p>
+              <div className="bg-secondary p-4 rounded-md text-left mt-4">
+                <ul className="list-none p-0 m-0 flex flex-col gap-3">
+                  <li className="flex items-center gap-3">
+                    <Globe size={20} className="text-primary" />
+                    <span>Connects to your Strava account</span>
+                  </li>
+                  <li className="flex items-center gap-3">
+                    <Zap size={20} className="text-primary" />
+                    <span>Uses local or cloud LLMs</span>
+                  </li>
+                  <li className="flex items-center gap-3">
+                    <Settings size={20} className="text-primary" />
+                    <span>Stores all your data locally</span>
+                  </li>
+                </ul>
+              </div>
+              <div className="flex justify-end mt-6">
+                <Button onClick={() => { setStep(2); }} className="flex items-center gap-2">
+                  Get Started <ChevronRight size={16} />
+                </Button>
               </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {step === 3 && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            <h2 style={{ fontSize: 22, fontWeight: 600, margin: 0 }}>LLM Setup</h2>
-            <p style={{ color: "var(--text-secondary)", margin: 0 }}>
-              Choose a local or cloud LLM provider.
-            </p>
+          {step === 2 && (
+            <div className="flex flex-col gap-4">
+              <h2 className="text-xl font-semibold m-0">Connect Strava</h2>
+              <p className="text-muted-foreground m-0">
+                Sync your running activities automatically to get personalized coaching insights.
+              </p>
 
-            <div style={{ display: "flex", flexDirection: "column", gap: 16, marginTop: 8 }}>
-              <div>
-                <label htmlFor="llm-provider">Provider</label>
-                <select
-                  id="llm-provider"
-                  value={provider}
-                  onChange={(e) => { setProvider(e.target.value); }}
-                  style={{ width: "100%" }}
-                >
-                  <option value="ollama">Ollama (Local)</option>
-                  <option value="groq">Groq (Cloud - Free Tier)</option>
-                  <option value="openrouter">OpenRouter (Cloud - Free Tier)</option>
-                </select>
-              </div>
-
-              {provider === "ollama" ? (
-                <>
-                  <div>
-                    <label htmlFor="ollama-endpoint">Endpoint URL</label>
-                    <div style={{ display: "flex", gap: 8 }}>
-                      <input
-                        id="ollama-endpoint"
-                        type="text"
-                        value={ollamaEndpoint}
-                        onChange={(e) => { setOllamaEndpoint(e.target.value); }}
-                        style={{ flex: 1 }}
-                      />
-                      <button className="btn-secondary" onClick={() => void fetchModels()} disabled={fetchingModels}>
-                        Fetch Models
-                      </button>
-                    </div>
+              <div className="bg-secondary p-6 rounded-md flex flex-col items-center gap-4 mt-2">
+                {!stravaAvailable ? (
+                  <div className="text-center text-muted-foreground">
+                    <p>Strava integration not available (no credentials configured).</p>
                   </div>
+                ) : stravaConnected ? (
+                  <div className="flex items-center gap-2 text-success font-medium">
+                    <Check size={20} /> Strava Connected
+                  </div>
+                ) : (
+                  <Button onClick={() => void handleConnectStrava()} className="w-full py-3 text-base">
+                    Connect Strava
+                  </Button>
+                )}
+              </div>
 
-                  {models.length > 0 && (
+              <div className="flex justify-between mt-6">
+                <Button variant="ghost" onClick={() => { setStep(1); }} className="flex items-center gap-2">
+                  <ChevronLeft size={16} /> Back
+                </Button>
+                <div className="flex gap-2">
+                  <Button variant="ghost" onClick={() => { setStep(3); }}>
+                    Skip for now
+                  </Button>
+                  <Button variant="secondary" onClick={() => { setStep(3); }} className="flex items-center gap-2">
+                    Next <ChevronRight size={16} />
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {step === 3 && (
+            <div className="flex flex-col gap-4">
+              <h2 className="text-xl font-semibold m-0">LLM Setup</h2>
+              <p className="text-muted-foreground m-0">
+                Choose a local or cloud LLM provider.
+              </p>
+
+              <div className="flex flex-col gap-4 mt-2">
+                <div>
+                  <Label>Provider</Label>
+                  <Select value={provider} onValueChange={(v) => { if (v !== null) setProvider(v); }}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ollama">Ollama (Local)</SelectItem>
+                      <SelectItem value="groq">Groq (Cloud - Free Tier)</SelectItem>
+                      <SelectItem value="openrouter">OpenRouter (Cloud - Free Tier)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {provider === "ollama" ? (
+                  <>
                     <div>
-                      <label>Available Models</label>
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 4 }}>
-                        {models.map(m => (
-                          <button
-                            key={m}
-                            className={ollamaModel === m ? "btn-primary" : "btn-secondary"}
-                            onClick={() => { setOllamaModel(m); }}
-                            style={{ padding: "4px 12px", fontSize: 13, borderRadius: "var(--radius-sm)" }}
-                          >
-                            {m}
-                          </button>
-                        ))}
+                      <Label htmlFor="ollama-endpoint">Endpoint URL</Label>
+                      <div className="flex gap-2">
+                        <Input
+                          id="ollama-endpoint"
+                          type="text"
+                          value={ollamaEndpoint}
+                          onChange={(e) => { setOllamaEndpoint(e.target.value); }}
+                          className="flex-1"
+                        />
+                        <Button variant="secondary" onClick={() => void fetchModels()} disabled={fetchingModels}>
+                          Fetch Models
+                        </Button>
                       </div>
                     </div>
-                  )}
 
-                  <div>
-                    <label htmlFor="ollama-model">Model Name</label>
-                    <input
-                      id="ollama-model"
-                      type="text"
-                      value={ollamaModel}
-                      onChange={(e) => { setOllamaModel(e.target.value); }}
-                      placeholder="e.g. llama3"
-                      style={{ width: "100%" }}
-                    />
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div>
-                    <label htmlFor="cloud-api-key">API Key</label>
-                    <input
-                      id="cloud-api-key"
-                      type="password"
-                      value={cloudApiKey}
-                      onChange={(e) => { setCloudApiKey(e.target.value); }}
-                      style={{ width: "100%" }}
-                      placeholder={provider === "groq" ? "gsk_..." : "sk-or-..."}
-                    />
-                    <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>
-                      {provider === "groq"
-                        ? "Get a free API key at console.groq.com"
-                        : "Get a free API key at openrouter.ai/keys"}
-                    </p>
-                  </div>
+                    {models.length > 0 && (
+                      <div>
+                        <Label>Available Models</Label>
+                        <div className="flex flex-wrap gap-2 mt-1">
+                          {models.map(m => (
+                            <Button
+                              key={m}
+                              variant={ollamaModel === m ? "default" : "secondary"}
+                              onClick={() => { setOllamaModel(m); }}
+                              size="xs"
+                            >
+                              {m}
+                            </Button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
 
-                  <div>
-                    <label htmlFor="cloud-model">Model Name</label>
-                    <input
-                      id="cloud-model"
-                      type="text"
-                      value={cloudModel}
-                      onChange={(e) => { setCloudModel(e.target.value); }}
-                      style={{ width: "100%" }}
-                      placeholder={provider === "groq" ? "llama-3.3-70b-versatile" : "meta-llama/llama-3.3-70b-instruct:free"}
-                    />
-                  </div>
-                </>
-              )}
-            </div>
+                    <div>
+                      <Label htmlFor="ollama-model">Model Name</Label>
+                      <Input
+                        id="ollama-model"
+                        type="text"
+                        value={ollamaModel}
+                        onChange={(e) => { setOllamaModel(e.target.value); }}
+                        placeholder="e.g. llama3"
+                        className="w-full"
+                      />
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div>
+                      <Label htmlFor="cloud-api-key">API Key</Label>
+                      <Input
+                        id="cloud-api-key"
+                        type="password"
+                        value={cloudApiKey}
+                        onChange={(e) => { setCloudApiKey(e.target.value); }}
+                        className="w-full"
+                        placeholder={provider === "groq" ? "gsk_..." : "sk-or-..."}
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {provider === "groq"
+                          ? "Get a free API key at console.groq.com"
+                          : "Get a free API key at openrouter.ai/keys"}
+                      </p>
+                    </div>
 
-            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 24 }}>
-              <button className="btn-ghost" onClick={() => { setStep(2); }} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <ChevronLeft size={16} /> Back
-              </button>
-              <div style={{ display: "flex", gap: 8 }}>
-                <button className="btn-ghost" onClick={() => {
-                  setOllamaEndpoint("http://localhost:11434");
-                  setOllamaModel("llama3");
-                  setStep(4);
-                }}>
-                  Skip for now
-                </button>
-                {provider === "ollama" && (
-                  <button className="btn-ghost" onClick={() => {
+                    <div>
+                      <Label htmlFor="cloud-model">Model Name</Label>
+                      <Input
+                        id="cloud-model"
+                        type="text"
+                        value={cloudModel}
+                        onChange={(e) => { setCloudModel(e.target.value); }}
+                        className="w-full"
+                        placeholder={provider === "groq" ? "llama-3.3-70b-versatile" : "meta-llama/llama-3.3-70b-instruct:free"}
+                      />
+                    </div>
+                  </>
+                )}
+              </div>
+
+              <div className="flex justify-between mt-6">
+                <Button variant="ghost" onClick={() => { setStep(2); }} className="flex items-center gap-2">
+                  <ChevronLeft size={16} /> Back
+                </Button>
+                <div className="flex gap-2">
+                  <Button variant="ghost" onClick={() => {
                     setOllamaEndpoint("http://localhost:11434");
                     setOllamaModel("llama3");
                     setStep(4);
                   }}>
-                    Use defaults
-                  </button>
-                )}
-                <button className="btn-primary" onClick={() => { setStep(4); }} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  Next <ChevronRight size={16} />
-                </button>
+                    Skip for now
+                  </Button>
+                  {provider === "ollama" && (
+                    <Button variant="ghost" onClick={() => {
+                      setOllamaEndpoint("http://localhost:11434");
+                      setOllamaModel("llama3");
+                      setStep(4);
+                    }}>
+                      Use defaults
+                    </Button>
+                  )}
+                  <Button onClick={() => { setStep(4); }} className="flex items-center gap-2">
+                    Next <ChevronRight size={16} />
+                  </Button>
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {step === 4 && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            <h2 style={{ fontSize: 22, fontWeight: 600, margin: 0 }}>All Set!</h2>
-            <p style={{ color: "var(--text-secondary)", margin: 0 }}>
-              You're ready to start using CoachLM.
-            </p>
+          {step === 4 && (
+            <div className="flex flex-col gap-4">
+              <h2 className="text-xl font-semibold m-0">All Set!</h2>
+              <p className="text-muted-foreground m-0">
+                You're ready to start using CoachLM.
+              </p>
 
-             <div style={{ background: "var(--bg-tertiary)", padding: 24, borderRadius: "var(--radius-md)", display: "flex", flexDirection: "column", gap: 16, marginTop: 8 }}>
-               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                 <div style={{ background: "var(--success)", borderRadius: "50%", padding: 4, display: "flex" }}>
-                   <Check size={16} color="white" />
-                 </div>
-                 <span>Settings configured</span>
-               </div>
-               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                 <div style={{ background: stravaConnected ? "var(--success)" : "var(--text-muted)", borderRadius: "50%", padding: 4, display: "flex" }}>
-                   <Check size={16} color="white" />
-                 </div>
-                 <span style={{ color: stravaConnected ? "inherit" : "var(--text-muted)" }}>
-                   {stravaConnected ? "Strava connected" : "Strava skipped"}
-                 </span>
-               </div>
-               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                 <div style={{ background: (provider === "ollama" ? ollamaModel : cloudModel) ? "var(--success)" : "var(--text-muted)", borderRadius: "50%", padding: 4, display: "flex" }}>
-                   <Check size={16} color="white" />
-                 </div>
-                <span style={{ color: (provider === "ollama" ? ollamaModel : cloudModel) ? "inherit" : "var(--text-muted)" }}>
-                  {provider === "ollama"
-                    ? (ollamaModel ? `Ollama model: ${ollamaModel}` : "No model selected")
-                    : (cloudModel ? `${provider}: ${cloudModel}` : `${provider}: no model selected`)}
-                </span>
+              <div className="bg-secondary p-6 rounded-md flex flex-col gap-4 mt-2">
+                <div className="flex items-center gap-3">
+                  <div className="bg-success rounded-full p-1 flex">
+                    <Check size={16} className="text-white" />
+                  </div>
+                  <span>Settings configured</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className={cn("rounded-full p-1 flex", stravaConnected ? "bg-success" : "bg-muted-foreground")}>
+                    <Check size={16} className="text-white" />
+                  </div>
+                  <span className={cn(stravaConnected ? "text-foreground" : "text-muted-foreground")}>
+                    {stravaConnected ? "Strava connected" : "Strava skipped"}
+                  </span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className={cn("rounded-full p-1 flex", (provider === "ollama" ? ollamaModel : cloudModel) ? "bg-success" : "bg-muted-foreground")}>
+                    <Check size={16} className="text-white" />
+                  </div>
+                  <span className={cn((provider === "ollama" ? ollamaModel : cloudModel) ? "text-foreground" : "text-muted-foreground")}>
+                    {provider === "ollama"
+                      ? (ollamaModel ? `Ollama model: ${ollamaModel}` : "No model selected")
+                      : (cloudModel ? `${provider}: ${cloudModel}` : `${provider}: no model selected`)}
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex justify-between mt-6">
+                <Button variant="ghost" onClick={() => { setStep(3); }} className="flex items-center gap-2">
+                  <ChevronLeft size={16} /> Back
+                </Button>
+                <Button onClick={() => void handleComplete()} disabled={saving} className="flex items-center gap-2">
+                  Go to Context <ChevronRight size={16} />
+                </Button>
               </div>
             </div>
-
-            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 24 }}>
-              <button className="btn-ghost" onClick={() => { setStep(3); }} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <ChevronLeft size={16} /> Back
-              </button>
-              <button className="btn-primary" onClick={() => void handleComplete()} disabled={saving} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                Go to Context <ChevronRight size={16} />
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-      {toastElement}
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

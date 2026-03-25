@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { ClipboardList, Calendar } from "lucide-react";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import PlanCreator from "./PlanCreator";
 import PlanCalendar from "./PlanCalendar";
 import type { TrainingPlan } from "./types";
@@ -16,7 +17,7 @@ export default function TrainingPlanPage() {
         await invoke<TrainingPlan>("get_active_plan");
         setActiveSubTab("schedule");
       } catch {
-        // empty catch: no active plan means we stay on default "plans" tab
+        // no active plan — stay on default "plans" tab
       }
     })();
   }, []);
@@ -25,52 +26,29 @@ export default function TrainingPlanPage() {
     setActiveSubTab("schedule");
   };
 
-  const subTabs: { id: SubTab; label: string; icon: React.ReactNode }[] = [
-    { id: "plans", label: "My Plans", icon: <ClipboardList size={14} /> },
-    { id: "schedule", label: "Schedule", icon: <Calendar size={14} /> },
-  ];
-
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-      <div
-        style={{
-          display: "flex",
-          gap: 2,
-          background: "var(--bg-secondary)",
-          borderBottom: "1px solid var(--border)",
-          padding: "0 16px",
-        }}
-      >
-        {subTabs.map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => { setActiveSubTab(tab.id); }}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-              padding: "8px 12px",
-              background: "transparent",
-              color: activeSubTab === tab.id ? "var(--text-primary)" : "var(--text-secondary)",
-              fontWeight: activeSubTab === tab.id ? 600 : 400,
-              fontSize: 13,
-              border: "none",
-              borderRadius: "var(--radius-sm) var(--radius-sm) 0 0",
-              borderBottom: activeSubTab === tab.id ? "2px solid var(--accent)" : "2px solid transparent",
-              cursor: "pointer",
-              transition: "color 0.15s, border-color 0.15s",
-            }}
-          >
-            {tab.icon}
-            {tab.label}
-          </button>
-        ))}
-      </div>
+    <Tabs
+      value={activeSubTab}
+      onValueChange={(v) => { setActiveSubTab(v as SubTab); }}
+      className="flex flex-col h-full gap-0"
+    >
+      <TabsList variant="line" className="w-full justify-start rounded-none border-b border-border bg-card px-4">
+        <TabsTrigger value="plans" className="gap-1.5 text-sm">
+          <ClipboardList size={14} />
+          My Plans
+        </TabsTrigger>
+        <TabsTrigger value="schedule" className="gap-1.5 text-sm">
+          <Calendar size={14} />
+          Schedule
+        </TabsTrigger>
+      </TabsList>
 
-      <div style={{ flex: 1, overflow: "auto" }}>
-        {activeSubTab === "plans" && <PlanCreator onPlanGenerated={handlePlanGenerated} />}
-        {activeSubTab === "schedule" && <PlanCalendar onPlanGenerated={handlePlanGenerated} />}
-      </div>
-    </div>
+      <TabsContent value="plans" className="flex-1 overflow-auto">
+        <PlanCreator onPlanGenerated={handlePlanGenerated} />
+      </TabsContent>
+      <TabsContent value="schedule" className="flex-1 overflow-auto">
+        <PlanCalendar onPlanGenerated={handlePlanGenerated} />
+      </TabsContent>
+    </Tabs>
   );
 }

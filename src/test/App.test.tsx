@@ -61,7 +61,7 @@ describe("App", () => {
 
     render(<App />);
 
-    const skeletons = document.querySelectorAll(".skeleton");
+    const skeletons = document.querySelectorAll('[data-slot="skeleton"]');
     expect(skeletons.length).toBeGreaterThan(0);
   });
 

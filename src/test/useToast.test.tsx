@@ -1,50 +1,30 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { renderHook, act } from "@testing-library/react";
+import { describe, it, expect, vi } from "vitest";
+import { renderHook } from "@testing-library/react";
 import { useToast } from "../hooks/useToast";
+import { toast } from "sonner";
+
+vi.mock("sonner", () => ({
+  toast: {
+    success: vi.fn(),
+    error: vi.fn(),
+  },
+}));
 
 describe("useToast", () => {
-  beforeEach(() => {
-    vi.useFakeTimers();
+  it("returns showToast function", () => {
+    const { result } = renderHook(() => useToast());
+    expect(result.current.showToast).toBeTypeOf("function");
   });
 
-  it("starts with no toast", () => {
+  it("calls toast.success for success type", () => {
     const { result } = renderHook(() => useToast());
-    expect(result.current.toast).toBeNull();
-    expect(result.current.toastElement).toBeNull();
+    result.current.showToast("Saved", "success");
+    expect(toast.success).toHaveBeenCalledWith("Saved");
   });
 
-  it("shows a success toast", () => {
+  it("calls toast.error for error type", () => {
     const { result } = renderHook(() => useToast());
-
-    act(() => {
-      result.current.showToast("Saved", "success");
-    });
-
-    expect(result.current.toast).toEqual({ message: "Saved", type: "success" });
-    expect(result.current.toastElement).not.toBeNull();
-  });
-
-  it("shows an error toast", () => {
-    const { result } = renderHook(() => useToast());
-
-    act(() => {
-      result.current.showToast("Failed", "error");
-    });
-
-    expect(result.current.toast).toEqual({ message: "Failed", type: "error" });
-  });
-
-  it("auto-dismisses after 3 seconds", () => {
-    const { result } = renderHook(() => useToast());
-
-    act(() => {
-      result.current.showToast("Temporary", "success");
-    });
-    expect(result.current.toast).not.toBeNull();
-
-    act(() => {
-      vi.advanceTimersByTime(3000);
-    });
-    expect(result.current.toast).toBeNull();
+    result.current.showToast("Failed", "error");
+    expect(toast.error).toHaveBeenCalledWith("Failed");
   });
 });

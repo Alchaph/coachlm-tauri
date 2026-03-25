@@ -66,7 +66,7 @@ describe("Context", () => {
       expect(screen.getByText("Athlete Profile")).toBeInTheDocument();
     });
 
-    expect(screen.getByRole("button", { name: /athlete profile/i })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /athlete profile/i })).toBeInTheDocument();
   });
 
   it("displays profile form fields for age and max hr", async () => {
@@ -88,10 +88,10 @@ describe("Context", () => {
     render(<Context />);
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: /pinned insights/i })).toBeInTheDocument();
+      expect(screen.getByRole("tab", { name: /pinned insights/i })).toBeInTheDocument();
     });
 
-    await user.click(screen.getByRole("button", { name: /pinned insights/i }));
+    await user.click(screen.getByRole("tab", { name: /pinned insights/i }));
 
     await waitFor(() => {
       expect(screen.getByText("Focus on easy aerobic base before adding speed work.")).toBeInTheDocument();
@@ -105,16 +105,16 @@ describe("Context", () => {
     render(<Context />);
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: /pinned insights/i })).toBeInTheDocument();
+      expect(screen.getByRole("tab", { name: /pinned insights/i })).toBeInTheDocument();
     });
 
-    await user.click(screen.getByRole("button", { name: /pinned insights/i }));
+    await user.click(screen.getByRole("tab", { name: /pinned insights/i }));
 
     await waitFor(() => {
       expect(screen.getByText("Recovery weeks every 4th week are essential to avoid injury.")).toBeInTheDocument();
     });
 
-    const deleteButtons = screen.getAllByTitle("Delete insight");
+    const deleteButtons = screen.getAllByRole("button", { name: /delete insight/i });
     expect(deleteButtons).toHaveLength(2);
   });
 
@@ -125,10 +125,10 @@ describe("Context", () => {
     render(<Context />);
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: /pinned insights/i })).toBeInTheDocument();
+      expect(screen.getByRole("tab", { name: /pinned insights/i })).toBeInTheDocument();
     });
 
-    await user.click(screen.getByRole("button", { name: /pinned insights/i }));
+    await user.click(screen.getByRole("tab", { name: /pinned insights/i }));
 
     await waitFor(() => {
       expect(screen.getByText("No pinned insights yet.")).toBeInTheDocument();
@@ -143,16 +143,16 @@ describe("Context", () => {
     render(<Context />);
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: /pinned insights/i })).toBeInTheDocument();
+      expect(screen.getByRole("tab", { name: /pinned insights/i })).toBeInTheDocument();
     });
 
-    await user.click(screen.getByRole("button", { name: /pinned insights/i }));
+    await user.click(screen.getByRole("tab", { name: /pinned insights/i }));
 
     await waitFor(() => {
-      expect(screen.getAllByTitle("Delete insight")).toHaveLength(2);
+      expect(screen.getAllByRole("button", { name: /delete insight/i })).toHaveLength(2);
     });
 
-    const [firstDeleteButton] = screen.getAllByTitle("Delete insight");
+    const [firstDeleteButton] = screen.getAllByRole("button", { name: /delete insight/i });
     await user.click(firstDeleteButton);
 
     await waitFor(() => {

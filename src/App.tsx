@@ -4,6 +4,10 @@ import { listen } from "@tauri-apps/api/event";
 import { check } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { MessageSquare, LayoutDashboard, Brain, Calendar, Settings as SettingsIcon, RefreshCw, X, Check, Zap, CloudDownload, Download } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Progress } from "@/components/ui/progress";
 import Chat from "./components/Chat";
 import Dashboard from "./components/Dashboard";
 import Context from "./components/Context";
@@ -11,8 +15,6 @@ import SettingsPage from "./components/Settings";
 import TrainingPlanPage from "./components/TrainingPlan";
 import ShoeCalculator from "./components/ShoeCalculator";
 import Onboarding from "./components/Onboarding";
-import "./styles/global.css";
-import "./styles/markdown.css";
 
 type Tab = "chat" | "dashboard" | "context" | "plan" | "shoes" | "settings";
 type ChatStatus = "idle" | "thinking" | "replied";
@@ -70,7 +72,7 @@ export default function App() {
           setUpdateVersion(update.version);
         }
       } catch {
-        // Fail silently — offline or endpoint unreachable
+        // expected when offline or endpoint unreachable
       }
     })();
   }, []);
@@ -240,28 +242,22 @@ export default function App() {
 
   if (loading) {
     return (
-      <div style={{ display: "flex", height: "100vh", overflow: "hidden" }}>
-        <div style={{
-          width: "var(--sidebar-width)",
-          minWidth: "var(--sidebar-width)",
-          background: "var(--bg-secondary)",
-          borderRight: "1px solid var(--border-subtle)",
-          padding: "16px 0",
-        }}>
-          <div style={{ padding: "4px 20px 24px" }}>
-            <div className="skeleton" style={{ width: 100, height: 20, borderRadius: "var(--radius-sm)" }} />
+      <div className="flex h-screen overflow-hidden">
+        <div className="w-[220px] min-w-[220px] bg-card border-r border-sidebar-border py-4">
+          <div className="px-5 pb-6 pt-1">
+            <Skeleton className="h-5 w-[100px]" />
           </div>
           {Array.from({ length: 6 }, (_, i) => (
-            <div key={i} style={{ padding: "8px 22px", margin: "2px 0" }}>
-              <div className="skeleton" style={{ width: "75%", height: 16, borderRadius: "var(--radius-sm)" }} />
+            <div key={i} className="px-[22px] py-2 my-0.5">
+              <Skeleton className="h-4 w-3/4" />
             </div>
           ))}
         </div>
-        <div style={{ flex: 1, padding: 28 }}>
-          <div className="skeleton" style={{ width: 200, height: 24, marginBottom: 24, borderRadius: "var(--radius-sm)" }} />
-          <div className="skeleton" style={{ width: "100%", height: 120, marginBottom: 20, borderRadius: "var(--radius-md)" }} />
-          <div className="skeleton" style={{ width: "60%", height: 16, marginBottom: 12, borderRadius: "var(--radius-sm)" }} />
-          <div className="skeleton" style={{ width: "40%", height: 16, borderRadius: "var(--radius-sm)" }} />
+        <div className="flex-1 p-7">
+          <Skeleton className="h-6 w-[200px] mb-6" />
+          <Skeleton className="h-[120px] w-full mb-5 rounded-md" />
+          <Skeleton className="h-4 w-3/5 mb-3" />
+          <Skeleton className="h-4 w-2/5" />
         </div>
       </div>
     );
@@ -285,165 +281,73 @@ export default function App() {
 
   const showBanner = activeTab !== "chat" && chatStatus !== "idle";
 
-  return (
-    <div style={{ display: "flex", height: "100vh", overflow: "hidden" }}>
-      <nav
-        style={{
-          width: "var(--sidebar-width)",
-          minWidth: "var(--sidebar-width)",
-          background: "var(--bg-secondary)",
-          borderRight: "1px solid var(--border-subtle)",
-          display: "flex",
-          flexDirection: "column",
-          padding: "16px 0 12px",
-        }}
+  const renderNavButton = (item: NavItem) => {
+    const isActive = activeTab === item.id;
+    return (
+      <button
+        key={item.id}
+        onClick={() => { setActiveTab(item.id); }}
+        aria-current={isActive ? "page" : undefined}
+        className={cn(
+          "flex w-full items-center gap-2.5 rounded-sm px-3 py-2 text-[13px] text-left transition-colors duration-150",
+          isActive
+            ? "bg-accent text-foreground font-semibold"
+            : "text-muted-foreground hover:bg-accent hover:text-foreground font-normal"
+        )}
       >
-        <div
-          style={{
-            padding: "4px 20px 24px",
-            fontSize: "15px",
-            fontWeight: 700,
-            color: "var(--text-primary)",
-            letterSpacing: "-0.03em",
-            display: "flex",
-            alignItems: "center",
-            gap: 10,
-          }}
-        >
-          <div style={{
-            width: 26,
-            height: 26,
-            borderRadius: "var(--radius-sm)",
-            background: "var(--accent)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            fontSize: 13,
-            fontWeight: 800,
-            color: "white",
-            flexShrink: 0,
-          }}>C</div>
+        <div className={cn(
+          "flex size-[30px] shrink-0 items-center justify-center rounded-sm transition-colors duration-150",
+          isActive ? "bg-primary/15 text-primary" : "text-inherit"
+        )}>
+          {item.icon}
+        </div>
+        {item.label}
+      </button>
+    );
+  };
+
+  return (
+    <div className="flex h-screen overflow-hidden">
+      <nav className="flex w-[220px] min-w-[220px] flex-col bg-card border-r border-sidebar-border pt-4 pb-3">
+        <div className="flex items-center gap-2.5 px-5 pb-6 pt-1 text-[15px] font-bold text-foreground tracking-tight">
+          <div className="flex size-[26px] shrink-0 items-center justify-center rounded-sm bg-primary text-[13px] font-extrabold text-primary-foreground">
+            C
+          </div>
           CoachLM
         </div>
 
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2, padding: "0 10px" }}>
-          {mainNavItems.map((item) => {
-            const isActive = activeTab === item.id;
-            return (
-              <button
-                key={item.id}
-                onClick={() => { setActiveTab(item.id); }}
-                aria-current={isActive ? "page" : undefined}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 10,
-                  padding: "8px 12px",
-                  borderRadius: "var(--radius-sm)",
-                  background: isActive ? "var(--bg-hover)" : "transparent",
-                  color: isActive ? "var(--text-primary)" : "var(--text-secondary)",
-                  border: "none",
-                  cursor: "pointer",
-                  fontSize: 13,
-                  fontWeight: isActive ? 600 : 450,
-                  textAlign: "left",
-                  width: "100%",
-                  transition: "background var(--transition-fast), color var(--transition-fast)",
-                  position: "relative",
-                }}
-              >
-                <div style={{
-                  width: 30,
-                  height: 30,
-                  borderRadius: "var(--radius-sm)",
-                  background: isActive ? "var(--accent-subtle)" : "transparent",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  transition: "background var(--transition-fast)",
-                  color: isActive ? "var(--accent)" : "inherit",
-                  flexShrink: 0,
-                }}>
-                  {item.icon}
-                </div>
-                {item.label}
-              </button>
-            );
-          })}
+        <div className="flex flex-1 flex-col gap-0.5 px-2.5">
+          {mainNavItems.map(renderNavButton)}
         </div>
 
-        <div style={{
-          borderTop: "1px solid var(--border-subtle)",
-          margin: "0 10px",
-          paddingTop: 8,
-        }}>
-          {bottomNavItems.map((item) => {
-            const isActive = activeTab === item.id;
-            return (
-              <button
-                key={item.id}
-                onClick={() => { setActiveTab(item.id); }}
-                aria-current={isActive ? "page" : undefined}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 10,
-                  padding: "8px 12px",
-                  borderRadius: "var(--radius-sm)",
-                  background: isActive ? "var(--bg-hover)" : "transparent",
-                  color: isActive ? "var(--text-primary)" : "var(--text-secondary)",
-                  border: "none",
-                  cursor: "pointer",
-                  fontSize: 13,
-                  fontWeight: isActive ? 600 : 450,
-                  textAlign: "left",
-                  width: "100%",
-                  transition: "background var(--transition-fast), color var(--transition-fast)",
-                }}
-              >
-                <div style={{
-                  width: 30,
-                  height: 30,
-                  borderRadius: "var(--radius-sm)",
-                  background: isActive ? "var(--accent-subtle)" : "transparent",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  transition: "background var(--transition-fast)",
-                  color: isActive ? "var(--accent)" : "inherit",
-                  flexShrink: 0,
-                }}>
-                  {item.icon}
-                </div>
-                {item.label}
-              </button>
-            );
-          })}
+        <div className="mx-2.5 border-t border-sidebar-border pt-2">
+          {bottomNavItems.map(renderNavButton)}
         </div>
       </nav>
 
-      <main style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+      <main className="flex flex-1 flex-col overflow-hidden">
         {showBanner && (
           <button
-            className={`chat-banner ${chatStatus === "thinking" ? "chat-banner-thinking" : "chat-banner-replied"}`}
+            className={cn(
+              "flex w-full items-center gap-2.5 border-b border-border px-5 py-2.5 text-left text-[13px] transition-colors duration-150 hover:bg-secondary",
+              chatStatus === "thinking"
+                ? "text-muted-foreground border-l-[3px] border-l-muted-foreground bg-card animate-pulse"
+                : "text-primary border-l-[3px] border-l-primary font-medium bg-card"
+            )}
             onClick={() => { setActiveTab("chat"); }}
             type="button"
           >
             <MessageSquare size={14} />
-            <span style={{ flex: 1 }}>
+            <span className="flex-1">
               {chatStatus === "thinking" ? (chatProgress || "Coach is thinking...") : "Coach has replied"}
             </span>
-            <span style={{ fontSize: 12, opacity: 0.7 }}>Go to Chat</span>
+            <span className="text-xs opacity-70">Go to Chat</span>
           </button>
         )}
-        <div
-          style={{
-            flex: 1,
-            overflow: "hidden",
-            display: activeTab === "chat" ? "flex" : "none",
-            flexDirection: "column",
-          }}
-        >
+        <div className={cn(
+          "flex-1 overflow-hidden flex-col",
+          activeTab === "chat" ? "flex" : "hidden"
+        )}>
           <Chat onStatusChange={handleChatStatusChange} />
         </div>
         {activeTab === "dashboard" && <Dashboard />}
@@ -454,159 +358,115 @@ export default function App() {
       </main>
 
       {(planGenerating || planResult) && (
-        <div style={{
-          position: "fixed",
-          bottom: 24,
-          right: 24,
-          zIndex: 200,
-          background: "var(--bg-secondary)",
-          border: `1px solid ${planResult === "error" ? "var(--danger)" : planResult === "success" ? "var(--success)" : "var(--border)"}`,
-          borderRadius: "var(--radius-md)",
-          padding: "14px 20px",
-          minWidth: 280,
-          maxWidth: 400,
-          display: "flex",
-          alignItems: "center",
-          gap: 12,
-          boxShadow: "var(--shadow-lg)",
-        }}>
-          {planGenerating && <RefreshCw size={18} className="spin" style={{ color: "var(--accent)", flexShrink: 0 }} />}
-          {planResult === "success" && <Check size={18} style={{ color: "var(--success)", flexShrink: 0 }} />}
-          {planResult === "error" && <X size={18} style={{ color: "var(--danger)", flexShrink: 0 }} />}
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: planResult === "error" ? 4 : 0 }}>
+        <div className={cn(
+          "fixed bottom-6 right-6 z-[200] flex min-w-[280px] max-w-[400px] items-center gap-3 rounded-md bg-card px-5 py-3.5 shadow-lg border",
+          planResult === "error" ? "border-destructive" : planResult === "success" ? "border-success" : "border-border"
+        )}>
+          {planGenerating && <RefreshCw size={18} className="animate-spin shrink-0 text-primary" />}
+          {planResult === "success" && <Check size={18} className="shrink-0 text-success" />}
+          {planResult === "error" && <X size={18} className="shrink-0 text-destructive" />}
+          <div className="flex-1 min-w-0">
+            <div className={cn("text-[13px] font-semibold", planResult === "error" && "mb-1")}>
               {planGenerating ? "Generating Plan" : planResult === "success" ? "Plan Generated" : "Plan Generation Failed"}
             </div>
             {planGenerating && planProgress && (
-              <div style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 2 }}>{planProgress}</div>
+              <div className="text-xs text-muted-foreground mt-0.5">{planProgress}</div>
             )}
             {planResult === "error" && planError && (
-              <div style={{ fontSize: 12, color: "var(--danger)", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{planError}</div>
+              <div className="text-xs text-destructive mt-0.5 truncate">{planError}</div>
             )}
           </div>
           {planResult && (
-            <button
-              className="btn-ghost"
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              className="shrink-0"
               onClick={() => { setPlanResult(null); setPlanError(""); }}
-              style={{ flexShrink: 0, padding: 4 }}
             >
               <X size={14} />
-            </button>
+            </Button>
           )}
         </div>
       )}
 
       {(syncActive || syncResult) && (
-        <div style={{
-          position: "fixed",
-          bottom: (planGenerating || planResult) ? 90 : 24,
-          right: 24,
-          zIndex: 200,
-          background: "var(--bg-secondary)",
-          border: `1px solid ${syncResult === "error" ? "var(--danger)" : syncResult === "success" ? "var(--success)" : "var(--border)"}`,
-          borderRadius: "var(--radius-md)",
-          padding: "14px 20px",
-          minWidth: 280,
-          maxWidth: 400,
-          display: "flex",
-          alignItems: "center",
-          gap: 12,
-          boxShadow: "var(--shadow-lg)",
-          transition: "bottom var(--transition-normal)",
-        }}>
-          {syncActive && <RefreshCw size={18} className="spin" style={{ color: "var(--accent)", flexShrink: 0 }} />}
-          {syncResult === "success" && <Check size={18} style={{ color: "var(--success)", flexShrink: 0 }} />}
-          {syncResult === "error" && <CloudDownload size={18} style={{ color: "var(--danger)", flexShrink: 0 }} />}
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: syncResult === "error" ? 4 : 0 }}>
+        <div className={cn(
+          "fixed right-6 z-[200] flex min-w-[280px] max-w-[400px] items-center gap-3 rounded-md bg-card px-5 py-3.5 shadow-lg border transition-all duration-250",
+          syncResult === "error" ? "border-destructive" : syncResult === "success" ? "border-success" : "border-border",
+          (planGenerating || planResult) ? "bottom-[90px]" : "bottom-6"
+        )}>
+          {syncActive && <RefreshCw size={18} className="animate-spin shrink-0 text-primary" />}
+          {syncResult === "success" && <Check size={18} className="shrink-0 text-success" />}
+          {syncResult === "error" && <CloudDownload size={18} className="shrink-0 text-destructive" />}
+          <div className="flex-1 min-w-0">
+            <div className={cn("text-[13px] font-semibold", syncResult === "error" && "mb-1")}>
               {syncActive ? "Syncing Strava" : syncResult === "success" ? "Strava Sync Complete" : "Strava Sync Failed"}
             </div>
             {syncActive && syncProgress && (
-              <div style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 2 }}>{syncProgress}</div>
+              <div className="text-xs text-muted-foreground mt-0.5">{syncProgress}</div>
             )}
             {syncResult && syncMessage && (
-              <div style={{ fontSize: 12, color: syncResult === "error" ? "var(--danger)" : "var(--text-secondary)", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{syncMessage}</div>
+              <div className={cn("text-xs mt-0.5 truncate", syncResult === "error" ? "text-destructive" : "text-muted-foreground")}>{syncMessage}</div>
             )}
           </div>
           {syncResult && (
-            <button
-              className="btn-ghost"
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              className="shrink-0"
               onClick={() => { setSyncResult(null); setSyncMessage(""); }}
-              style={{ flexShrink: 0, padding: 4 }}
             >
               <X size={14} />
-            </button>
+            </Button>
           )}
         </div>
       )}
 
       {updateAvailable && (
-        <div style={{
-          position: "fixed",
-          bottom: (syncActive || syncResult) ? ((planGenerating || planResult) ? 156 : 90) : (planGenerating || planResult) ? 90 : 24,
-          right: 24,
-          zIndex: 200,
-          background: "var(--bg-secondary)",
-          border: "1px solid var(--accent)",
-          borderRadius: "var(--radius-md)",
-          padding: "14px 20px",
-          minWidth: 280,
-          maxWidth: 400,
-          display: "flex",
-          alignItems: "center",
-          gap: 12,
-          boxShadow: "var(--shadow-lg)",
-          transition: "bottom var(--transition-normal)",
-        }}>
+        <div className={cn(
+          "fixed right-6 z-[200] flex min-w-[280px] max-w-[400px] items-center gap-3 rounded-md bg-card border border-primary px-5 py-3.5 shadow-lg transition-all duration-250",
+          (syncActive || syncResult)
+            ? (planGenerating || planResult) ? "bottom-[156px]" : "bottom-[90px]"
+            : (planGenerating || planResult) ? "bottom-[90px]" : "bottom-6"
+        )}>
           {updateDownloading
-            ? <RefreshCw size={18} className="spin" style={{ color: "var(--accent)", flexShrink: 0 }} />
-            : <Download size={18} style={{ color: "var(--accent)", flexShrink: 0 }} />}
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 13, fontWeight: 600 }}>
+            ? <RefreshCw size={18} className="animate-spin shrink-0 text-primary" />
+            : <Download size={18} className="shrink-0 text-primary" />}
+          <div className="flex-1 min-w-0">
+            <div className="text-[13px] font-semibold">
               {updateDownloading ? "Downloading Update" : `Update Available: v${updateVersion}`}
             </div>
             {updateDownloading ? (
-              <div style={{ marginTop: 6 }}>
-                <div style={{
-                  height: 4,
-                  background: "var(--bg-primary)",
-                  borderRadius: "var(--radius-sm)",
-                  overflow: "hidden",
-                }}>
-                  <div style={{
-                    height: "100%",
-                    width: `${String(updateProgress)}%`,
-                    background: "var(--accent)",
-                    borderRadius: "var(--radius-sm)",
-                    transition: "width var(--transition-normal)",
-                  }} />
-                </div>
-                <div style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 2 }}>
+              <div className="mt-1.5">
+                <Progress value={updateProgress} className="h-1" />
+                <div className="text-[11px] text-muted-foreground mt-0.5">
                   {`${String(updateProgress)}%`}
                 </div>
               </div>
             ) : (
-              <div style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 2 }}>
+              <div className="text-xs text-muted-foreground mt-0.5">
                 Click install to update and restart
               </div>
             )}
           </div>
           {!updateDownloading && (
             <>
-              <button
-                className="btn-ghost"
+              <Button
+                variant="ghost"
+                size="sm"
+                className="shrink-0 text-xs font-semibold text-primary"
                 onClick={handleUpdate}
-                style={{ flexShrink: 0, padding: "4px 10px", fontSize: 12, fontWeight: 600, color: "var(--accent)" }}
               >
                 Install
-              </button>
-              <button
-                className="btn-ghost"
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                className="shrink-0"
                 onClick={() => { setUpdateAvailable(false); }}
-                style={{ flexShrink: 0, padding: 4 }}
               >
                 <X size={14} />
-              </button>
+              </Button>
             </>
           )}
         </div>
