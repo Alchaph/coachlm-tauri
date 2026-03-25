@@ -224,7 +224,7 @@ describe("Chat event listener regression", () => {
     window.HTMLElement.prototype.scrollIntoView = vi.fn();
   });
 
-  it("emitting chat:send:progress produces exactly one step per distinct status", async () => {
+  it("emitting chat:send:progress shows only the current step", async () => {
     const { emit } = setupListenCapture();
     setupInvokeMocks({ send_message: new Promise(() => {}) });
     const user = userEvent.setup();
@@ -255,8 +255,7 @@ describe("Chat event listener regression", () => {
       expect(screen.getByText("Querying LLM")).toBeInTheDocument();
     });
 
-    expect(screen.getAllByText("Preparing context")).toHaveLength(1);
-    expect(screen.getAllByText("Querying LLM")).toHaveLength(1);
+    expect(screen.queryByText("Preparing context")).not.toBeInTheDocument();
   });
 
   it("deduplicates consecutive progress events with the same status label", async () => {

@@ -41,18 +41,7 @@ interface ProgressStep {
   completedAt?: number;
 }
 
-function ProgressStepRow({ step, isActive }: { step: ProgressStep; isActive: boolean }) {
-  const [, setTick] = useState(0);
-
-  useEffect(() => {
-    if (!isActive) return;
-    const interval = setInterval(() => { setTick((t) => t + 1); }, 100);
-    return () => { clearInterval(interval); };
-  }, [isActive]);
-
-  const elapsed = ((step.completedAt ?? Date.now()) - step.startedAt) / 1000;
-  const elapsedStr = elapsed < 10 ? elapsed.toFixed(1) : String(Math.round(elapsed));
-
+function CurrentStepLabel({ label }: { label: string }) {
   return (
     <div style={{
       display: "flex",
@@ -60,28 +49,22 @@ function ProgressStepRow({ step, isActive }: { step: ProgressStep; isActive: boo
       gap: 6,
       fontSize: 11,
       lineHeight: "16px",
-      color: isActive ? "var(--text-secondary)" : "var(--text-muted)",
+      color: "var(--text-secondary)",
     }}>
       <span style={{
         width: 8,
         textAlign: "center",
-        color: isActive ? "var(--accent)" : "var(--text-muted)",
+        color: "var(--accent)",
         fontSize: 10,
       }}>
-        {isActive ? "\u25CF" : "\u00B7"}
+        {"\u25CF"}
       </span>
-      <span>{step.label}</span>
-      <span style={{ color: "var(--text-muted)", fontSize: 10 }}>
-        {elapsedStr}s
-      </span>
+      <span>{label}</span>
     </div>
   );
 }
 
 function CollapsedStepsSummary({ steps }: { steps: ProgressStep[] }) {
-  const totalMs = steps.reduce((sum, s) => sum + ((s.completedAt ?? s.startedAt) - s.startedAt), 0);
-  const totalSec = totalMs / 1000;
-  const totalStr = totalSec < 10 ? totalSec.toFixed(1) : String(Math.round(totalSec));
   const labels = steps.map((s) => s.label).join(" \u00B7 ");
 
   return (
@@ -91,7 +74,7 @@ function CollapsedStepsSummary({ steps }: { steps: ProgressStep[] }) {
       marginBottom: 4,
       lineHeight: "16px",
     }}>
-      {labels} &middot; {totalStr}s
+      {labels}
     </div>
   );
 }
@@ -655,11 +638,7 @@ export default function Chat({ onStatusChange }: ChatProps) {
               }}
             >
               {showActiveStepper && (
-                <div style={{ display: "flex", flexDirection: "column", gap: 2, marginBottom: 6 }}>
-                  {progressSteps.map((step, i) => (
-                    <ProgressStepRow key={i} step={step} isActive={i === progressSteps.length - 1 && !step.completedAt} />
-                  ))}
-                </div>
+                <CurrentStepLabel label={progressSteps[progressSteps.length - 1].label} />
               )}
               {showThinkingLabel && (
                 <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>
@@ -777,20 +756,16 @@ export default function Chat({ onStatusChange }: ChatProps) {
           })}
 
            {loading && !messages.some((m) => m.id === -1) && (
-             <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", marginBottom: 16 }}>
-               {progressSteps.length > 0 ? (
-                 <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                   {progressSteps.map((step, i) => (
-                     <ProgressStepRow key={i} step={step} isActive={i === progressSteps.length - 1 && !step.completedAt} />
-                   ))}
-                 </div>
-               ) : (
-                 <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
-                   Thinking...
-                 </div>
-               )}
-             </div>
-           )}
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", marginBottom: 16 }}>
+                {progressSteps.length > 0 ? (
+                  <CurrentStepLabel label={progressSteps[progressSteps.length - 1].label} />
+                ) : (
+                  <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                    Thinking...
+                  </div>
+                )}
+              </div>
+            )}
 
            {loading && messages.some((m) => m.id === -1) && (
              <div style={{ display: "flex", justifyContent: "center", marginBottom: 16 }}>
