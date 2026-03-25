@@ -21,6 +21,7 @@ pub struct AppState {
     pub db: Arc<Database>,
     pub current_session_id: std::sync::Mutex<Option<String>>,
     pub cached_context: std::sync::Mutex<Option<String>>,
+    pub web_search_pending: std::sync::Mutex<Option<tokio::sync::oneshot::Sender<bool>>>,
 }
 
 /// Returns the cached LLM context string, building and caching it if not present.
@@ -226,6 +227,7 @@ async fn query_and_save_response(
     session_id: &str,
     user_content: &str,
     llm_ctx: &str,
+    web_search_pending: &std::sync::Mutex<Option<tokio::sync::oneshot::Sender<bool>>>,
 ) -> Result<String, String> {
     let mut web_search_context = String::new();
     match settings.effective_web_mode() {
@@ -249,6 +251,47 @@ async fn query_and_save_response(
                 }
                 Err(e) => {
                     log::warn!("Research agent failed, continuing without results: {e}");
+                }
+            }
+        }
+        WebAugmentationMode::Auto => {
+            emit_chat_progress(app_handle, session_id, "Analyzing message...");
+            let should_search = web_search::classifier::should_suggest_search(settings, user_content)
+                .await
+                .unwrap_or(false);
+
+            if should_search {
+                let (tx, rx) = tokio::sync::oneshot::channel();
+                if let Ok(mut pending) = web_search_pending.lock() {
+                    *pending = Some(tx);
+                }
+                app_handle
+                    .emit("web-search:suggest", serde_json::json!({ "session_id": session_id }))
+                    .ok();
+
+                emit_chat_progress(app_handle, session_id, "Waiting for confirmation...");
+                let approved = tokio::time::timeout(
+                    std::time::Duration::from_secs(30),
+                    rx,
+                )
+                .await
+                .unwrap_or(Ok(false))
+                .unwrap_or(false);
+
+                if let Ok(mut pending) = web_search_pending.lock() {
+                    *pending = None;
+                }
+
+                if approved {
+                    emit_chat_progress(app_handle, session_id, "Searching the web...");
+                    match web_search::search_duckduckgo(user_content, 5).await {
+                        Ok(results) => {
+                            web_search_context = web_search::format_search_results(&results);
+                        }
+                        Err(e) => {
+                            log::warn!("Web search failed, continuing without results: {e}");
+                        }
+                    }
                 }
             }
         }
@@ -334,7 +377,7 @@ async fn send_message(
     }
 
     let llm_ctx = get_or_build_context(&state);
-    query_and_save_response(&state.db, &app_handle, &settings, &session_id, &content, &llm_ctx).await
+    query_and_save_response(&state.db, &app_handle, &settings, &session_id, &content, &llm_ctx, &state.web_search_pending).await
 }
 
 #[tauri::command]
@@ -364,7 +407,20 @@ async fn edit_and_resend(
         .ok_or("Settings not configured. Complete the setup wizard first.")?;
 
     let llm_ctx = get_or_build_context(&state);
-    query_and_save_response(&state.db, &app_handle, &settings, &session_id, &content, &llm_ctx).await
+    query_and_save_response(&state.db, &app_handle, &settings, &session_id, &content, &llm_ctx, &state.web_search_pending).await
+}
+
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
+fn respond_web_search_suggestion(
+    state: tauri::State<'_, AppState>,
+    approved: bool,
+) {
+    if let Ok(mut pending) = state.web_search_pending.lock() {
+        if let Some(tx) = pending.take() {
+            tx.send(approved).ok();
+        }
+    }
 }
 
 #[tauri::command]
@@ -699,6 +755,7 @@ pub fn run() {
                 db: Arc::new(db),
                 current_session_id: std::sync::Mutex::new(None),
                 cached_context: std::sync::Mutex::new(None),
+                web_search_pending: std::sync::Mutex::new(None),
             };
             app.manage(state);
             Ok(())
@@ -722,6 +779,7 @@ pub fn run() {
             delete_pinned_insight,
             send_message,
             edit_and_resend,
+            respond_web_search_suggestion,
             get_chat_sessions,
             get_chat_messages,
             create_chat_session,
@@ -800,6 +858,7 @@ mod tests {
             db: std::sync::Arc::new(db),
             current_session_id: std::sync::Mutex::new(None),
             cached_context: std::sync::Mutex::new(Some("cached".to_string())),
+            web_search_pending: std::sync::Mutex::new(None),
         };
 
         invalidate_context_cache(&state);
@@ -817,6 +876,7 @@ mod tests {
             db: std::sync::Arc::new(db),
             current_session_id: std::sync::Mutex::new(None),
             cached_context: std::sync::Mutex::new(None),
+            web_search_pending: std::sync::Mutex::new(None),
         };
 
         let ctx1 = get_or_build_context(&state);

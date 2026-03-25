@@ -8,6 +8,7 @@ pub enum WebAugmentationMode {
     Off,
     Simple,
     Agent,
+    Auto,
 }
 
 impl WebAugmentationMode {
@@ -15,6 +16,7 @@ impl WebAugmentationMode {
         match value.to_lowercase().as_str() {
             "simple" => Self::Simple,
             "agent" => Self::Agent,
+            "auto" => Self::Auto,
             _ => Self::Off,
         }
     }
@@ -26,6 +28,7 @@ impl fmt::Display for WebAugmentationMode {
             Self::Off => write!(f, "off"),
             Self::Simple => write!(f, "simple"),
             Self::Agent => write!(f, "agent"),
+            Self::Auto => write!(f, "auto"),
         }
     }
 }
