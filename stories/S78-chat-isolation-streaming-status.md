@@ -1,7 +1,7 @@
 ---
 id: S78
 title: Chat session isolation and streaming progress steps
-status: in-progress
+status: done
 created: 2026-03-22
 updated: 2026-03-22
 ---

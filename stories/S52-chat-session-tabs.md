@@ -1,7 +1,7 @@
 ---
 id: S52
 title: Chat session tabs with auto-naming
-status: in-progress
+status: done
 created: 2026-03-20
 updated: 2026-03-20
 ---
