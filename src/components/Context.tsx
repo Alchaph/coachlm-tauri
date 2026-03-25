@@ -50,6 +50,12 @@ export default function Context() {
     previewBtnRef.current?.focus();
   }, []);
 
+  useEffect(() => {
+    if (showPreview) {
+      modalRef.current?.focus();
+    }
+  }, [showPreview]);
+
   const loadData = useCallback(async () => {
     try {
       const [p, ins] = await Promise.all([
