@@ -7,10 +7,10 @@
   --text-primary: #eef2f7;
   --text-secondary: #7a8fa6;
   --text-muted: #455566;
-  --accent: #3b82f6;
-  --accent-hover: #2563eb;
-  --accent-dim: #1d4ed8;
-  --accent-subtle: #1e3a5f;
+  --accent: #e94560;
+  --accent-hover: #d63b55;
+  --accent-dim: #b8304a;
+  --accent-subtle: #3d1a25;
   --border: #1e2f40;
   --border-subtle: #172030;
   --danger: #ef4444;
@@ -99,7 +99,7 @@ button:active:not(:disabled) {
 }
 .btn-primary:hover:not(:disabled) {
   background: var(--accent-hover);
-  box-shadow: 0 0 16px #3b82f640;
+  box-shadow: 0 0 16px #e9456040;
 }
 
 .btn-secondary {
