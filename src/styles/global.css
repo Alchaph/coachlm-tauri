@@ -1,21 +1,34 @@
 :root {
-  --bg-primary: #1b2636;
-  --bg-secondary: #243044;
-  --bg-tertiary: #2d3b50;
-  --bg-hover: #354560;
-  --text-primary: #e2e8f0;
-  --text-secondary: #94a3b8;
-  --text-muted: #64748b;
+  --bg-primary: #0e1520;
+  --bg-secondary: #131f2e;
+  --bg-tertiary: #192436;
+  --bg-hover: #1e2d42;
+  --bg-elevated: #243350;
+  --text-primary: #eef2f7;
+  --text-secondary: #7a8fa6;
+  --text-muted: #455566;
   --accent: #3b82f6;
   --accent-hover: #2563eb;
-  --accent-dim: #1e40af;
-  --border: #334155;
+  --accent-dim: #1d4ed8;
+  --accent-subtle: #1e3a5f;
+  --border: #1e2f40;
+  --border-subtle: #172030;
   --danger: #ef4444;
   --danger-hover: #dc2626;
   --success: #22c55e;
   --warning: #f59e0b;
-  --sidebar-width: 200px;
+  --warm: #e94560;
+  --shadow-sm: 0 1px 3px #00000040;
+  --shadow-md: 0 4px 16px #00000060;
+  --shadow-lg: 0 8px 32px #00000080;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --sidebar-width: 220px;
   --sidebar-collapsed: 56px;
+  --transition-fast: 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+  --transition-normal: 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  --transition-slow: 0.4s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 * {
@@ -28,11 +41,13 @@ html, body, #root {
   height: 100%;
   width: 100%;
   overflow: hidden;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   background: var(--bg-primary);
   color: var(--text-primary);
   font-size: 14px;
   line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 input, textarea, select, button {
@@ -44,15 +59,16 @@ input, textarea, select, button {
 input, textarea, select {
   background: var(--bg-tertiary);
   border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
   color: var(--text-primary);
   outline: none;
-  transition: border-color 0.2s;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
 }
 
 input:focus, textarea:focus, select:focus {
   border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-subtle);
 }
 
 input::placeholder, textarea::placeholder {
@@ -62,15 +78,19 @@ input::placeholder, textarea::placeholder {
 button {
   cursor: pointer;
   border: none;
-  border-radius: 4px;
-  padding: 8px 16px;
+  border-radius: var(--radius-sm);
+  padding: 10px 18px;
   font-weight: 500;
-  transition: background 0.2s, opacity 0.2s;
+  transition: background var(--transition-fast), opacity var(--transition-fast), transform var(--transition-fast), box-shadow var(--transition-fast);
 }
 
 button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+button:active:not(:disabled) {
+  transform: scale(0.97);
 }
 
 .btn-primary {
@@ -79,6 +99,7 @@ button:disabled {
 }
 .btn-primary:hover:not(:disabled) {
   background: var(--accent-hover);
+  box-shadow: 0 0 16px #3b82f640;
 }
 
 .btn-secondary {
@@ -88,6 +109,7 @@ button:disabled {
 }
 .btn-secondary:hover:not(:disabled) {
   background: var(--bg-hover);
+  border-color: var(--text-muted);
 }
 
 .btn-danger {
@@ -96,12 +118,13 @@ button:disabled {
 }
 .btn-danger:hover:not(:disabled) {
   background: var(--danger-hover);
+  box-shadow: 0 0 16px #ef444440;
 }
 
 .btn-ghost {
   background: transparent;
   color: var(--text-secondary);
-  padding: 4px 8px;
+  padding: 6px 10px;
 }
 .btn-ghost:hover:not(:disabled) {
   color: var(--text-primary);
@@ -109,38 +132,44 @@ button:disabled {
 }
 
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #475569;
-  border-radius: 4px;
+  background: var(--bg-hover);
+  border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  background: var(--text-muted);
 }
 
 html {
   scrollbar-width: thin;
-  scrollbar-color: #475569 transparent;
+  scrollbar-color: var(--bg-hover) transparent;
 }
 
 label {
   display: block;
-  font-size: 13px;
+  font-size: 12px;
   color: var(--text-secondary);
-  margin-bottom: 4px;
+  margin-bottom: 6px;
   font-weight: 500;
+  letter-spacing: 0.01em;
 }
 
 .card {
   background: var(--bg-secondary);
   border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 16px;
+  border-radius: var(--radius-md);
+  padding: 20px;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.card:hover {
+  border-color: var(--border);
 }
 
 .empty-state {
@@ -158,8 +187,10 @@ label {
 a {
   color: var(--accent);
   text-decoration: none;
+  transition: color var(--transition-fast);
 }
 a:hover {
+  color: var(--accent-hover);
   text-decoration: underline;
 }
 
@@ -169,14 +200,15 @@ a:hover {
   right: 24px;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 12px 20px;
-  border-radius: 4px;
+  gap: 10px;
+  padding: 14px 22px;
+  border-radius: var(--radius-md);
   font-size: 13px;
   font-weight: 500;
   color: white;
   z-index: 9999;
-  animation: toast-in 0.25s ease-out;
+  animation: toast-in 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: var(--shadow-lg);
 }
 
 .toast-success {
@@ -190,27 +222,25 @@ a:hover {
 @keyframes toast-in {
   from {
     opacity: 0;
-    transform: translateY(12px);
+    transform: translateY(16px) scale(0.96);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: translateY(0) scale(1);
   }
 }
-
-/* Chat notification banner */
 
 .chat-banner {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 16px;
+  gap: 10px;
+  padding: 10px 20px;
   border: none;
   border-bottom: 1px solid var(--border);
   border-left: 3px solid transparent;
   background: var(--bg-secondary);
   cursor: pointer;
-  transition: background 0.15s;
+  transition: background var(--transition-fast);
   font-size: 13px;
   font-family: inherit;
   width: 100%;
@@ -238,16 +268,14 @@ a:hover {
   50% { opacity: 0.6; }
 }
 
-/* Chat history sidebar */
-
 .chat-sidebar {
-  width: 220px;
-  min-width: 220px;
+  width: 240px;
+  min-width: 240px;
   background: var(--bg-secondary);
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
-  transition: width 0.2s ease, min-width 0.2s ease;
+  transition: width var(--transition-normal), min-width var(--transition-normal);
   overflow: hidden;
 }
 
@@ -260,42 +288,42 @@ a:hover {
 .chat-sidebar-header {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px 10px;
+  gap: 8px;
+  padding: 12px 14px;
   border-bottom: 1px solid var(--border);
   white-space: nowrap;
 }
 
 .chat-sidebar-header span {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
-  color: var(--text-secondary);
+  color: var(--text-muted);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.08em;
 }
 
 .chat-sidebar-list {
   flex: 1;
   overflow-y: auto;
-  padding: 4px 0;
+  padding: 6px;
 }
 
 .chat-session-item {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 10px;
-  margin: 1px 4px;
-  border-radius: 0;
+  padding: 9px 12px;
+  margin: 1px 0;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--text-secondary);
   font-size: 13px;
   cursor: pointer;
   border: none;
-  width: calc(100% - 8px);
+  width: 100%;
   text-align: left;
   font-family: inherit;
-  transition: background 0.15s, color 0.15s;
+  transition: background var(--transition-fast), color var(--transition-fast);
   white-space: nowrap;
   overflow: hidden;
 }
@@ -321,10 +349,10 @@ a:hover {
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 0;
+  border-radius: var(--radius-sm);
   padding: 2px;
   opacity: 0;
-  transition: opacity 0.15s, background 0.15s;
+  transition: opacity var(--transition-fast), background var(--transition-fast);
   flex-shrink: 0;
 }
 
@@ -337,11 +365,9 @@ a:hover {
   color: var(--danger);
 }
 
-/* Chat message edit button */
-
 .chat-message-edit {
   opacity: 0;
-  transition: opacity 0.15s;
+  transition: opacity var(--transition-fast);
 }
 
 .chat-message-user:hover ~ .chat-message-edit,
@@ -353,8 +379,8 @@ a:hover {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 4px 10px;
-  border-radius: 12px;
+  padding: 5px 12px;
+  border-radius: 100px;
   border: 1px solid var(--border);
   background: var(--bg-tertiary);
   color: var(--text-muted);
@@ -362,7 +388,7 @@ a:hover {
   font-weight: 500;
   font-family: inherit;
   cursor: pointer;
-  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  transition: background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
 }
 
 .chat-toggle-chip:hover {
@@ -373,21 +399,19 @@ a:hover {
 .chat-toggle-chip-active {
   color: var(--accent);
   border-color: var(--accent);
-  background: var(--bg-secondary);
+  background: var(--accent-subtle);
 }
-
-/* Web search suggestion banner */
 
 .web-search-banner {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 16px;
+  gap: 12px;
+  padding: 12px 18px;
   background: var(--bg-tertiary);
   border: 1px solid var(--accent);
-  border-radius: 4px;
+  border-radius: var(--radius-md);
   margin: 0 0 8px;
-  animation: banner-slide-in 0.2s ease-out;
+  animation: banner-slide-in 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .web-search-banner-text {
@@ -398,22 +422,20 @@ a:hover {
 
 .web-search-banner-actions {
   display: flex;
-  gap: 6px;
+  gap: 8px;
   flex-shrink: 0;
 }
 
 @keyframes banner-slide-in {
   from {
     opacity: 0;
-    transform: translateY(4px);
+    transform: translateY(6px);
   }
   to {
     opacity: 1;
     transform: translateY(0);
   }
 }
-
-/* Focus-visible outlines for keyboard navigation */
 
 :focus-visible {
   outline: 2px solid var(--accent);
@@ -425,10 +447,8 @@ textarea:focus-visible,
 select:focus-visible {
   outline: none;
   border-color: var(--accent);
-  box-shadow: 0 0 0 2px var(--accent-dim);
+  box-shadow: 0 0 0 3px var(--accent-subtle);
 }
-
-/* Reduced motion preference */
 
 @media (prefers-reduced-motion: reduce) {
   *,
@@ -440,8 +460,6 @@ select:focus-visible {
   }
 }
 
-/* Skeleton loading placeholder */
-
 .skeleton {
   background: linear-gradient(
     90deg,
@@ -451,15 +469,13 @@ select:focus-visible {
   );
   background-size: 200% 100%;
   animation: skeleton-shimmer 1.5s ease-in-out infinite;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
 }
 
 @keyframes skeleton-shimmer {
   0% { background-position: 200% 0; }
   100% { background-position: -200% 0; }
 }
-
-/* Spin animation */
 
 .spin {
   animation: spin 1s linear infinite;

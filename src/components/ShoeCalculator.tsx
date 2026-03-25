@@ -190,9 +190,9 @@ export default function ShoeCalculator() {
   };
 
   const getTierStyle = (tier: "supershoe" | "racer" | "trainer"): React.CSSProperties => {
-    if (tier === "supershoe") return { color: "var(--accent)", background: "var(--accent-dim)", padding: "2px 6px", borderRadius: 4, fontSize: 11, fontWeight: 600 };
-    if (tier === "racer") return { color: "var(--warning)", background: "#451a03", padding: "2px 6px", borderRadius: 4, fontSize: 11, fontWeight: 600 };
-    return { color: "var(--text-muted)", background: "var(--bg-tertiary)", padding: "2px 6px", borderRadius: 4, fontSize: 11, fontWeight: 600 };
+    if (tier === "supershoe") return { color: "var(--accent)", background: "var(--accent-dim)", padding: "2px 6px", borderRadius: "var(--radius-sm)", fontSize: 11, fontWeight: 600 };
+    if (tier === "racer") return { color: "var(--warning)", background: "#451a03", padding: "2px 6px", borderRadius: "var(--radius-sm)", fontSize: 11, fontWeight: 600 };
+    return { color: "var(--text-muted)", background: "var(--bg-tertiary)", padding: "2px 6px", borderRadius: "var(--radius-sm)", fontSize: 11, fontWeight: 600 };
   };
 
   const tierLabel = (tier: "supershoe" | "racer" | "trainer") => {
