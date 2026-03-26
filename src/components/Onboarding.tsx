@@ -8,6 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
+import CloudProviderGuide from "@/components/CloudProviderGuide";
 
 export default function Onboarding({ onComplete }: { onComplete: () => void }) {
   const [step, setStep] = useState(1);
@@ -254,6 +255,12 @@ export default function Onboarding({ onComplete }: { onComplete: () => void }) {
                           ? "Get a free API key at console.groq.com"
                           : "Get a free API key at openrouter.ai/keys"}
                       </p>
+                      <div className="mt-3">
+                        <CloudProviderGuide
+                          provider={provider as "groq" | "openrouter"}
+                          compact
+                        />
+                      </div>
                     </div>
 
                     <div>

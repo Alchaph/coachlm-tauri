@@ -310,9 +310,14 @@ export default function App() {
     <div className="flex h-screen overflow-hidden">
       <nav className="flex w-[220px] min-w-[220px] flex-col bg-card border-r border-sidebar-border pt-4 pb-3">
         <div className="flex items-center gap-2.5 px-5 pb-6 pt-1 text-[15px] font-bold text-foreground tracking-tight">
-          <div className="flex size-[26px] shrink-0 items-center justify-center rounded-sm bg-primary text-[13px] font-extrabold text-primary-foreground">
-            C
-          </div>
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" className="size-[26px] shrink-0 rounded-sm">
+            <rect x="32" y="32" width="960" height="960" rx="220" ry="220" fill="#1a1a2e"/>
+            <g transform="translate(512, 512)" strokeLinecap="round" fill="none">
+              <line x1="-60" y1="220" x2="100" y2="-240" stroke="#e94560" strokeWidth="80"/>
+              <line x1="-200" y1="180" x2="-80" y2="-200" stroke="#e94560" strokeWidth="50" opacity="0.55"/>
+              <line x1="-310" y1="140" x2="-220" y2="-160" stroke="#e94560" strokeWidth="30" opacity="0.25"/>
+            </g>
+          </svg>
           CoachLM
         </div>
 

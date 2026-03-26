@@ -4,13 +4,14 @@ import { listen } from "@tauri-apps/api/event";
 import { ask } from "@tauri-apps/plugin-dialog";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Send, Pin, Plus, X, MessageSquare, PanelLeftClose, PanelLeftOpen, Globe, Pencil, Copy, RefreshCw, Square } from "lucide-react";
+import { Send, Pin, Plus, X, MessageSquare, PanelLeftClose, PanelLeftOpen, Globe, Pencil, Copy, RefreshCw, Square, HelpCircle } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import OllamaSetupGuide from "@/components/OllamaSetupGuide";
 
 interface Message {
   id: number;
@@ -90,6 +91,10 @@ export default function Chat({ onStatusChange }: ChatProps) {
   const [editContent, setEditContent] = useState("");
   const [completedSteps, setCompletedSteps] = useState<ProgressStep[] | null>(null);
   const lastCompletedStepsRef = useRef<ProgressStep[] | null>(null);
+  const [ollamaOffline, setOllamaOffline] = useState(false);
+  const [ollamaEndpoint, setOllamaEndpoint] = useState("http://localhost:11434");
+  const [activeLlm, setActiveLlm] = useState("ollama");
+  const [showSetupGuide, setShowSetupGuide] = useState(false);
 
   const scrollToBottom = useCallback(() => {
     if (shouldAutoScroll.current) {
@@ -148,6 +153,16 @@ export default function Chat({ onStatusChange }: ChatProps) {
       try {
         const settings = await invoke<ChatSettingsData>("get_settings");
         setWebAugmentationMode(settings.web_augmentation_mode);
+        setActiveLlm(settings.active_llm);
+        setOllamaEndpoint(settings.ollama_endpoint || "http://localhost:11434");
+
+        const isOllama = settings.active_llm === "ollama" || settings.active_llm === "local" || !settings.active_llm;
+        if (isOllama) {
+          const connected = await invoke<boolean>("check_ollama_status", {
+            endpoint: settings.ollama_endpoint || "http://localhost:11434",
+          });
+          setOllamaOffline(!connected);
+        }
       } catch {
         // Settings may not exist yet on first run
       }
@@ -623,23 +638,34 @@ export default function Chat({ onStatusChange }: ChatProps) {
         >
           {messages.length === 0 && !loading && (
             <div className="text-center py-12 px-6 text-muted-foreground/60">
-              <MessageSquare size={48} className="mx-auto mb-4 opacity-30" />
-              <p>Start a conversation with your AI running coach.</p>
-              <div className="flex flex-wrap gap-2 justify-center mt-3">
-                {["Review my last week of training", "Help me plan a tempo run", "What should my easy pace be?"].map((prompt) => (
-                  <button
-                    key={prompt}
-                    type="button"
-                    onClick={() => { setInput(prompt); }}
-                    className="px-3.5 py-2 text-xs bg-secondary border border-border rounded-md text-muted-foreground cursor-pointer transition-colors duration-150 hover:border-muted-foreground hover:text-foreground"
-                  >
-                    {prompt}
-                  </button>
-                ))}
-              </div>
-              <p className="text-[11px] mt-3 text-muted-foreground/60">
-                Tip: Be specific with running terms for best results. LLMs can misinterpret ambiguous phrases.
-              </p>
+              {ollamaOffline && (activeLlm === "ollama" || activeLlm === "local" || !activeLlm) ? (
+                <div className="max-w-[480px] mx-auto text-left">
+                  <OllamaSetupGuide
+                    endpoint={ollamaEndpoint}
+                    onConnected={() => { setOllamaOffline(false); }}
+                  />
+                </div>
+              ) : (
+                <>
+                  <MessageSquare size={48} className="mx-auto mb-4 opacity-30" />
+                  <p>Start a conversation with your AI running coach.</p>
+                  <div className="flex flex-wrap gap-2 justify-center mt-3">
+                    {["Review my last week of training", "Help me plan a tempo run", "What should my easy pace be?"].map((prompt) => (
+                      <button
+                        key={prompt}
+                        type="button"
+                        onClick={() => { setInput(prompt); }}
+                        className="px-3.5 py-2 text-xs bg-secondary border border-border rounded-md text-muted-foreground cursor-pointer transition-colors duration-150 hover:border-muted-foreground hover:text-foreground"
+                      >
+                        {prompt}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-[11px] mt-3 text-muted-foreground/60">
+                    Tip: Be specific with running terms for best results. LLMs can misinterpret ambiguous phrases.
+                  </p>
+                </>
+              )}
             </div>
           )}
 
@@ -808,18 +834,42 @@ export default function Chat({ onStatusChange }: ChatProps) {
           )}
 
           {error && (
-            <div className="text-left px-4 py-2.5 rounded-md bg-card border border-destructive flex items-center justify-between gap-3">
-              <span>{error}</span>
-              {!loading && (
-                <Button
-                  variant="ghost"
-                  size="xs"
-                  onClick={() => { setError(null); setInput(lastSentContentRef.current); }}
-                  aria-label="Retry"
-                  className="shrink-0 flex items-center gap-1 text-destructive"
-                >
-                  <RefreshCw size={14} /> Retry
-                </Button>
+            <div className="flex flex-col gap-2">
+              <div className="text-left px-4 py-2.5 rounded-md bg-card border border-destructive flex items-center justify-between gap-3">
+                <span>{error}</span>
+                <div className="flex items-center gap-1 shrink-0">
+                  {error.includes("Ollama is not running") && (
+                    <Button
+                      variant="ghost"
+                      size="xs"
+                      onClick={() => { setShowSetupGuide((prev) => !prev); }}
+                      aria-label="Setup guide"
+                      className="flex items-center gap-1 text-muted-foreground"
+                    >
+                      <HelpCircle size={14} /> {showSetupGuide ? "Hide Guide" : "Setup Guide"}
+                    </Button>
+                  )}
+                  {!loading && (
+                    <Button
+                      variant="ghost"
+                      size="xs"
+                      onClick={() => { setError(null); setShowSetupGuide(false); setInput(lastSentContentRef.current); }}
+                      aria-label="Retry"
+                      className="flex items-center gap-1 text-destructive"
+                    >
+                      <RefreshCw size={14} /> Retry
+                    </Button>
+                  )}
+                </div>
+              </div>
+              {showSetupGuide && (
+                <div className="px-4 py-3 rounded-md bg-card border border-border">
+                  <OllamaSetupGuide
+                    endpoint={ollamaEndpoint}
+                    compact
+                    onConnected={() => { setOllamaOffline(false); setShowSetupGuide(false); setError(null); }}
+                  />
+                </div>
               )}
             </div>
           )}

@@ -14,6 +14,8 @@ import { Separator } from "@/components/ui/separator";
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import OllamaSetupGuide from "@/components/OllamaSetupGuide";
+import CloudProviderGuide from "@/components/CloudProviderGuide";
 
 interface SettingsData {
   active_llm: string;
@@ -218,6 +220,25 @@ export default function SettingsPage() {
                       </span>
                     </div>
                   )}
+                  {ollamaConnected === false && (
+                    <Accordion className="mt-3 border border-border rounded-md">
+                      <AccordionItem value="setup-guide" className="border-none">
+                        <AccordionTrigger className="px-3 py-2.5 text-xs font-medium text-destructive bg-secondary rounded-md hover:no-underline">
+                          <span className="flex items-center gap-2">
+                            <Info size={14} />
+                            How to install and start Ollama
+                          </span>
+                        </AccordionTrigger>
+                        <AccordionContent className="px-4 pt-3 pb-4">
+                          <OllamaSetupGuide
+                            endpoint={settings.ollama_endpoint}
+                            compact
+                            onConnected={() => { setOllamaConnected(true); }}
+                          />
+                        </AccordionContent>
+                      </AccordionItem>
+                    </Accordion>
+                  )}
                 </div>
 
                 <div className="flex flex-col gap-1.5">
@@ -274,6 +295,22 @@ export default function SettingsPage() {
                       ? "Get a free API key at console.groq.com"
                       : "Get a free API key at openrouter.ai/keys"}
                   </p>
+                  <Accordion className="mt-3 border border-border rounded-md">
+                    <AccordionItem value="cloud-guide" className="border-none">
+                      <AccordionTrigger className="px-3 py-2.5 text-xs font-medium text-muted-foreground bg-secondary rounded-md hover:no-underline">
+                        <span className="flex items-center gap-2">
+                          <Info size={14} />
+                          How to get your {settings.active_llm === "groq" ? "Groq" : "OpenRouter"} API key
+                        </span>
+                      </AccordionTrigger>
+                      <AccordionContent className="px-4 pt-3 pb-4">
+                        <CloudProviderGuide
+                          provider={settings.active_llm as "groq" | "openrouter"}
+                          compact
+                        />
+                      </AccordionContent>
+                    </AccordionItem>
+                  </Accordion>
                 </div>
 
                 <div className="flex flex-col gap-1.5">

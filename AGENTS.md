@@ -16,6 +16,34 @@ A Tauri v2 desktop app for runners that:
 
 This app is local only. It does not use cloud sync.
 
+### Landing page
+
+The project landing page (marketing / product website) lives on a separate branch: `feat/website`. Do not merge it into `main`. If you need to work on the landing page, check out that branch first. Do not mix landing page changes with app changes.
+
+The landing page is deployed to GitHub Pages at **https://alchaph.github.io/coachlm-tauri/**.
+
+#### How deployment works
+
+- A GitHub Actions workflow (`.github/workflows/pages.yml`) deploys the site automatically on every push to `feat/website`.
+- The workflow runs `npm ci && npm run build`, uploads the `dist/` folder, and deploys via `actions/deploy-pages`.
+- Manual deployment can also be triggered via `workflow_dispatch` in the Actions tab.
+- Vite's `base` is set to `/coachlm-tauri/` in `vite.config.ts` to match the GitHub Pages subpath. Do not change this unless the repo is moved or a custom domain is configured.
+
+#### How to update the landing page
+
+1. Check out the `feat/website` branch. If a worktree already exists (e.g. at `../coachlm-website`), work there instead.
+2. Make changes in `src/`. The site is a Vite + React + TypeScript project (no Tailwind, no shadcn — inline styles + CSS variables).
+3. Run `npm run build` to verify the build passes.
+4. Commit and push to `feat/website`. The Pages workflow will deploy automatically within a few minutes.
+5. Verify at https://alchaph.github.io/coachlm-tauri/.
+
+#### Rules for landing page changes
+
+- Do not merge `feat/website` into `main` or vice versa.
+- Do not add app dependencies (Tauri, shadcn, etc.) to the landing page `package.json`.
+- Do not hardcode version numbers in download links. The site fetches the latest release from the GitHub API at runtime.
+- The landing page has its own `package.json`, `tsconfig.json`, and `vite.config.ts`. These are independent from the app's config files.
+
 ---
 
 ## Non-negotiable workflow
@@ -25,10 +53,11 @@ Every task follows this exact sequence. No exceptions.
 1. READ: Load the story file for the feature you are working on.
 2. UPDATE: Set story status to `in-progress`.
 3. BUILD: Implement the feature exactly as specified.
-4. TEST: Run `cargo clippy -- -D warnings` and `cargo test` for Rust. Run `npm run lint` and `npx tsc --noEmit` for TypeScript. Run `npm run tauri dev` to verify.
+4. TEST: Run `cargo clippy -- -D warnings` and `cargo test` for Rust. Run `npm run lint` and `npx tsc --noEmit` for TypeScript. Run `npm run tauri dev`. Also run the e2e and other tests to verify.
 5. UPDATE: Set story status to `done` (or `failed` with notes).
 6. COMMIT: git commit with message format: `feat|fix|docs(SXX): short description`.
 7. RELEASE: Create and push a semver tag (e.g. `v1.8.2`). This triggers the release pipeline.
+8. CHECK: use gh to check if the build pipelines are green. this should be if the local tests are also green
 
 If a story file does not exist for what you are about to build, stop and create one first.
 
