@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import * as THREE from 'three'
 import { gsap } from 'gsap'
+import { useReleaseAssets, detectPlatform } from '../hooks/useReleaseAssets'
 
 const PARTICLE_COUNT = 2000
 
@@ -68,6 +69,8 @@ function createParticleSystem(): {
 export default function Hero() {
   const canvasRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
+  const releaseAssets = useReleaseAssets()
+  const platform = detectPlatform()
 
   useEffect(() => {
     if (!canvasRef.current) return
@@ -210,6 +213,37 @@ export default function Hero() {
     flexWrap: 'wrap',
   }
 
+  const platformLabelStyle: React.CSSProperties = {
+    fontSize: 12,
+    color: 'var(--text-3)',
+    fontFamily: 'var(--font-body)',
+    marginTop: 10,
+  }
+
+  const downloadWrapStyle: React.CSSProperties = {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+  }
+
+  const downloadHref =
+    platform === 'mac'
+      ? (releaseAssets.macArm ?? releaseAssets.fallback)
+      : platform === 'windows'
+        ? (releaseAssets.windows ?? releaseAssets.fallback)
+        : platform === 'linux'
+          ? (releaseAssets.linux ?? releaseAssets.fallback)
+          : releaseAssets.fallback
+
+  const platformLabel =
+    platform === 'mac'
+      ? 'for macOS'
+      : platform === 'windows'
+        ? 'for Windows'
+        : platform === 'linux'
+          ? 'for Linux'
+          : null
+
   const gradientStyle: React.CSSProperties = {
     position: 'absolute',
     top: '20%',
@@ -244,19 +278,24 @@ export default function Hero() {
           No cloud. No telemetry. Just you and your data.
         </p>
         <div style={btnsStyle}>
-          <a
-            href="https://github.com/Alchaph/coachlm-tauri/releases/latest"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="btn btn-primary"
-          >
-            Download now
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-              <polyline points="7 10 12 15 17 10" />
-              <line x1="12" y1="15" x2="12" y2="3" />
-            </svg>
-          </a>
+          <div style={downloadWrapStyle}>
+            <a
+              href={downloadHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn btn-primary"
+            >
+              Download now
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="7 10 12 15 17 10" />
+                <line x1="12" y1="15" x2="12" y2="3" />
+              </svg>
+            </a>
+            {platformLabel !== null && (
+              <span style={platformLabelStyle}>{platformLabel}</span>
+            )}
+          </div>
           <a
             href="https://github.com/Alchaph/coachlm-tauri"
             target="_blank"
