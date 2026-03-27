@@ -52,6 +52,27 @@ const DEFAULT_MOCK_RESPONSES: Record<string, unknown> = {
     latest_date: null,
   },
 
+  // Activity detail
+  get_activity_laps: [
+    { id: 1, activity_id: "a1", lap_index: 1, distance: 1000.0, elapsed_time: 280, moving_time: 275, average_speed: 3.57, max_speed: 4.2, average_heartrate: 142.0, max_heartrate: 155.0, average_cadence: 178.0, total_elevation_gain: 5.0 },
+    { id: 2, activity_id: "a1", lap_index: 2, distance: 1000.0, elapsed_time: 270, moving_time: 265, average_speed: 3.70, max_speed: 4.3, average_heartrate: 148.0, max_heartrate: 162.0, average_cadence: 182.0, total_elevation_gain: 3.0 },
+    { id: 3, activity_id: "a1", lap_index: 3, distance: 1000.0, elapsed_time: 285, moving_time: 280, average_speed: 3.51, max_speed: 4.1, average_heartrate: 150.0, max_heartrate: 165.0, average_cadence: 176.0, total_elevation_gain: 8.0 },
+  ],
+  get_activity_zone_distribution: [
+    { activity_id: "a1", zone_index: 0, zone_min: 0, zone_max: 120, time_seconds: 120 },
+    { activity_id: "a1", zone_index: 1, zone_min: 120, zone_max: 148, time_seconds: 480 },
+    { activity_id: "a1", zone_index: 2, zone_min: 148, zone_max: 162, time_seconds: 900 },
+    { activity_id: "a1", zone_index: 3, zone_min: 162, zone_max: 174, time_seconds: 360 },
+    { activity_id: "a1", zone_index: 4, zone_min: 174, zone_max: -1, time_seconds: 60 },
+  ],
+  get_aggregated_zone_distribution: [
+    { zone_index: 0, zone_min: 0, zone_max: 120, total_time_seconds: 600, percentage: 10.0 },
+    { zone_index: 1, zone_min: 120, zone_max: 148, total_time_seconds: 1800, percentage: 30.0 },
+    { zone_index: 2, zone_min: 148, zone_max: 162, total_time_seconds: 2400, percentage: 40.0 },
+    { zone_index: 3, zone_min: 162, zone_max: 174, total_time_seconds: 900, percentage: 15.0 },
+    { zone_index: 4, zone_min: 174, zone_max: -1, total_time_seconds: 300, percentage: 5.0 },
+  ],
+
   // Context
   get_profile_data: null,
   save_profile_data: null,

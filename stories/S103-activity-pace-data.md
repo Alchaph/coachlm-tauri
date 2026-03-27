@@ -1,7 +1,7 @@
 ---
 id: S103
 title: Activity pace distribution data
-status: draft
+status: done
 created: 2026-03-27
 updated: 2026-03-27
 ---
@@ -56,3 +56,4 @@ so that **my AI coach can distinguish interval sessions from steady runs and pro
 | Date | Status | Notes |
 |---|---|---|
 | 2026-03-27 | draft | Created from user request for more detailed activity data |
+| 2026-03-27 | done | Implemented: laps fetch, pace chart, context CV, E2E tests |

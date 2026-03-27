@@ -1,7 +1,7 @@
 ---
 id: S98
 title: Heart rate zone analytics
-status: draft
+status: done
 created: 2026-03-27
 updated: 2026-03-27
 ---
@@ -45,3 +45,4 @@ Chart library: consider lightweight options (recharts is already available if us
 | Date | Status | Notes |
 |---|---|---|
 | 2026-03-27 | draft | Created |
+| 2026-03-27 | done | Implemented: zone fetch, zone charts, aggregate panel, context block, E2E tests |
