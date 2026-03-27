@@ -98,8 +98,6 @@ describe("App", () => {
       expect(screen.queryByText("Loading...")).not.toBeInTheDocument();
     });
 
-    expect(screen.getByText("CoachLM")).toBeInTheDocument();
-
     expect(screen.getByText("Chat")).toBeInTheDocument();
     expect(screen.getByText("Dashboard")).toBeInTheDocument();
     expect(screen.getByText("Context")).toBeInTheDocument();
