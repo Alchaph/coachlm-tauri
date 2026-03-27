@@ -110,3 +110,39 @@ export function formatElevation(meters: number | null): string {
   if (meters === null) return "\u2014";
   return `${Math.round(meters).toString()}m`;
 }
+
+export interface ActivityLap {
+  id: number | null;
+  activity_id: string;
+  lap_index: number;
+  distance: number;
+  elapsed_time: number;
+  moving_time: number;
+  average_speed: number;
+  max_speed: number | null;
+  average_heartrate: number | null;
+  max_heartrate: number | null;
+  average_cadence: number | null;
+  total_elevation_gain: number | null;
+}
+
+export interface ActivityZoneDistribution {
+  activity_id: string;
+  zone_index: number;
+  zone_min: number;
+  zone_max: number;
+  time_seconds: number;
+}
+
+export interface ActivityZoneSummary {
+  zone_index: number;
+  zone_min: number;
+  zone_max: number;
+  total_time_seconds: number;
+  percentage: number;
+}
+
+export interface ActivityDetailData {
+  laps: ActivityLap[];
+  zones: ActivityZoneDistribution[];
+}

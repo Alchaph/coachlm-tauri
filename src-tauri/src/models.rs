@@ -336,3 +336,37 @@ pub struct ExportData {
 pub struct SettingsMeta {
     pub active_llm: String,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ActivityLap {
+    pub id: Option<i64>,
+    pub activity_id: String,
+    pub lap_index: i64,
+    pub distance: f64,
+    pub elapsed_time: i64,
+    pub moving_time: i64,
+    pub average_speed: f64,
+    pub max_speed: Option<f64>,
+    pub average_heartrate: Option<f64>,
+    pub max_heartrate: Option<f64>,
+    pub average_cadence: Option<f64>,
+    pub total_elevation_gain: Option<f64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ActivityZoneDistribution {
+    pub activity_id: String,
+    pub zone_index: i64,
+    pub zone_min: i64,
+    pub zone_max: i64,
+    pub time_seconds: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ActivityZoneSummary {
+    pub zone_index: i64,
+    pub zone_min: i64,
+    pub zone_max: i64,
+    pub total_time_seconds: i64,
+    pub percentage: f64,
+}

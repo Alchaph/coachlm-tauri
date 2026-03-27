@@ -622,6 +622,217 @@ impl Database {
         Ok(())
     }
 
+    // ── Activity Laps ──────────────────────────────────────────
+    pub fn save_activity_laps(
+        &self,
+        activity_id: &str,
+        laps: &[super::models::ActivityLap],
+    ) -> SqlResult<()> {
+        let conn = self.conn();
+        conn.execute(
+            "DELETE FROM activity_laps WHERE activity_id = ?1",
+            params![activity_id],
+        )?;
+        for lap in laps {
+            conn.execute(
+                "INSERT INTO activity_laps
+                 (activity_id, lap_index, distance, elapsed_time, moving_time, average_speed,
+                  max_speed, average_heartrate, max_heartrate, average_cadence, total_elevation_gain)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+                params![
+                    activity_id,
+                    lap.lap_index,
+                    lap.distance,
+                    lap.elapsed_time,
+                    lap.moving_time,
+                    lap.average_speed,
+                    lap.max_speed,
+                    lap.average_heartrate,
+                    lap.max_heartrate,
+                    lap.average_cadence,
+                    lap.total_elevation_gain,
+                ],
+            )?;
+        }
+        Ok(())
+    }
+
+    pub fn get_activity_laps(
+        &self,
+        activity_id: &str,
+    ) -> SqlResult<Vec<super::models::ActivityLap>> {
+        let conn = self.conn();
+        let mut stmt = conn.prepare(
+            "SELECT id, activity_id, lap_index, distance, elapsed_time, moving_time, average_speed,
+                    max_speed, average_heartrate, max_heartrate, average_cadence, total_elevation_gain
+             FROM activity_laps WHERE activity_id = ?1 ORDER BY lap_index ASC",
+        )?;
+        let rows = stmt.query_map(params![activity_id], |row| {
+            Ok(super::models::ActivityLap {
+                id: row.get(0)?,
+                activity_id: row.get(1)?,
+                lap_index: row.get(2)?,
+                distance: row.get(3)?,
+                elapsed_time: row.get(4)?,
+                moving_time: row.get(5)?,
+                average_speed: row.get(6)?,
+                max_speed: row.get(7)?,
+                average_heartrate: row.get(8)?,
+                max_heartrate: row.get(9)?,
+                average_cadence: row.get(10)?,
+                total_elevation_gain: row.get(11)?,
+            })
+        })?;
+        rows.collect()
+    }
+
+    pub fn has_activity_laps(&self, activity_id: &str) -> SqlResult<bool> {
+        let conn = self.conn();
+        conn.query_row(
+            "SELECT COUNT(*) > 0 FROM activity_laps WHERE activity_id = ?1",
+            params![activity_id],
+            |row| row.get(0),
+        )
+    }
+
+    // ── Activity Zone Distribution ─────────────────────────────
+    pub fn save_activity_zone_distribution(
+        &self,
+        activity_id: &str,
+        zones: &[super::models::ActivityZoneDistribution],
+    ) -> SqlResult<()> {
+        let conn = self.conn();
+        conn.execute(
+            "DELETE FROM activity_zone_distribution WHERE activity_id = ?1",
+            params![activity_id],
+        )?;
+        for zone in zones {
+            conn.execute(
+                "INSERT INTO activity_zone_distribution
+                 (activity_id, zone_index, zone_min, zone_max, time_seconds)
+                 VALUES (?1, ?2, ?3, ?4, ?5)",
+                params![
+                    activity_id,
+                    zone.zone_index,
+                    zone.zone_min,
+                    zone.zone_max,
+                    zone.time_seconds,
+                ],
+            )?;
+        }
+        Ok(())
+    }
+
+    pub fn get_activity_zone_distribution(
+        &self,
+        activity_id: &str,
+    ) -> SqlResult<Vec<super::models::ActivityZoneDistribution>> {
+        let conn = self.conn();
+        let mut stmt = conn.prepare(
+            "SELECT activity_id, zone_index, zone_min, zone_max, time_seconds
+             FROM activity_zone_distribution WHERE activity_id = ?1 ORDER BY zone_index ASC",
+        )?;
+        let rows = stmt.query_map(params![activity_id], |row| {
+            Ok(super::models::ActivityZoneDistribution {
+                activity_id: row.get(0)?,
+                zone_index: row.get(1)?,
+                zone_min: row.get(2)?,
+                zone_max: row.get(3)?,
+                time_seconds: row.get(4)?,
+            })
+        })?;
+        rows.collect()
+    }
+
+    pub fn has_activity_zone_distribution(&self, activity_id: &str) -> SqlResult<bool> {
+        let conn = self.conn();
+        conn.query_row(
+            "SELECT COUNT(*) > 0 FROM activity_zone_distribution WHERE activity_id = ?1",
+            params![activity_id],
+            |row| row.get(0),
+        )
+    }
+
+    pub fn get_aggregated_zone_distribution(
+        &self,
+        days: Option<u32>,
+    ) -> SqlResult<Vec<super::models::ActivityZoneSummary>> {
+        let conn = self.conn();
+        let total_time: i64 = if let Some(n) = days {
+            conn.query_row(
+                "SELECT COALESCE(SUM(z.time_seconds), 0)
+                 FROM activity_zone_distribution z
+                 JOIN activities a ON z.activity_id = a.activity_id
+                 WHERE a.start_date >= datetime('now', ?1)",
+                params![format!("-{n} days")],
+                |row| row.get(0),
+            )?
+        } else {
+            conn.query_row(
+                "SELECT COALESCE(SUM(time_seconds), 0) FROM activity_zone_distribution",
+                [],
+                |row| row.get(0),
+            )?
+        };
+
+        if total_time == 0 {
+            return Ok(Vec::new());
+        }
+
+        let rows: Vec<super::models::ActivityZoneSummary> = if let Some(n) = days {
+            let mut stmt = conn.prepare(
+                "SELECT z.zone_index, z.zone_min, z.zone_max, SUM(z.time_seconds) AS zone_time
+                 FROM activity_zone_distribution z
+                 JOIN activities a ON z.activity_id = a.activity_id
+                 WHERE a.start_date >= datetime('now', ?1)
+                 GROUP BY z.zone_index, z.zone_min, z.zone_max
+                 ORDER BY z.zone_index ASC",
+            )?;
+            let mapped = stmt.query_map(params![format!("-{n} days")], |row| {
+                let zone_time: i64 = row.get(3)?;
+                Ok(super::models::ActivityZoneSummary {
+                    zone_index: row.get(0)?,
+                    zone_min: row.get(1)?,
+                    zone_max: row.get(2)?,
+                    total_time_seconds: zone_time,
+                    percentage: 0.0,
+                })
+            })?;
+            mapped.collect::<SqlResult<Vec<_>>>()?
+        } else {
+            let mut stmt = conn.prepare(
+                "SELECT zone_index, zone_min, zone_max, SUM(time_seconds) AS zone_time
+                 FROM activity_zone_distribution
+                 GROUP BY zone_index, zone_min, zone_max
+                 ORDER BY zone_index ASC",
+            )?;
+            let mapped = stmt.query_map([], |row| {
+                let zone_time: i64 = row.get(3)?;
+                Ok(super::models::ActivityZoneSummary {
+                    zone_index: row.get(0)?,
+                    zone_min: row.get(1)?,
+                    zone_max: row.get(2)?,
+                    total_time_seconds: zone_time,
+                    percentage: 0.0,
+                })
+            })?;
+            mapped.collect::<SqlResult<Vec<_>>>()?
+        };
+
+        #[allow(clippy::cast_precision_loss)]
+        let total_f = total_time as f64;
+        Ok(rows
+            .into_iter()
+            .map(|mut s| {
+                #[allow(clippy::cast_precision_loss)]
+                {
+                    s.percentage = s.total_time_seconds as f64 / total_f * 100.0;
+                }
+                s
+            })
+            .collect())
+    }
+
     // ── Athlete Stats / Zones / Gear ───────────────────────────
     pub fn save_athlete_stats(&self, data: &str) -> SqlResult<()> {
         let conn = self.conn();
@@ -1053,6 +1264,11 @@ static MIGRATIONS: &[MigrationEntry] = &[
         migration_08_athlete_profile_custom_notes,
     ),
     (9, "research cache table", migration_09_research_cache),
+    (
+        10,
+        "activity laps and zone distribution tables",
+        migration_10_laps_and_zones,
+    ),
 ];
 
 fn migration_01_core_tables(conn: &Connection) -> SqlResult<()> {
@@ -1292,6 +1508,33 @@ fn migration_08_athlete_profile_custom_notes(conn: &Connection) -> SqlResult<()>
 
 fn migration_09_research_cache(conn: &Connection) -> SqlResult<()> {
     crate::research::cache::ResearchCache::init_tables(conn)
+}
+
+fn migration_10_laps_and_zones(conn: &Connection) -> SqlResult<()> {
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS activity_laps (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          activity_id TEXT NOT NULL REFERENCES activities(activity_id),
+          lap_index INTEGER NOT NULL,
+          distance REAL NOT NULL,
+          elapsed_time INTEGER NOT NULL,
+          moving_time INTEGER NOT NULL,
+          average_speed REAL NOT NULL,
+          max_speed REAL,
+          average_heartrate REAL,
+          max_heartrate REAL,
+          average_cadence REAL,
+          total_elevation_gain REAL
+        );
+        CREATE TABLE IF NOT EXISTS activity_zone_distribution (
+          activity_id TEXT NOT NULL REFERENCES activities(activity_id),
+          zone_index INTEGER NOT NULL,
+          zone_min INTEGER NOT NULL,
+          zone_max INTEGER NOT NULL,
+          time_seconds INTEGER NOT NULL,
+          PRIMARY KEY (activity_id, zone_index)
+        );",
+    )
 }
 
 fn derive_key_argon2(password: &[u8], salt: &[u8]) -> Result<[u8; 32], argon2::Error> {
@@ -2458,6 +2701,7 @@ mod tests {
             migration_07_settings_columns(&conn).expect("migration 7 failed");
             migration_08_athlete_profile_custom_notes(&conn).expect("migration 8 failed");
             migration_09_research_cache(&conn).expect("migration 9 failed");
+            migration_10_laps_and_zones(&conn).expect("migration 10 failed");
         }
 
         let db = Database::new(&dir).expect("Database::new should succeed on existing DB");
