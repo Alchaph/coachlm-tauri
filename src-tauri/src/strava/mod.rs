@@ -665,4 +665,32 @@ mod tests {
         let cv = compute_pace_variance(&laps).expect("should return Some");
         assert!(cv.abs() < 1e-9, "identical valid laps should give CV near zero after skipping zero-distance, got {cv}");
     }
+
+    #[test]
+    fn test_compute_pace_variance_multi_lap() {
+        let laps = vec![
+            make_lap("a1", 1, 300, 1000.0),
+            make_lap("a1", 2, 360, 1000.0),
+            make_lap("a1", 3, 240, 1000.0),
+        ];
+        let cv = compute_pace_variance(&laps);
+        assert!(cv.is_some(), "should return Some for 3 laps with variance");
+        let cv_val = cv.expect("already checked Some");
+        assert!(!cv_val.is_nan(), "CV should not be NaN");
+        assert!(cv_val > 0.0, "CV should be positive for varying paces, got {cv_val}");
+    }
+
+    #[test]
+    fn test_compute_pace_variance_zero_distance_laps_excluded() {
+        let laps = vec![
+            make_lap("a1", 1, 300, 1000.0),
+            make_lap("a1", 2, 300, 0.0),
+            make_lap("a1", 3, 300, 0.0),
+        ];
+        let cv = compute_pace_variance(&laps);
+        assert!(
+            cv.is_none(),
+            "only one nonzero-distance lap remains — should return None, got {cv:?}"
+        );
+    }
 }

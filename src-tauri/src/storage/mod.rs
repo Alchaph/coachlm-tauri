@@ -2775,4 +2775,347 @@ mod tests {
         );
         cleanup(&dir);
     }
+
+    // ── Activity Laps ──────────────────────────────────────────
+
+    #[test]
+    fn test_migration_10_creates_tables() {
+        let (db, dir) = temp_db();
+        let conn = db.conn();
+
+        let tables: Vec<String> = {
+            let mut stmt = conn
+                .prepare("SELECT name FROM sqlite_master WHERE type='table'")
+                .expect("prepare failed");
+            stmt.query_map([], |row| row.get(0))
+                .expect("query failed")
+                .map(|r| r.expect("row failed"))
+                .collect()
+        };
+
+        assert!(
+            tables.contains(&"activity_laps".to_string()),
+            "activity_laps table should exist after migration 10"
+        );
+        assert!(
+            tables.contains(&"activity_zone_distribution".to_string()),
+            "activity_zone_distribution table should exist after migration 10"
+        );
+        cleanup(&dir);
+    }
+
+    fn sample_laps(activity_id: &str) -> Vec<super::super::models::ActivityLap> {
+        vec![
+            super::super::models::ActivityLap {
+                id: None,
+                activity_id: activity_id.to_string(),
+                lap_index: 1,
+                distance: 1000.0,
+                elapsed_time: 300,
+                moving_time: 295,
+                average_speed: 3.33,
+                max_speed: Some(4.0),
+                average_heartrate: Some(155.0),
+                max_heartrate: Some(170.0),
+                average_cadence: Some(180.0),
+                total_elevation_gain: Some(5.0),
+            },
+            super::super::models::ActivityLap {
+                id: None,
+                activity_id: activity_id.to_string(),
+                lap_index: 2,
+                distance: 1000.0,
+                elapsed_time: 310,
+                moving_time: 308,
+                average_speed: 3.23,
+                max_speed: Some(3.9),
+                average_heartrate: Some(160.0),
+                max_heartrate: Some(172.0),
+                average_cadence: Some(178.0),
+                total_elevation_gain: Some(8.0),
+            },
+            super::super::models::ActivityLap {
+                id: None,
+                activity_id: activity_id.to_string(),
+                lap_index: 3,
+                distance: 1000.0,
+                elapsed_time: 290,
+                moving_time: 288,
+                average_speed: 3.45,
+                max_speed: Some(4.1),
+                average_heartrate: Some(162.0),
+                max_heartrate: Some(175.0),
+                average_cadence: Some(182.0),
+                total_elevation_gain: Some(3.0),
+            },
+        ]
+    }
+
+    #[test]
+    fn test_save_get_activity_laps() {
+        let (db, dir) = temp_db();
+        let activity = sample_activity("act-lap-1", Some("strava-lap-1"));
+        db.insert_activity(&activity)
+            .expect("insert_activity failed");
+
+        let laps = sample_laps("act-lap-1");
+        db.save_activity_laps("act-lap-1", &laps)
+            .expect("save_activity_laps failed");
+
+        let retrieved = db
+            .get_activity_laps("act-lap-1")
+            .expect("get_activity_laps failed");
+        assert_eq!(retrieved.len(), 3);
+        assert_eq!(retrieved[0].lap_index, 1);
+        assert!((retrieved[0].distance - 1000.0).abs() < f64::EPSILON);
+        assert_eq!(retrieved[0].elapsed_time, 300);
+        assert_eq!(retrieved[1].lap_index, 2);
+        assert_eq!(retrieved[1].elapsed_time, 310);
+        assert_eq!(retrieved[2].lap_index, 3);
+        assert_eq!(retrieved[2].elapsed_time, 290);
+        assert_eq!(
+            retrieved[0].average_heartrate,
+            Some(155.0),
+            "heartrate should round-trip"
+        );
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn test_save_activity_laps_replaces() {
+        let (db, dir) = temp_db();
+        let activity = sample_activity("act-lap-2", None);
+        db.insert_activity(&activity)
+            .expect("insert_activity failed");
+
+        let laps_v1 = sample_laps("act-lap-2");
+        db.save_activity_laps("act-lap-2", &laps_v1)
+            .expect("save v1 failed");
+
+        // Second save with different elapsed_time values
+        let laps_v2: Vec<super::super::models::ActivityLap> = laps_v1
+            .iter()
+            .map(|l| super::super::models::ActivityLap {
+                elapsed_time: l.elapsed_time + 100,
+                ..l.clone()
+            })
+            .collect();
+        db.save_activity_laps("act-lap-2", &laps_v2)
+            .expect("save v2 failed");
+
+        let retrieved = db.get_activity_laps("act-lap-2").expect("get failed");
+        assert_eq!(retrieved.len(), 3, "should have exactly 3 laps (not 6)");
+        for lap in &retrieved {
+            assert!(
+                lap.elapsed_time >= 390,
+                "expected v2 lap elapsed_time >= 390, got {}",
+                lap.elapsed_time
+            );
+        }
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn test_has_activity_laps_true_false() {
+        let (db, dir) = temp_db();
+        let activity = sample_activity("act-lap-3", None);
+        db.insert_activity(&activity).expect("insert failed");
+
+        assert!(
+            !db.has_activity_laps("act-lap-3").expect("has_laps failed"),
+            "should be false before saving laps"
+        );
+
+        let laps = sample_laps("act-lap-3");
+        db.save_activity_laps("act-lap-3", &laps)
+            .expect("save failed");
+
+        assert!(
+            db.has_activity_laps("act-lap-3").expect("has_laps failed"),
+            "should be true after saving laps"
+        );
+
+        assert!(
+            !db.has_activity_laps("nonexistent-activity")
+                .expect("has_laps failed"),
+            "should be false for unknown activity"
+        );
+        cleanup(&dir);
+    }
+
+    // ── Activity Zone Distribution ─────────────────────────────
+
+    fn sample_zones(activity_id: &str) -> Vec<super::super::models::ActivityZoneDistribution> {
+        vec![
+            super::super::models::ActivityZoneDistribution {
+                activity_id: activity_id.to_string(),
+                zone_index: 0,
+                zone_min: 0,
+                zone_max: 120,
+                time_seconds: 300,
+            },
+            super::super::models::ActivityZoneDistribution {
+                activity_id: activity_id.to_string(),
+                zone_index: 1,
+                zone_min: 120,
+                zone_max: 145,
+                time_seconds: 900,
+            },
+            super::super::models::ActivityZoneDistribution {
+                activity_id: activity_id.to_string(),
+                zone_index: 2,
+                zone_min: 145,
+                zone_max: 999,
+                time_seconds: 1800,
+            },
+        ]
+    }
+
+    #[test]
+    fn test_save_get_zone_distribution() {
+        let (db, dir) = temp_db();
+        let activity = sample_activity("act-zone-1", None);
+        db.insert_activity(&activity).expect("insert failed");
+
+        let zones = sample_zones("act-zone-1");
+        db.save_activity_zone_distribution("act-zone-1", &zones)
+            .expect("save failed");
+
+        let retrieved = db
+            .get_activity_zone_distribution("act-zone-1")
+            .expect("get failed");
+        assert_eq!(retrieved.len(), 3);
+        assert_eq!(retrieved[0].zone_index, 0);
+        assert_eq!(retrieved[0].zone_min, 0);
+        assert_eq!(retrieved[0].zone_max, 120);
+        assert_eq!(retrieved[0].time_seconds, 300);
+        assert_eq!(retrieved[1].zone_index, 1);
+        assert_eq!(retrieved[1].time_seconds, 900);
+        assert_eq!(retrieved[2].zone_index, 2);
+        assert_eq!(retrieved[2].time_seconds, 1800);
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn test_has_zone_distribution() {
+        let (db, dir) = temp_db();
+        let activity = sample_activity("act-zone-2", None);
+        db.insert_activity(&activity).expect("insert failed");
+
+        assert!(
+            !db.has_activity_zone_distribution("act-zone-2")
+                .expect("has_zone failed"),
+            "should be false before saving zones"
+        );
+
+        let zones = sample_zones("act-zone-2");
+        db.save_activity_zone_distribution("act-zone-2", &zones)
+            .expect("save failed");
+
+        assert!(
+            db.has_activity_zone_distribution("act-zone-2")
+                .expect("has_zone failed"),
+            "should be true after saving zones"
+        );
+
+        assert!(
+            !db.has_activity_zone_distribution("nonexistent-activity")
+                .expect("has_zone failed"),
+            "should be false for unknown activity"
+        );
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn test_aggregated_zone_distribution_days_filter() {
+        use chrono::Utc;
+        let (db, dir) = temp_db();
+
+        let mut recent = sample_activity("act-recent", None);
+        recent.start_date = Some(Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string());
+        db.insert_activity(&recent).expect("insert recent failed");
+
+        let old_date = (Utc::now() - chrono::Duration::days(30))
+            .format("%Y-%m-%dT%H:%M:%SZ")
+            .to_string();
+        let mut old = sample_activity("act-old", Some("strava-old-99"));
+        old.start_date = Some(old_date);
+        db.insert_activity(&old).expect("insert old failed");
+
+        db.save_activity_zone_distribution("act-recent", &sample_zones("act-recent"))
+            .expect("save recent zones failed");
+        db.save_activity_zone_distribution("act-old", &sample_zones("act-old"))
+            .expect("save old zones failed");
+
+        let result = db
+            .get_aggregated_zone_distribution(Some(7))
+            .expect("aggregated failed");
+        let total_time: i64 = result.iter().map(|z| z.total_time_seconds).sum();
+
+        assert_eq!(
+            total_time, 3000,
+            "7-day filter should only include recent activity (300+900+1800=3000s), got {total_time}"
+        );
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn test_aggregated_zone_distribution_all_time() {
+        use chrono::Utc;
+        let (db, dir) = temp_db();
+
+        let mut act1 = sample_activity("act-all-1", None);
+        act1.start_date = Some(Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string());
+        db.insert_activity(&act1).expect("insert act1 failed");
+
+        let old_date = (Utc::now() - chrono::Duration::days(30))
+            .format("%Y-%m-%dT%H:%M:%SZ")
+            .to_string();
+        let mut act2 = sample_activity("act-all-2", Some("strava-all-2"));
+        act2.start_date = Some(old_date);
+        db.insert_activity(&act2).expect("insert act2 failed");
+
+        db.save_activity_zone_distribution("act-all-1", &sample_zones("act-all-1"))
+            .expect("save zones act1 failed");
+        db.save_activity_zone_distribution("act-all-2", &sample_zones("act-all-2"))
+            .expect("save zones act2 failed");
+
+        let result = db
+            .get_aggregated_zone_distribution(None)
+            .expect("aggregated all-time failed");
+        let total_time: i64 = result.iter().map(|z| z.total_time_seconds).sum();
+
+        assert_eq!(
+            total_time, 6000,
+            "all-time should include both activities (2 × 3000s = 6000s), got {total_time}"
+        );
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn test_aggregated_zone_percentages_sum() {
+        use chrono::Utc;
+        let (db, dir) = temp_db();
+
+        let mut activity = sample_activity("act-pct", None);
+        activity.start_date = Some(Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string());
+        db.insert_activity(&activity).expect("insert failed");
+
+        let zones = sample_zones("act-pct");
+        db.save_activity_zone_distribution("act-pct", &zones)
+            .expect("save zones failed");
+
+        let result = db
+            .get_aggregated_zone_distribution(None)
+            .expect("aggregated failed");
+
+        assert!(!result.is_empty(), "should have zone data");
+
+        let pct_sum: f64 = result.iter().map(|z| z.percentage).sum();
+        assert!(
+            (pct_sum - 100.0).abs() < 0.1,
+            "percentages should sum to ~100%, got {pct_sum}"
+        );
+        cleanup(&dir);
+    }
 }

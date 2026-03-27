@@ -746,4 +746,55 @@ mod tests {
 
         cleanup(&dir);
     }
+
+    #[test]
+    fn test_context_zone_summary_under_200_chars() {
+        use chrono::Utc;
+        let (db, dir) = temp_db();
+
+        let mut activity = minimal_activity("act-len", "strava-len", 10_000.0, 3600);
+        activity.start_date = Some(Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string());
+        db.insert_activity(&activity)
+            .expect("insert_activity failed");
+
+        let zones = vec![
+            ActivityZoneDistribution {
+                activity_id: "act-len".to_string(),
+                zone_index: 0,
+                zone_min: 0,
+                zone_max: 115,
+                time_seconds: 600,
+            },
+            ActivityZoneDistribution {
+                activity_id: "act-len".to_string(),
+                zone_index: 1,
+                zone_min: 115,
+                zone_max: 152,
+                time_seconds: 1200,
+            },
+            ActivityZoneDistribution {
+                activity_id: "act-len".to_string(),
+                zone_index: 2,
+                zone_min: 152,
+                zone_max: 999,
+                time_seconds: 1800,
+            },
+        ];
+        db.save_activity_zone_distribution("act-len", &zones)
+            .expect("save_activity_zone_distribution failed");
+
+        let zone_summaries = db
+            .get_aggregated_zone_distribution(Some(7))
+            .expect("get_aggregated_zone_distribution failed");
+        assert!(!zone_summaries.is_empty(), "expected zone data");
+
+        let zone_block = format_zone_distribution_block(&zone_summaries);
+        assert!(
+            zone_block.len() <= 200,
+            "zone block should be ≤200 chars, got {} chars: {zone_block}",
+            zone_block.len()
+        );
+
+        cleanup(&dir);
+    }
 }
