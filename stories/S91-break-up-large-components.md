@@ -1,8 +1,7 @@
 ---
 id: S91
 title: Break up large frontend components
-status: in-progress
-created: 2026-03-27
+status: done
 updated: 2026-03-27
 ---
 
@@ -16,12 +15,12 @@ so that **the frontend code is easier to navigate, test, and maintain**.
 
 ## Acceptance criteria
 
-- [ ] `Chat.tsx` (922 lines) is split into logical sub-components in `src/components/chat/`
-- [ ] `Dashboard.tsx` (524 lines) is split into logical sub-components in `src/components/dashboard/`
-- [ ] All sub-components use proper TypeScript types (no `any`)
-- [ ] All existing functionality preserved — no behavioral changes
-- [ ] `npx tsc --noEmit` passes
-- [ ] `npm run lint` passes
+- [x] `Chat.tsx` (922 lines) is split into logical sub-components in `src/components/chat/`
+- [x] `Dashboard.tsx` (524 lines) is split into logical sub-components in `src/components/dashboard/`
+- [x] All sub-components use proper TypeScript types (no `any`)
+- [x] All existing functionality preserved — no behavioral changes
+- [x] `npx tsc --noEmit` passes
+- [x] `npm run lint` passes
 
 ## Technical notes
 
@@ -68,3 +67,4 @@ Suggested sub-components in `src/components/dashboard/`:
 | Date | Status | Notes |
 |---|---|---|
 | 2026-03-27 | draft | Created |
+| 2026-03-27 | done | Split Chat.tsx into 6 sub-components in chat/, Dashboard.tsx into 4 sub-components in dashboard/ |
