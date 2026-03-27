@@ -1,7 +1,7 @@
 ---
 id: S52
 title: Chat session tabs with auto-naming
-status: in-progress
+status: done
 created: 2026-03-20
 updated: 2026-03-20
 ---
@@ -78,6 +78,7 @@ so that **I can quickly switch between conversations and keep history visible**.
 |---|---|---|
 | 2026-03-20 | draft | Created |
 | 2026-03-20 | in-progress | Implementation started |
+| 2026-03-27 | done | Sidebar replaced with horizontal scrollable tabs |
 
 ---
 

@@ -1,7 +1,7 @@
 ---
 id: S78
 title: Chat session isolation and streaming progress steps
-status: in-progress
+status: done
 created: 2026-03-22
 updated: 2026-03-22
 ---
@@ -59,3 +59,4 @@ Replace the single `loadingStatus: string` state with a `progressSteps: Array<{l
 | Date | Status | Notes |
 |---|---|---|
 | 2026-03-22 | in-progress | Created |
+| 2026-03-27 | done | Live elapsed timer added to CurrentStepLabel |
