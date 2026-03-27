@@ -110,224 +110,15 @@ impl Database {
         self.conn.lock().unwrap()
     }
 
-    #[allow(clippy::too_many_lines)]
     fn run_migrations(&self) -> SqlResult<()> {
         // Mutex poisoning is unrecoverable at startup — same justification as conn().
         #[allow(clippy::unwrap_used)]
         let conn = self.conn.lock().unwrap();
-        conn.execute_batch(
-            "
-            CREATE TABLE IF NOT EXISTS oauth_tokens (
-                id INTEGER PRIMARY KEY DEFAULT 1,
-                access_token TEXT NOT NULL,
-                refresh_token TEXT NOT NULL,
-                token_expires_at INTEGER NOT NULL
-            );
-
-            CREATE TABLE IF NOT EXISTS activities (
-                activity_id TEXT PRIMARY KEY,
-                strava_id TEXT UNIQUE,
-                name TEXT,
-                type TEXT,
-                start_date TEXT,
-                distance REAL,
-                moving_time INTEGER,
-                average_speed REAL,
-                average_heartrate REAL,
-                max_heartrate REAL,
-                average_cadence REAL,
-                gear_id TEXT
-            );
-
-            CREATE TABLE IF NOT EXISTS activity_streams (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                activity_id TEXT NOT NULL REFERENCES activities(activity_id),
-                stream_type TEXT NOT NULL,
-                data TEXT NOT NULL
-            );
-
-            CREATE TABLE IF NOT EXISTS athlete_profile (
-                id INTEGER PRIMARY KEY DEFAULT 1,
-                age INTEGER,
-                max_hr INTEGER,
-                resting_hr INTEGER,
-                threshold_pace_secs INTEGER,
-                weekly_mileage_target REAL,
-                race_goals TEXT,
-                injury_history TEXT,
-                experience_level TEXT,
-                training_days_per_week INTEGER,
-                preferred_terrain TEXT,
-                heart_rate_zones TEXT,
-                custom_notes TEXT
-            );
-
-            CREATE TABLE IF NOT EXISTS athlete_stats (
-                id INTEGER PRIMARY KEY DEFAULT 1,
-                data TEXT NOT NULL
-            );
-
-            CREATE TABLE IF NOT EXISTS athlete_zones (
-                id INTEGER PRIMARY KEY DEFAULT 1,
-                data TEXT NOT NULL
-            );
-
-            CREATE TABLE IF NOT EXISTS gear (
-                gear_id TEXT PRIMARY KEY,
-                name TEXT,
-                distance REAL,
-                brand_name TEXT,
-                model_name TEXT
-            );
-
-            CREATE TABLE IF NOT EXISTS pinned_insights (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                content TEXT NOT NULL,
-                source_session_id TEXT,
-                created_at TEXT NOT NULL
-            );
-
-            CREATE TABLE IF NOT EXISTS chat_sessions (
-                id TEXT PRIMARY KEY,
-                created_at TEXT NOT NULL
-            );
-
-            CREATE TABLE IF NOT EXISTS chat_messages (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                session_id TEXT NOT NULL REFERENCES chat_sessions(id),
-                role TEXT NOT NULL,
-                content TEXT NOT NULL,
-                created_at TEXT NOT NULL
-            );
-
-            CREATE TABLE IF NOT EXISTS races (
-                id TEXT PRIMARY KEY,
-                name TEXT NOT NULL,
-                distance_km REAL NOT NULL,
-                race_date TEXT NOT NULL,
-                terrain TEXT NOT NULL,
-                elevation_m REAL,
-                goal_time_s INTEGER,
-                priority TEXT NOT NULL,
-                is_active INTEGER DEFAULT 0,
-                created_at TEXT NOT NULL
-            );
-
-            CREATE TABLE IF NOT EXISTS training_plans (
-                id TEXT PRIMARY KEY,
-                race_id TEXT NOT NULL REFERENCES races(id),
-                generated_at TEXT NOT NULL,
-                llm_backend TEXT NOT NULL,
-                prompt_hash TEXT NOT NULL
-            );
-
-            CREATE TABLE IF NOT EXISTS plan_weeks (
-                id TEXT PRIMARY KEY,
-                plan_id TEXT NOT NULL REFERENCES training_plans(id),
-                week_number INTEGER NOT NULL,
-                week_start TEXT NOT NULL,
-                UNIQUE(plan_id, week_number)
-            );
-
-            CREATE TABLE IF NOT EXISTS plan_sessions (
-                id TEXT PRIMARY KEY,
-                week_id TEXT NOT NULL REFERENCES plan_weeks(id),
-                day_of_week INTEGER NOT NULL,
-                session_type TEXT NOT NULL,
-                duration_min INTEGER,
-                distance_km REAL,
-                hr_zone INTEGER,
-                pace_min_low REAL,
-                pace_min_high REAL,
-                notes TEXT,
-                status TEXT DEFAULT 'planned',
-                actual_duration_min INTEGER,
-                actual_distance_km REAL,
-                completed_at TEXT
-            );
-
-            CREATE TABLE IF NOT EXISTS settings (
-                id INTEGER PRIMARY KEY DEFAULT 1,
-                active_llm TEXT DEFAULT 'local',
-                ollama_endpoint TEXT DEFAULT 'http://localhost:11434',
-                ollama_model TEXT DEFAULT 'llama3',
-                custom_system_prompt TEXT DEFAULT ''
-            );
-        ",
-        )?;
-
-        // Add title column to existing chat_sessions tables (safe to run if column already exists)
-        let has_title_col: bool = conn
-            .prepare("SELECT title FROM chat_sessions LIMIT 0")
-            .is_ok();
-        if !has_title_col {
-            conn.execute_batch("ALTER TABLE chat_sessions ADD COLUMN title TEXT")?;
-        }
-
-        // Add is_active column to training_plans (safe to run if column already exists)
-        let has_plan_active: bool = conn
-            .prepare("SELECT is_active FROM training_plans LIMIT 0")
-            .is_ok();
-        if !has_plan_active {
-            conn.execute_batch(
-                "ALTER TABLE training_plans ADD COLUMN is_active INTEGER DEFAULT 0",
-            )?;
-            // Migrate: set the most recent plan per active race as active
-            conn.execute_batch(
-                "UPDATE training_plans SET is_active = 1 WHERE id IN (
-                    SELECT tp.id FROM training_plans tp
-                    JOIN races r ON tp.race_id = r.id
-                    WHERE r.is_active = 1
-                    ORDER BY tp.generated_at DESC LIMIT 1
-                )",
-            )?;
-        }
-
-        // Add enhanced activity columns (safe to run if columns already exist)
-        let new_activity_cols = [
-            ("elapsed_time", "INTEGER"),
-            ("total_elevation_gain", "REAL"),
-            ("max_speed", "REAL"),
-            ("workout_type", "INTEGER"),
-            ("sport_type", "TEXT"),
-            ("start_date_local", "TEXT"),
-        ];
-        for (col, col_type) in new_activity_cols {
-            let exists: bool = conn
-                .prepare(&format!("SELECT {col} FROM activities LIMIT 0"))
-                .is_ok();
-            if !exists {
-                conn.execute_batch(&format!(
-                    "ALTER TABLE activities ADD COLUMN {col} {col_type}"
-                ))?;
-            }
-        }
-
-        let new_settings_cols = [
-            ("cloud_api_key", "TEXT"),
-            ("cloud_model", "TEXT"),
-            ("web_search_enabled", "INTEGER DEFAULT 0"),
-            ("web_search_provider", "TEXT DEFAULT 'duckduckgo'"),
-            ("web_augmentation_mode", "TEXT DEFAULT 'off'"),
-        ];
-        for (col, col_type) in new_settings_cols {
-            let exists: bool = conn
-                .prepare(&format!("SELECT {col} FROM settings LIMIT 0"))
-                .is_ok();
-            if !exists {
-                conn.execute_batch(&format!("ALTER TABLE settings ADD COLUMN {col} {col_type}"))?;
-            }
-        }
-
-        let has_custom_notes: bool = conn
-            .prepare("SELECT custom_notes FROM athlete_profile LIMIT 0")
-            .is_ok();
-        if !has_custom_notes {
-            conn.execute_batch("ALTER TABLE athlete_profile ADD COLUMN custom_notes TEXT")?;
-        }
-
+        create_core_tables(&conn)?;
+        create_chat_tables(&conn)?;
+        create_plan_tables(&conn)?;
+        run_alter_migrations(&conn)?;
         crate::research::cache::ResearchCache::init_tables(&conn)?;
-
         Ok(())
     }
 
@@ -1198,6 +989,233 @@ impl Database {
         conn.execute("DELETE FROM training_plans WHERE id = ?1", params![plan_id])?;
         Ok(())
     }
+}
+
+fn create_core_tables(conn: &Connection) -> SqlResult<()> {
+    conn.execute_batch(
+        "
+        CREATE TABLE IF NOT EXISTS oauth_tokens (
+            id INTEGER PRIMARY KEY DEFAULT 1,
+            access_token TEXT NOT NULL,
+            refresh_token TEXT NOT NULL,
+            token_expires_at INTEGER NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS activities (
+            activity_id TEXT PRIMARY KEY,
+            strava_id TEXT UNIQUE,
+            name TEXT,
+            type TEXT,
+            start_date TEXT,
+            distance REAL,
+            moving_time INTEGER,
+            average_speed REAL,
+            average_heartrate REAL,
+            max_heartrate REAL,
+            average_cadence REAL,
+            gear_id TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS activity_streams (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            activity_id TEXT NOT NULL REFERENCES activities(activity_id),
+            stream_type TEXT NOT NULL,
+            data TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS athlete_profile (
+            id INTEGER PRIMARY KEY DEFAULT 1,
+            age INTEGER,
+            max_hr INTEGER,
+            resting_hr INTEGER,
+            threshold_pace_secs INTEGER,
+            weekly_mileage_target REAL,
+            race_goals TEXT,
+            injury_history TEXT,
+            experience_level TEXT,
+            training_days_per_week INTEGER,
+            preferred_terrain TEXT,
+            heart_rate_zones TEXT,
+            custom_notes TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS athlete_stats (
+            id INTEGER PRIMARY KEY DEFAULT 1,
+            data TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS athlete_zones (
+            id INTEGER PRIMARY KEY DEFAULT 1,
+            data TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS gear (
+            gear_id TEXT PRIMARY KEY,
+            name TEXT,
+            distance REAL,
+            brand_name TEXT,
+            model_name TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS pinned_insights (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            content TEXT NOT NULL,
+            source_session_id TEXT,
+            created_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS settings (
+            id INTEGER PRIMARY KEY DEFAULT 1,
+            active_llm TEXT DEFAULT 'local',
+            ollama_endpoint TEXT DEFAULT 'http://localhost:11434',
+            ollama_model TEXT DEFAULT 'llama3',
+            custom_system_prompt TEXT DEFAULT ''
+        );
+    ",
+    )
+}
+
+fn create_chat_tables(conn: &Connection) -> SqlResult<()> {
+    conn.execute_batch(
+        "
+        CREATE TABLE IF NOT EXISTS chat_sessions (
+            id TEXT PRIMARY KEY,
+            created_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS chat_messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id TEXT NOT NULL REFERENCES chat_sessions(id),
+            role TEXT NOT NULL,
+            content TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        );
+    ",
+    )
+}
+
+fn create_plan_tables(conn: &Connection) -> SqlResult<()> {
+    conn.execute_batch(
+        "
+        CREATE TABLE IF NOT EXISTS races (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            distance_km REAL NOT NULL,
+            race_date TEXT NOT NULL,
+            terrain TEXT NOT NULL,
+            elevation_m REAL,
+            goal_time_s INTEGER,
+            priority TEXT NOT NULL,
+            is_active INTEGER DEFAULT 0,
+            created_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS training_plans (
+            id TEXT PRIMARY KEY,
+            race_id TEXT NOT NULL REFERENCES races(id),
+            generated_at TEXT NOT NULL,
+            llm_backend TEXT NOT NULL,
+            prompt_hash TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS plan_weeks (
+            id TEXT PRIMARY KEY,
+            plan_id TEXT NOT NULL REFERENCES training_plans(id),
+            week_number INTEGER NOT NULL,
+            week_start TEXT NOT NULL,
+            UNIQUE(plan_id, week_number)
+        );
+
+        CREATE TABLE IF NOT EXISTS plan_sessions (
+            id TEXT PRIMARY KEY,
+            week_id TEXT NOT NULL REFERENCES plan_weeks(id),
+            day_of_week INTEGER NOT NULL,
+            session_type TEXT NOT NULL,
+            duration_min INTEGER,
+            distance_km REAL,
+            hr_zone INTEGER,
+            pace_min_low REAL,
+            pace_min_high REAL,
+            notes TEXT,
+            status TEXT DEFAULT 'planned',
+            actual_duration_min INTEGER,
+            actual_distance_km REAL,
+            completed_at TEXT
+        );
+    ",
+    )
+}
+
+fn run_alter_migrations(conn: &Connection) -> SqlResult<()> {
+    // Add title column to existing chat_sessions tables (safe to run if column already exists)
+    let has_title_col: bool = conn
+        .prepare("SELECT title FROM chat_sessions LIMIT 0")
+        .is_ok();
+    if !has_title_col {
+        conn.execute_batch("ALTER TABLE chat_sessions ADD COLUMN title TEXT")?;
+    }
+
+    // Add is_active column to training_plans (safe to run if column already exists)
+    let has_plan_active: bool = conn
+        .prepare("SELECT is_active FROM training_plans LIMIT 0")
+        .is_ok();
+    if !has_plan_active {
+        conn.execute_batch("ALTER TABLE training_plans ADD COLUMN is_active INTEGER DEFAULT 0")?;
+        // Migrate: set the most recent plan per active race as active
+        conn.execute_batch(
+            "UPDATE training_plans SET is_active = 1 WHERE id IN (
+                SELECT tp.id FROM training_plans tp
+                JOIN races r ON tp.race_id = r.id
+                WHERE r.is_active = 1
+                ORDER BY tp.generated_at DESC LIMIT 1
+            )",
+        )?;
+    }
+
+    // Add enhanced activity columns (safe to run if columns already exist)
+    let new_activity_cols = [
+        ("elapsed_time", "INTEGER"),
+        ("total_elevation_gain", "REAL"),
+        ("max_speed", "REAL"),
+        ("workout_type", "INTEGER"),
+        ("sport_type", "TEXT"),
+        ("start_date_local", "TEXT"),
+    ];
+    for (col, col_type) in new_activity_cols {
+        let exists: bool = conn
+            .prepare(&format!("SELECT {col} FROM activities LIMIT 0"))
+            .is_ok();
+        if !exists {
+            conn.execute_batch(&format!(
+                "ALTER TABLE activities ADD COLUMN {col} {col_type}"
+            ))?;
+        }
+    }
+
+    let new_settings_cols = [
+        ("cloud_api_key", "TEXT"),
+        ("cloud_model", "TEXT"),
+        ("web_search_enabled", "INTEGER DEFAULT 0"),
+        ("web_search_provider", "TEXT DEFAULT 'duckduckgo'"),
+        ("web_augmentation_mode", "TEXT DEFAULT 'off'"),
+    ];
+    for (col, col_type) in new_settings_cols {
+        let exists: bool = conn
+            .prepare(&format!("SELECT {col} FROM settings LIMIT 0"))
+            .is_ok();
+        if !exists {
+            conn.execute_batch(&format!("ALTER TABLE settings ADD COLUMN {col} {col_type}"))?;
+        }
+    }
+
+    let has_custom_notes: bool = conn
+        .prepare("SELECT custom_notes FROM athlete_profile LIMIT 0")
+        .is_ok();
+    if !has_custom_notes {
+        conn.execute_batch("ALTER TABLE athlete_profile ADD COLUMN custom_notes TEXT")?;
+    }
+
+    Ok(())
 }
 
 fn derive_key_argon2(password: &[u8], salt: &[u8]) -> Result<[u8; 32], argon2::Error> {
