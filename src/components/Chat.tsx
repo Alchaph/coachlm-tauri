@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import OllamaSetupGuide from "@/components/OllamaSetupGuide";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -102,13 +103,13 @@ function SessionLabel({ label }: { label: string }) {
   if (isOverflowing) {
     return (
       <Tooltip>
-        <TooltipTrigger render={<span className="max-w-[120px] truncate" ref={spanRef}>{label}</span>} />
+        <TooltipTrigger render={<span className="max-w-[140px] truncate" ref={spanRef}>{label}</span>} />
         <TooltipContent>{label}</TooltipContent>
       </Tooltip>
     );
   }
 
-  return <span className="max-w-[120px] truncate" ref={spanRef}>{label}</span>;
+  return <span className="max-w-[140px] truncate" ref={spanRef}>{label}</span>;
 }
 
 export default function Chat({ onStatusChange }: ChatProps) {
@@ -120,7 +121,6 @@ export default function Chat({ onStatusChange }: ChatProps) {
   const [error, setError] = useState<string | null>(null);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const currentSessionIdRef = useRef<string | null>(null);
-  const tabBarRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const shouldAutoScroll = useRef(true);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -365,9 +365,6 @@ export default function Chat({ onStatusChange }: ChatProps) {
       setSessions((prev) => [session, ...prev]);
       setTimeout(() => {
         textareaRef.current?.focus();
-        if (tabBarRef.current) {
-          tabBarRef.current.scrollLeft = tabBarRef.current.scrollWidth;
-        }
       }, 50);
     } catch (e) {
       setError(String(e));
@@ -592,59 +589,58 @@ export default function Chat({ onStatusChange }: ChatProps) {
   };
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="flex items-center gap-2 px-5 py-2.5 border-b border-sidebar-border bg-card">
-        <span className="text-sm font-semibold text-foreground overflow-hidden text-ellipsis whitespace-nowrap">
-          {currentSessionId ? getSessionLabel(sessions.find((s) => s.id === currentSessionId) ?? { id: "", created_at: "" }) : ""}
-        </span>
-        <div className="flex-1" />
+    <div className="flex h-full">
+      <div className="flex w-[220px] min-w-[220px] flex-col border-r border-sidebar-border bg-card px-2 py-3">
+        <div className="mb-1 px-0.5">
+          <Button
+            variant="ghost"
+            className="w-full justify-start gap-2 text-[13px] text-muted-foreground hover:bg-accent hover:text-foreground"
+            onClick={() => { void createNewSession(); }}
+          >
+            <Plus size={14} />
+            New Chat
+          </Button>
+        </div>
+        <ScrollArea className="flex-1">
+          <div className="flex flex-col gap-0.5">
+            {sessions.map((s) => (
+              <button
+                key={s.id}
+                type="button"
+                className={cn(
+                  "flex w-full items-center gap-1.5 px-2.5 py-2 rounded-md text-[13px] text-left transition-colors duration-150 group",
+                  s.id === currentSessionId
+                    ? "bg-accent text-foreground font-medium"
+                    : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+                )}
+                onClick={() => { void loadSession(s.id); }}
+              >
+                <MessageSquare size={14} className="shrink-0" />
+                <span className="flex-1 overflow-hidden">
+                  <SessionLabel label={getSessionLabel(s)} />
+                </span>
+                <span
+                  className="flex items-center justify-center rounded-sm p-0.5 opacity-0 group-hover:opacity-100 transition-opacity duration-150 hover:text-destructive"
+                  role="button"
+                  tabIndex={0}
+                  onClick={(e) => { e.stopPropagation(); closeSession(s.id); }}
+                  onKeyDown={(e) => { if (e.key === "Enter") { e.stopPropagation(); closeSession(s.id); } }}
+                >
+                  <X size={10} />
+                </span>
+              </button>
+            ))}
+          </div>
+        </ScrollArea>
       </div>
 
-      <div
-        ref={tabBarRef}
-        className="flex items-center gap-1 px-3 py-1.5 border-b border-border bg-card overflow-x-auto [&::-webkit-scrollbar]:hidden"
-        style={{ scrollbarWidth: "none" }}
-      >
-        {sessions.map((s) => (
-          <button
-            key={s.id}
-            type="button"
-            className={cn(
-              "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs whitespace-nowrap shrink-0 transition-colors duration-150 group",
-              s.id === currentSessionId
-                ? "bg-accent text-foreground font-medium"
-                : "text-muted-foreground hover:bg-secondary hover:text-foreground"
-            )}
-            onClick={() => { void loadSession(s.id); }}
-          >
-            <MessageSquare size={12} className="shrink-0" />
-            <SessionLabel label={getSessionLabel(s)} />
-            <span
-              className="flex items-center justify-center rounded-sm p-0.5 opacity-0 group-hover:opacity-100 transition-opacity duration-150 hover:text-destructive"
-              role="button"
-              tabIndex={0}
-              onClick={(e) => { e.stopPropagation(); closeSession(s.id); }}
-              onKeyDown={(e) => { if (e.key === "Enter") { e.stopPropagation(); closeSession(s.id); } }}
-            >
-              <X size={10} />
-            </span>
-          </button>
-        ))}
-        <Tooltip>
-          <TooltipTrigger>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              onClick={() => { void createNewSession(); }}
-              aria-label="New chat"
-              className="shrink-0"
-            >
-              <Plus size={14} />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>New chat</TooltipContent>
-        </Tooltip>
-      </div>
+      <div className="flex flex-1 flex-col overflow-hidden">
+        <div className="flex items-center gap-2 px-5 py-2.5 border-b border-sidebar-border bg-card">
+          <span className="text-sm font-semibold text-foreground overflow-hidden text-ellipsis whitespace-nowrap">
+            {currentSessionId ? getSessionLabel(sessions.find((s) => s.id === currentSessionId) ?? { id: "", created_at: "" }) : ""}
+          </span>
+          <div className="flex-1" />
+        </div>
 
       <div
         className="flex-1 overflow-auto p-5"
@@ -953,6 +949,7 @@ export default function Chat({ onStatusChange }: ChatProps) {
             <Send size={16} />
           </Button>
         </div>
+      </div>
       </div>
       <ConfirmDialog
         open={deleteSessionId !== null}

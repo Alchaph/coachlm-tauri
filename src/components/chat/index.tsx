@@ -462,14 +462,7 @@ export default function Chat({ onStatusChange }: ChatProps) {
   };
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="flex items-center gap-2 px-5 py-2.5 border-b border-sidebar-border bg-card">
-        <span className="text-sm font-semibold text-foreground overflow-hidden text-ellipsis whitespace-nowrap">
-          {currentSessionId ? getSessionLabel(sessions.find((s) => s.id === currentSessionId) ?? { id: "", created_at: "" }) : ""}
-        </span>
-        <div className="flex-1" />
-      </div>
-
+    <div className="flex h-full">
       <ChatTabBar
         sessions={sessions}
         currentSessionId={currentSessionId}
@@ -479,49 +472,58 @@ export default function Chat({ onStatusChange }: ChatProps) {
         getSessionLabel={getSessionLabel}
       />
 
-      <ChatMessageList
-        messages={messages}
-        loading={loading}
-        error={error}
-        progressSteps={progressSteps}
-        completedSteps={completedSteps}
-        editingMessageId={editingMessageId}
-        editContent={editContent}
-        ollamaOffline={ollamaOffline}
-        ollamaEndpoint={ollamaEndpoint}
-        activeLlm={activeLlm}
-        showSetupGuide={showSetupGuide}
-        onEditContentChange={setEditContent}
-        onStartEditing={startEditing}
-        onCancelEditing={cancelEditing}
-        onSubmitEdit={() => { void submitEdit(); }}
-        onCopyMessage={(content) => { void copyMessage(content); }}
-        onPinMessage={(content) => { void pinMessage(content); }}
-        onSetInput={setInput}
-        onStopGenerating={() => { setLoading(false); setProgressSteps([]); onStatusChange?.("idle"); }}
-        onToggleSetupGuide={() => { setShowSetupGuide((prev) => !prev); }}
-        onRetry={() => { setError(null); setShowSetupGuide(false); setInput(lastSentContentRef.current); }}
-        onOllamaConnected={() => { setOllamaOffline(false); setShowSetupGuide(false); setError(null); }}
-      />
+      <div className="flex flex-1 flex-col overflow-hidden">
+        <div className="flex items-center gap-2 px-5 py-2.5 border-b border-sidebar-border bg-card">
+          <span className="text-sm font-semibold text-foreground overflow-hidden text-ellipsis whitespace-nowrap">
+            {currentSessionId ? getSessionLabel(sessions.find((s) => s.id === currentSessionId) ?? { id: "", created_at: "" }) : ""}
+          </span>
+          <div className="flex-1" />
+        </div>
 
-      <ChatInput
-        input={input}
-        loading={loading}
-        webAugmentationMode={webAugmentationMode}
-        webSearchSuggestion={webSearchSuggestion}
-        onInputChange={setInput}
-        onSendMessage={() => { void sendMessage(); }}
-        onRespondWebSearch={respondWebSearch}
-        onKeyDown={handleKeyDown}
-      />
-      <ConfirmDialog
-        open={deleteSessionId !== null}
-        onOpenChange={(open) => { if (!open) setDeleteSessionId(null); }}
-        title="Delete Chat Session"
-        description="Delete this chat session? This action cannot be undone."
-        confirmLabel="Delete"
-        onConfirm={() => { if (deleteSessionId) { void doCloseSession(deleteSessionId); } setDeleteSessionId(null); }}
-      />
+        <ChatMessageList
+          messages={messages}
+          loading={loading}
+          error={error}
+          progressSteps={progressSteps}
+          completedSteps={completedSteps}
+          editingMessageId={editingMessageId}
+          editContent={editContent}
+          ollamaOffline={ollamaOffline}
+          ollamaEndpoint={ollamaEndpoint}
+          activeLlm={activeLlm}
+          showSetupGuide={showSetupGuide}
+          onEditContentChange={setEditContent}
+          onStartEditing={startEditing}
+          onCancelEditing={cancelEditing}
+          onSubmitEdit={() => { void submitEdit(); }}
+          onCopyMessage={(content) => { void copyMessage(content); }}
+          onPinMessage={(content) => { void pinMessage(content); }}
+          onSetInput={setInput}
+          onStopGenerating={() => { setLoading(false); setProgressSteps([]); onStatusChange?.("idle"); }}
+          onToggleSetupGuide={() => { setShowSetupGuide((prev) => !prev); }}
+          onRetry={() => { setError(null); setShowSetupGuide(false); setInput(lastSentContentRef.current); }}
+          onOllamaConnected={() => { setOllamaOffline(false); setShowSetupGuide(false); setError(null); }}
+        />
+
+        <ChatInput
+          input={input}
+          loading={loading}
+          webAugmentationMode={webAugmentationMode}
+          webSearchSuggestion={webSearchSuggestion}
+          onInputChange={setInput}
+          onSendMessage={() => { void sendMessage(); }}
+          onRespondWebSearch={respondWebSearch}
+          onKeyDown={handleKeyDown}
+        />
+        <ConfirmDialog
+          open={deleteSessionId !== null}
+          onOpenChange={(open) => { if (!open) setDeleteSessionId(null); }}
+          title="Delete Chat Session"
+          description="Delete this chat session? This action cannot be undone."
+          confirmLabel="Delete"
+          onConfirm={() => { if (deleteSessionId) { void doCloseSession(deleteSessionId); } setDeleteSessionId(null); }}
+        />
+      </div>
     </div>
   );
 }

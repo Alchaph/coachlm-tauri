@@ -41,3 +41,4 @@ Object.assign(navigator, {
 });
 
 Element.prototype.scrollIntoView = vi.fn();
+Element.prototype.getAnimations = vi.fn(() => []);

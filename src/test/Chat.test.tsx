@@ -109,7 +109,7 @@ describe("Chat component", () => {
     });
   });
 
-  it("renders sessions as horizontal tabs with close buttons", async () => {
+  it("renders sessions in the sidebar list with close buttons", async () => {
     render(<Chat />);
 
     await waitFor(() => {
