@@ -12,6 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Card } from "@/components/ui/card";
 import type { ActivityItem, ActivityLap, ActivityZoneDistribution } from "@/components/dashboard/types";
 import LapPaceChart from "@/components/dashboard/LapPaceChart";
+import ActivityZoneChart from "@/components/dashboard/ActivityZoneChart";
 import {
   formatDistance,
   formatDuration,
@@ -144,11 +145,7 @@ export default function ActivityDetailModal({
                     </span>
                   </Card>
                 ) : (
-                  <Card className="p-4 flex items-center justify-center h-[160px]">
-                    <span className="text-sm text-muted-foreground">
-                      HR zone chart will render here
-                    </span>
-                  </Card>
+                  <ActivityZoneChart zones={zones} />
                 )}
               </div>
             </div>
