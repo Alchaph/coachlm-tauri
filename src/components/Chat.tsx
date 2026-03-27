@@ -292,14 +292,14 @@ export default function Chat({ onStatusChange }: ChatProps) {
     if (!webSearchSuggestion) return;
     const timer = setTimeout(() => {
       setWebSearchSuggestion(false);
-      void invoke("respond_web_search_suggestion", { approved: false });
+      invoke("respond_web_search_suggestion", { approved: false }).catch(() => undefined);
     }, 30_000);
     return () => { clearTimeout(timer); };
   }, [webSearchSuggestion]);
 
   const respondWebSearch = (approved: boolean) => {
     setWebSearchSuggestion(false);
-    void invoke("respond_web_search_suggestion", { approved });
+    invoke("respond_web_search_suggestion", { approved }).catch(() => undefined);
   };
 
   const loadSession = async (sessionId: string) => {
