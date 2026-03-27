@@ -413,6 +413,42 @@ impl Database {
         rows.collect()
     }
 
+    pub fn get_activity_by_id(
+        &self,
+        activity_id: &str,
+    ) -> SqlResult<Option<super::models::ActivityData>> {
+        let conn = self.conn();
+        let mut stmt = conn.prepare(
+            "SELECT activity_id, strava_id, name, type, start_date, distance, moving_time,
+                    average_speed, average_heartrate, max_heartrate, average_cadence, gear_id,
+                    elapsed_time, total_elevation_gain, max_speed, workout_type, sport_type, start_date_local
+             FROM activities WHERE activity_id = ?1 LIMIT 1",
+        )?;
+        let mut rows = stmt.query_map(rusqlite::params![activity_id], |row| {
+            Ok(super::models::ActivityData {
+                activity_id: row.get(0)?,
+                strava_id: row.get(1)?,
+                name: row.get(2)?,
+                activity_type: row.get(3)?,
+                start_date: row.get(4)?,
+                distance: row.get(5)?,
+                moving_time: row.get(6)?,
+                average_speed: row.get(7)?,
+                average_heartrate: row.get(8)?,
+                max_heartrate: row.get(9)?,
+                average_cadence: row.get(10)?,
+                gear_id: row.get(11)?,
+                elapsed_time: row.get(12)?,
+                total_elevation_gain: row.get(13)?,
+                max_speed: row.get(14)?,
+                workout_type: row.get(15)?,
+                sport_type: row.get(16)?,
+                start_date_local: row.get(17)?,
+            })
+        })?;
+        rows.next().transpose()
+    }
+
     pub fn get_activity_stats(&self) -> SqlResult<super::models::StatsData> {
         let conn = self.conn();
         let count: i64 = conn.query_row("SELECT COUNT(*) FROM activities", [], |row| row.get(0))?;

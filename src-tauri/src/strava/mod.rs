@@ -113,7 +113,7 @@ pub fn get_auth_status(db: &Database) -> Result<AuthStatus, AppError> {
     }
 }
 
-async fn get_valid_token(db: &Database) -> Result<String, AppError> {
+pub(crate) async fn get_valid_token(db: &Database) -> Result<String, AppError> {
     let (access, refresh, expires_at) = db
         .get_oauth_tokens()?
         .ok_or_else(|| AppError::Strava("Not connected to Strava".into()))?;
@@ -318,7 +318,6 @@ pub async fn fetch_athlete_stats(db: &Database, athlete_id: &str) -> Result<(), 
     Ok(())
 }
 
-#[allow(dead_code)]
 pub async fn fetch_activity_laps(
     db: &Database,
     strava_id: &str,
@@ -415,7 +414,6 @@ pub async fn fetch_activity_laps(
 /// empty or contains no `"heartrate"` type entry). Returns `AppError::Strava` for 403 responses
 /// (Strava Premium requirement). 429 responses are retried after the `Retry-After` header delay.
 /// Results are cached to the database before returning.
-#[allow(dead_code)]
 pub async fn fetch_activity_zones(
     db: &Database,
     strava_id: &str,

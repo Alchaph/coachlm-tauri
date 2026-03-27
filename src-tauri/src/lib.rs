@@ -11,8 +11,9 @@ mod web_search;
 
 use error::AppError;
 use models::{
-    ActivityData, AuthStatus, ExportData, InsightData, MessageData, OllamaMessage, PlanWeekWithSessions,
-    ProfileData, Race, SessionData, SessionStatus, SettingsData, SettingsMeta, StatsData, TrainingPlan,
+    ActivityData, ActivityLap, ActivityZoneDistribution, ActivityZoneSummary, AuthStatus,
+    ExportData, InsightData, MessageData, OllamaMessage, PlanWeekWithSessions, ProfileData, Race,
+    SessionData, SessionStatus, SettingsData, SettingsMeta, StatsData, TrainingPlan,
     TrainingPlanSummary, WebAugmentationMode,
 };
 use std::sync::Arc;
@@ -787,6 +788,74 @@ fn get_athlete_zones_data(state: tauri::State<'_, AppState>) -> Result<Option<se
     }
 }
 
+#[tauri::command]
+async fn get_activity_laps(
+    state: tauri::State<'_, AppState>,
+    activity_id: String,
+) -> Result<Vec<ActivityLap>, String> {
+    let db = state.db.clone();
+
+    let activity_opt = tokio::task::spawn_blocking({
+        let db = db.clone();
+        let id = activity_id.clone();
+        move || db.get_activity_by_id(&id)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+    .map_err(|e: rusqlite::Error| e.to_string())?;
+
+    let Some(strava_id) = activity_opt.and_then(|a| a.strava_id) else {
+        return Ok(vec![]);
+    };
+
+    let token = strava::get_valid_token(&db)
+        .await
+        .map_err(|e| e.to_string())?;
+    strava::fetch_activity_laps(&db, &strava_id, &activity_id, &token)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn get_activity_zone_distribution(
+    state: tauri::State<'_, AppState>,
+    activity_id: String,
+) -> Result<Vec<ActivityZoneDistribution>, String> {
+    let db = state.db.clone();
+
+    let activity_opt = tokio::task::spawn_blocking({
+        let db = db.clone();
+        let id = activity_id.clone();
+        move || db.get_activity_by_id(&id)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+    .map_err(|e: rusqlite::Error| e.to_string())?;
+
+    let Some(strava_id) = activity_opt.and_then(|a| a.strava_id) else {
+        return Ok(vec![]);
+    };
+
+    let token = strava::get_valid_token(&db)
+        .await
+        .map_err(|e| e.to_string())?;
+    strava::fetch_activity_zones(&db, &strava_id, &activity_id, &token)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
+fn get_aggregated_zone_distribution(
+    state: tauri::State<'_, AppState>,
+    days: Option<u32>,
+) -> Result<Vec<ActivityZoneSummary>, String> {
+    state
+        .db
+        .get_aggregated_zone_distribution(days)
+        .map_err(|e| e.to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -859,6 +928,9 @@ pub fn run() {
             update_session_status,
             get_athlete_summary,
             get_athlete_zones_data,
+            get_activity_laps,
+            get_activity_zone_distribution,
+            get_aggregated_zone_distribution,
         ])
         .run(tauri::generate_context!())
         .unwrap_or_else(|e| eprintln!("Error while running tauri application: {e}"));
