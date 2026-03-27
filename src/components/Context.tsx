@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { ask } from "@tauri-apps/plugin-dialog";
-import { Trash2, Eye, Save } from "lucide-react";
+import { Trash2, Eye } from "lucide-react";
 import { toast } from "sonner";
+import { useDebouncedCallback } from "use-debounce";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
 interface ProfileData {
   age: number | null;
@@ -47,10 +48,59 @@ export default function Context() {
   const [insights, setInsights] = useState<Insight[]>([]);
   const [contextPreview, setContextPreview] = useState<string | null>(null);
   const [showPreview, setShowPreview] = useState(false);
-  const [saving, setSaving] = useState(false);
   const [tab, setTab] = useState<"profile" | "insights">("profile");
   const [paceMinutes, setPaceMinutes] = useState("");
   const [paceSeconds, setPaceSeconds] = useState("");
+  const [deleteInsightId, setDeleteInsightId] = useState<number | null>(null);
+
+  const debouncedSaveProfile = useDebouncedCallback(async (profileData: ProfileData, paceMin: string, paceSec: string) => {
+    try {
+      const paceSecs = paceMin && paceSec
+        ? parseInt(paceMin) * 60 + parseInt(paceSec)
+        : null;
+      await invoke("save_profile_data", {
+        data: { ...profileData, threshold_pace_secs: paceSecs },
+      });
+      toast.success("Profile saved", { id: "profile-save" });
+    } catch {
+      toast.error("Failed to save profile", { id: "profile-save" });
+    }
+  }, 1000);
+
+  const updateProfile = useCallback((patch: Partial<ProfileData>) => {
+    setProfile((prev) => {
+      const next = { ...prev, ...patch };
+      void debouncedSaveProfile(next, paceMinutes, paceSeconds);
+      return next;
+    });
+  }, [debouncedSaveProfile, paceMinutes, paceSeconds]);
+
+  const updatePaceMinutes = useCallback((value: string) => {
+    setPaceMinutes(value);
+    void debouncedSaveProfile(profile, value, paceSeconds);
+  }, [debouncedSaveProfile, profile, paceSeconds]);
+
+  const updatePaceSeconds = useCallback((value: string) => {
+    setPaceSeconds(value);
+    void debouncedSaveProfile(profile, paceMinutes, value);
+  }, [debouncedSaveProfile, profile, paceMinutes]);
+
+  const updateProfileImmediate = useCallback((patch: Partial<ProfileData>) => {
+    setProfile((prev) => {
+      const next = { ...prev, ...patch };
+      debouncedSaveProfile.cancel();
+      const paceSecs = paceMinutes && paceSeconds
+        ? parseInt(paceMinutes) * 60 + parseInt(paceSeconds)
+        : null;
+      void invoke("save_profile_data", {
+        data: { ...next, threshold_pace_secs: paceSecs },
+      }).then(
+        () => { toast.success("Profile saved", { id: "profile-save" }); },
+        () => { toast.error("Failed to save profile", { id: "profile-save" }); },
+      );
+      return next;
+    });
+  }, [debouncedSaveProfile, paceMinutes, paceSeconds]);
 
   const loadData = useCallback(async () => {
     try {
@@ -73,26 +123,11 @@ export default function Context() {
 
   useEffect(() => { void loadData(); }, [loadData]);
 
-  const saveProfile = async () => {
-    setSaving(true);
-    try {
-      const paceSecs = paceMinutes && paceSeconds
-        ? parseInt(paceMinutes) * 60 + parseInt(paceSeconds)
-        : null;
-      await invoke("save_profile_data", {
-        data: { ...profile, threshold_pace_secs: paceSecs },
-      });
-      toast.success("Profile saved");
-    } catch {
-      toast.error("Failed to save profile");
-    } finally {
-      setSaving(false);
-    }
+  const deleteInsight = (id: number) => {
+    setDeleteInsightId(id);
   };
 
-  const deleteInsight = async (id: number) => {
-    const confirmed = await ask("Unpin this insight?", { title: "CoachLM", kind: "warning" });
-    if (!confirmed) return;
+  const doDeleteInsight = async (id: number) => {
     try {
       await invoke("delete_pinned_insight", { id });
       setInsights((prev) => prev.filter((i) => i.id !== id));
@@ -120,8 +155,9 @@ export default function Context() {
         type="number"
         value={profile[field] !== null ? String(profile[field]) : ""}
         onChange={(e) =>
-          { setProfile({ ...profile, [field]: e.target.value ? parseInt(e.target.value) : null }); }
+          { updateProfile({ [field]: e.target.value ? parseInt(e.target.value) : null }); }
         }
+        onBlur={() => { void debouncedSaveProfile.flush(); }}
         min={min}
         max={max}
       />
@@ -164,7 +200,8 @@ export default function Context() {
                     id="profile-pace"
                     type="number"
                     value={paceMinutes}
-                    onChange={(e) => { setPaceMinutes(e.target.value); }}
+                    onChange={(e) => { updatePaceMinutes(e.target.value); }}
+                    onBlur={() => { void debouncedSaveProfile.flush(); }}
                     placeholder="min"
                     min={2}
                     max={15}
@@ -175,7 +212,8 @@ export default function Context() {
                     id="profile-pace-sec"
                     type="number"
                     value={paceSeconds}
-                    onChange={(e) => { setPaceSeconds(e.target.value); }}
+                    onChange={(e) => { updatePaceSeconds(e.target.value); }}
+                    onBlur={() => { void debouncedSaveProfile.flush(); }}
                     placeholder="sec"
                     min={0}
                     max={59}
@@ -191,14 +229,15 @@ export default function Context() {
                   type="number"
                   value={profile.weekly_mileage_target ?? ""}
                   onChange={(e) =>
-                    { setProfile({ ...profile, weekly_mileage_target: e.target.value ? parseFloat(e.target.value) : null }); }
+                    { updateProfile({ weekly_mileage_target: e.target.value ? parseFloat(e.target.value) : null }); }
                   }
+                  onBlur={() => { void debouncedSaveProfile.flush(); }}
                 />
               </div>
 
               <div className="mb-3">
                 <Label className="mb-1.5">Experience level</Label>
-                <Select value={profile.experience_level ?? ""} onValueChange={(v) => { setProfile({ ...profile, experience_level: v ?? null }); }}>
+                <Select value={profile.experience_level ?? ""} onValueChange={(v) => { updateProfileImmediate({ experience_level: v ?? null }); }}>
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="—" />
                   </SelectTrigger>
@@ -213,7 +252,7 @@ export default function Context() {
 
               <div className="mb-3">
                 <Label className="mb-1.5">Preferred terrain</Label>
-                <Select value={profile.preferred_terrain ?? ""} onValueChange={(v) => { setProfile({ ...profile, preferred_terrain: v ?? null }); }}>
+                <Select value={profile.preferred_terrain ?? ""} onValueChange={(v) => { updateProfileImmediate({ preferred_terrain: v ?? null }); }}>
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="—" />
                   </SelectTrigger>
@@ -231,7 +270,8 @@ export default function Context() {
                 <Textarea
                   id="profile-goals"
                   value={profile.race_goals ?? ""}
-                  onChange={(e) => { setProfile({ ...profile, race_goals: e.target.value || null }); }}
+                  onChange={(e) => { updateProfile({ race_goals: e.target.value || null }); }}
+                  onBlur={() => { void debouncedSaveProfile.flush(); }}
                   rows={2}
                   className="resize-y"
                 />
@@ -242,7 +282,8 @@ export default function Context() {
                 <Textarea
                   id="profile-injuries"
                   value={profile.injury_history ?? ""}
-                  onChange={(e) => { setProfile({ ...profile, injury_history: e.target.value || null }); }}
+                  onChange={(e) => { updateProfile({ injury_history: e.target.value || null }); }}
+                  onBlur={() => { void debouncedSaveProfile.flush(); }}
                   rows={2}
                   className="resize-y"
                 />
@@ -253,17 +294,13 @@ export default function Context() {
                 <Textarea
                   id="profile-notes"
                   value={profile.custom_notes ?? ""}
-                  onChange={(e) => { setProfile({ ...profile, custom_notes: e.target.value || null }); }}
+                  onChange={(e) => { updateProfile({ custom_notes: e.target.value || null }); }}
+                  onBlur={() => { void debouncedSaveProfile.flush(); }}
                   rows={4}
                   className="resize-y"
                   placeholder="Add any training context here — weekly schedule, preferred workouts, limitations, or anything else the coach should know."
                 />
               </div>
-
-              <Button onClick={() => void saveProfile()} disabled={saving}>
-                <Save className="size-4" />
-                Save Profile
-              </Button>
             </CardContent>
           </Card>
         </TabsContent>
@@ -290,7 +327,7 @@ export default function Context() {
                       </div>
                       <Tooltip>
                         <TooltipTrigger>
-                          <Button variant="ghost" size="icon-sm" onClick={() => void deleteInsight(insight.id)} aria-label="Delete insight">
+                          <Button variant="ghost" size="icon-sm" onClick={() => { deleteInsight(insight.id); }} aria-label="Delete insight">
                             <Trash2 className="size-3.5" />
                           </Button>
                         </TooltipTrigger>
@@ -317,6 +354,14 @@ export default function Context() {
           </ScrollArea>
         </DialogContent>
       </Dialog>
+      <ConfirmDialog
+        open={deleteInsightId !== null}
+        onOpenChange={(open) => { if (!open) setDeleteInsightId(null); }}
+        title="Unpin Insight"
+        description="Unpin this insight? It will no longer be included in the coaching context."
+        confirmLabel="Unpin"
+        onConfirm={() => { if (deleteInsightId !== null) { void doDeleteInsight(deleteInsightId); } setDeleteInsightId(null); }}
+      />
     </div>
   );
 }

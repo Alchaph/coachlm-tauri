@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { ask } from "@tauri-apps/plugin-dialog";
 import { useTheme } from "next-themes";
-import { Save, RefreshCw, Plug, Unplug, Globe, Info, Sun, Moon, Monitor } from "lucide-react";
+import { RefreshCw, Plug, Unplug, Globe, Info, Sun, Moon, Monitor } from "lucide-react";
 import { toast } from "sonner";
+import { useDebouncedCallback } from "use-debounce";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -16,6 +16,7 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@
 import { cn } from "@/lib/utils";
 import OllamaSetupGuide from "@/components/OllamaSetupGuide";
 import CloudProviderGuide from "@/components/CloudProviderGuide";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
 interface SettingsData {
   active_llm: string;
@@ -45,12 +46,41 @@ export default function SettingsPage() {
   });
   const [models, setModels] = useState<string[]>([]);
   const [fetchingModels, setFetchingModels] = useState(false);
-  const [saving, setSaving] = useState(false);
   const [stravaAuth, setStravaAuth] = useState<StravaAuthStatus>({ connected: false, expires_at: null });
   const [stravaAvailable, setStravaAvailable] = useState(false);
   const [ollamaConnected, setOllamaConnected] = useState<boolean | null>(null);
-  const [initialSettings, setInitialSettings] = useState<SettingsData | null>(null);
-  const isDirty = initialSettings !== null && JSON.stringify(settings) !== JSON.stringify(initialSettings);
+  const [, setInitialSettings] = useState<SettingsData | null>(null);
+  const [showDisconnectConfirm, setShowDisconnectConfirm] = useState(false);
+
+  const debouncedSave = useDebouncedCallback(async (data: SettingsData) => {
+    try {
+      await invoke("save_settings", { data });
+      setInitialSettings({ ...data });
+      toast.success("Settings saved", { id: "settings-save" });
+    } catch {
+      toast.error("Failed to save settings", { id: "settings-save" });
+    }
+  }, 1000);
+
+  const updateSettings = useCallback((patch: Partial<SettingsData>) => {
+    setSettings((prev) => {
+      const next = { ...prev, ...patch };
+      void debouncedSave(next);
+      return next;
+    });
+  }, [debouncedSave]);
+
+  const updateSettingsImmediate = useCallback((patch: Partial<SettingsData>) => {
+    setSettings((prev) => {
+      const next = { ...prev, ...patch };
+      debouncedSave.cancel();
+      void invoke("save_settings", { data: next }).then(
+        () => { setInitialSettings({ ...next }); toast.success("Settings saved", { id: "settings-save" }); },
+        () => { toast.error("Failed to save settings", { id: "settings-save" }); },
+      );
+      return next;
+    });
+  }, [debouncedSave]);
 
   const checkOllamaConnection = useCallback(async (endpoint: string) => {
     try {
@@ -108,19 +138,6 @@ export default function SettingsPage() {
     return () => { state.cancelled = true; unlisten?.(); };
   }, [loadData]);
 
-  const saveSettings = async () => {
-    setSaving(true);
-    try {
-      await invoke("save_settings", { data: settings });
-      setInitialSettings({ ...settings });
-      toast.success("Settings saved");
-    } catch {
-      toast.error("Failed to save settings");
-    } finally {
-      setSaving(false);
-    }
-  };
-
   const fetchModels = async () => {
     setFetchingModels(true);
     try {
@@ -143,9 +160,11 @@ export default function SettingsPage() {
     }
   };
 
-  const disconnectStrava = async () => {
-    const confirmed = await ask("Disconnect your Strava account? You can reconnect later.", { title: "CoachLM", kind: "warning" });
-    if (!confirmed) return;
+  const disconnectStrava = () => {
+    setShowDisconnectConfirm(true);
+  };
+
+  const doDisconnectStrava = async () => {
     try {
       await invoke("disconnect_strava");
       const auth = await invoke<StravaAuthStatus>("get_strava_auth_status");
@@ -160,10 +179,6 @@ export default function SettingsPage() {
     <div className="h-full overflow-auto p-6">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-xl font-bold text-foreground">Settings</h1>
-        <Button onClick={() => void saveSettings()} disabled={saving || !isDirty}>
-          <Save size={16} />
-          Save Settings
-        </Button>
       </div>
 
       <div className="flex flex-col gap-6 max-w-[600px]">
@@ -176,7 +191,7 @@ export default function SettingsPage() {
 
             <div className="flex flex-col gap-1.5">
               <Label>Provider</Label>
-              <Select value={settings.active_llm === "local" ? "ollama" : settings.active_llm} onValueChange={(v) => { if (v !== null) setSettings({ ...settings, active_llm: v }); }}>
+              <Select value={settings.active_llm === "local" ? "ollama" : settings.active_llm} onValueChange={(v) => { if (v !== null) updateSettingsImmediate({ active_llm: v }); }}>
                 <SelectTrigger className="w-full">
                   <SelectValue />
                 </SelectTrigger>
@@ -197,7 +212,8 @@ export default function SettingsPage() {
                       id="ollama-endpoint"
                       type="text"
                       value={settings.ollama_endpoint}
-                      onChange={(e) => { setSettings({ ...settings, ollama_endpoint: e.target.value }); }}
+                      onChange={(e) => { updateSettings({ ollama_endpoint: e.target.value }); }}
+                      onBlur={() => { void debouncedSave.flush(); }}
                       placeholder="http://localhost:11434"
                       className="flex-1"
                     />
@@ -247,7 +263,8 @@ export default function SettingsPage() {
                     id="ollama-model"
                     type="text"
                     value={settings.ollama_model}
-                    onChange={(e) => { setSettings({ ...settings, ollama_model: e.target.value }); }}
+                    onChange={(e) => { updateSettings({ ollama_model: e.target.value }); }}
+                    onBlur={() => { void debouncedSave.flush(); }}
                     placeholder="e.g. llama3"
                   />
 
@@ -287,7 +304,8 @@ export default function SettingsPage() {
                     id="cloud-api-key"
                     type="password"
                     value={settings.cloud_api_key ?? ""}
-                    onChange={(e) => { setSettings({ ...settings, cloud_api_key: e.target.value || null }); }}
+                    onChange={(e) => { updateSettings({ cloud_api_key: e.target.value || null }); }}
+                    onBlur={() => { void debouncedSave.flush(); }}
                     placeholder={settings.active_llm === "groq" ? "gsk_..." : "sk-or-..."}
                   />
                   <p className="text-xs text-muted-foreground mt-1">
@@ -319,7 +337,8 @@ export default function SettingsPage() {
                     id="cloud-model"
                     type="text"
                     value={settings.cloud_model ?? ""}
-                    onChange={(e) => { setSettings({ ...settings, cloud_model: e.target.value || null }); }}
+                    onChange={(e) => { updateSettings({ cloud_model: e.target.value || null }); }}
+                    onBlur={() => { void debouncedSave.flush(); }}
                     placeholder={settings.active_llm === "groq" ? "llama-3.3-70b-versatile" : "meta-llama/llama-3.3-70b-instruct:free"}
                   />
                 </div>
@@ -331,7 +350,8 @@ export default function SettingsPage() {
               <Textarea
                 id="custom-prompt"
                 value={settings.custom_system_prompt}
-                onChange={(e) => { setSettings({ ...settings, custom_system_prompt: e.target.value }); }}
+                onChange={(e) => { updateSettings({ custom_system_prompt: e.target.value }); }}
+                onBlur={() => { void debouncedSave.flush(); }}
                 rows={4}
                 placeholder="Add custom instructions for the coach..."
                 className="resize-y"
@@ -406,7 +426,7 @@ export default function SettingsPage() {
                 </div>
 
                 {stravaAuth.connected ? (
-                  <Button variant="destructive" onClick={() => void disconnectStrava()}>
+                  <Button variant="destructive" onClick={() => { disconnectStrava(); }}>
                     <Unplug size={16} /> Disconnect
                   </Button>
                 ) : (
@@ -432,7 +452,7 @@ export default function SettingsPage() {
             <p className="text-xs text-muted-foreground">
               Controls how the coach uses the web before answering. Auto detects when a search would help and asks you first. Simple always injects a DuckDuckGo snippet. Agent runs an LLM-driven research loop.
             </p>
-            <Select value={settings.web_augmentation_mode} onValueChange={(v) => { if (v !== null) setSettings({ ...settings, web_augmentation_mode: v }); }}>
+            <Select value={settings.web_augmentation_mode} onValueChange={(v) => { if (v !== null) updateSettingsImmediate({ web_augmentation_mode: v }); }}>
               <SelectTrigger className="w-full">
                 <SelectValue />
               </SelectTrigger>
@@ -480,6 +500,14 @@ export default function SettingsPage() {
         </Card>
 
       </div>
+      <ConfirmDialog
+        open={showDisconnectConfirm}
+        onOpenChange={setShowDisconnectConfirm}
+        title="Disconnect Strava"
+        description="Disconnect your Strava account? You can reconnect later."
+        confirmLabel="Disconnect"
+        onConfirm={() => { void doDisconnectStrava(); }}
+      />
     </div>
   );
 }

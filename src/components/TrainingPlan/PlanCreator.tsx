@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { ask } from "@tauri-apps/plugin-dialog";
 import { Plus, Trash2, Trophy, Calendar, Pencil, Check } from "lucide-react";
 import type { Race, TrainingPlanSummary } from "./types";
 import { formatGoalTime, getWeeksToRace } from "./types";
@@ -13,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
 export default function PlanCreator({ onPlanGenerated }: { onPlanGenerated: () => void }) {
   const [races, setRaces] = useState<Race[]>([]);
@@ -30,6 +30,8 @@ export default function PlanCreator({ onPlanGenerated }: { onPlanGenerated: () =
   const [raceElevation, setRaceElevation] = useState("");
   const [raceGoalTime, setRaceGoalTime] = useState("");
   const [racePriority, setRacePriority] = useState("A");
+  const [deleteRaceId, setDeleteRaceId] = useState<string | null>(null);
+  const [deletePlanId, setDeletePlanId] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
     try {
@@ -201,9 +203,11 @@ export default function PlanCreator({ onPlanGenerated }: { onPlanGenerated: () =
     }
   };
 
-  const handleDeleteRace = async (id: string) => {
-    const confirmed = await ask("Delete this race? This will also remove any associated training plans.", { title: "CoachLM", kind: "warning" });
-    if (!confirmed) return;
+  const handleDeleteRace = (id: string) => {
+    setDeleteRaceId(id);
+  };
+
+  const doDeleteRace = async (id: string) => {
     try {
       await invoke("delete_race", { id });
       void loadData();
@@ -230,7 +234,11 @@ export default function PlanCreator({ onPlanGenerated }: { onPlanGenerated: () =
     }
   };
 
-  const handleDeletePlan = async (planId: string) => {
+  const handleDeletePlan = (planId: string) => {
+    setDeletePlanId(planId);
+  };
+
+  const doDeletePlan = async (planId: string) => {
     try {
       await invoke("delete_plan", { planId });
       void loadData();
@@ -350,7 +358,7 @@ export default function PlanCreator({ onPlanGenerated }: { onPlanGenerated: () =
                       <TooltipTrigger render={<Button variant="ghost" size="sm" aria-label="Edit race" onClick={() => { startEditRace(race); }}><Pencil size={16} /></Button>} />
                       <TooltipContent>Edit race</TooltipContent>
                     </Tooltip>
-                    <Button variant="ghost" size="sm" className="text-destructive" onClick={() => { void handleDeleteRace(race.id); }}>
+                    <Button variant="ghost" size="sm" className="text-destructive" onClick={() => { handleDeleteRace(race.id); }}>
                       <Trash2 size={16} />
                     </Button>
                   </div>
@@ -390,7 +398,7 @@ export default function PlanCreator({ onPlanGenerated }: { onPlanGenerated: () =
                           <Button variant="secondary" size="sm" onClick={() => { void handleSetActivePlan(p.id); }}>Set Active</Button>
                         )}
                         <Tooltip>
-                          <TooltipTrigger render={<Button variant="ghost" size="sm" className="text-destructive" aria-label="Delete plan" onClick={() => { void handleDeletePlan(p.id); }}><Trash2 size={16} /></Button>} />
+                          <TooltipTrigger render={<Button variant="ghost" size="sm" className="text-destructive" aria-label="Delete plan" onClick={() => { handleDeletePlan(p.id); }}><Trash2 size={16} /></Button>} />
                           <TooltipContent>Delete plan</TooltipContent>
                         </Tooltip>
                       </div>
@@ -414,6 +422,22 @@ export default function PlanCreator({ onPlanGenerated }: { onPlanGenerated: () =
           </div>
         </div>
       )}
+      <ConfirmDialog
+        open={deleteRaceId !== null}
+        onOpenChange={(open) => { if (!open) setDeleteRaceId(null); }}
+        title="Delete Race"
+        description="Delete this race? This will also remove any associated training plans."
+        confirmLabel="Delete"
+        onConfirm={() => { if (deleteRaceId) { void doDeleteRace(deleteRaceId); } setDeleteRaceId(null); }}
+      />
+      <ConfirmDialog
+        open={deletePlanId !== null}
+        onOpenChange={(open) => { if (!open) setDeletePlanId(null); }}
+        title="Delete Training Plan"
+        description="Delete this training plan? This action cannot be undone."
+        confirmLabel="Delete"
+        onConfirm={() => { if (deletePlanId) { void doDeletePlan(deletePlanId); } setDeletePlanId(null); }}
+      />
     </div>
   );
 }

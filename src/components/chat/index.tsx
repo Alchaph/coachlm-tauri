@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { ask } from "@tauri-apps/plugin-dialog";
 import { toast } from "sonner";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import ChatTabBar from "@/components/chat/ChatTabBar";
 import ChatInput from "@/components/chat/ChatInput";
 import ChatMessageList from "@/components/chat/ChatMessageList";
@@ -33,6 +33,7 @@ export default function Chat({ onStatusChange }: ChatProps) {
   const [ollamaEndpoint, setOllamaEndpoint] = useState("http://localhost:11434");
   const [activeLlm, setActiveLlm] = useState("ollama");
   const [showSetupGuide, setShowSetupGuide] = useState(false);
+  const [deleteSessionId, setDeleteSessionId] = useState<string | null>(null);
 
   useEffect(() => {
     currentSessionIdRef.current = currentSessionId;
@@ -249,9 +250,11 @@ export default function Chat({ onStatusChange }: ChatProps) {
     }
   };
 
-  const closeSession = async (sessionId: string) => {
-    const confirmed = await ask("Delete this chat session?", { title: "CoachLM", kind: "warning" });
-    if (!confirmed) return;
+  const closeSession = (sessionId: string) => {
+    setDeleteSessionId(sessionId);
+  };
+
+  const doCloseSession = async (sessionId: string) => {
     try {
       await invoke("delete_chat_session", { sessionId });
       const remaining = sessions.filter((s) => s.id !== sessionId);
@@ -471,7 +474,7 @@ export default function Chat({ onStatusChange }: ChatProps) {
         sessions={sessions}
         currentSessionId={currentSessionId}
         onLoadSession={(id) => { void loadSession(id); }}
-        onCloseSession={(id) => { void closeSession(id); }}
+        onCloseSession={(id) => { closeSession(id); }}
         onCreateNewSession={() => { void createNewSession(); }}
         getSessionLabel={getSessionLabel}
       />
@@ -510,6 +513,14 @@ export default function Chat({ onStatusChange }: ChatProps) {
         onSendMessage={() => { void sendMessage(); }}
         onRespondWebSearch={respondWebSearch}
         onKeyDown={handleKeyDown}
+      />
+      <ConfirmDialog
+        open={deleteSessionId !== null}
+        onOpenChange={(open) => { if (!open) setDeleteSessionId(null); }}
+        title="Delete Chat Session"
+        description="Delete this chat session? This action cannot be undone."
+        confirmLabel="Delete"
+        onConfirm={() => { if (deleteSessionId) { void doCloseSession(deleteSessionId); } setDeleteSessionId(null); }}
       />
     </div>
   );

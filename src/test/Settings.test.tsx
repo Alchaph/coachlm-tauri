@@ -51,38 +51,23 @@ describe("SettingsPage", () => {
     expect(screen.getByText("Provider")).toBeInTheDocument();
   });
 
-  it("displays Save Settings button", async () => {
-    setupInvokeMock();
-
-    render(<SettingsPage />);
-
-    await waitFor(() => {
-      expect(screen.getByRole("button", { name: /save settings/i })).toBeInTheDocument();
-    });
-  });
-
-  it("save settings button calls invoke with save_settings", async () => {
+  it("auto-saves settings after debounce when model name is changed", async () => {
     setupInvokeMock();
     const user = userEvent.setup();
 
     render(<SettingsPage />);
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: /save settings/i })).toBeInTheDocument();
+      expect(screen.getByLabelText("Model Name")).toBeInTheDocument();
     });
 
-    // Save is disabled until settings are dirty — make a change first
     const modelInput = screen.getByLabelText("Model Name");
     await user.clear(modelInput);
     await user.type(modelInput, "llama3-updated");
 
-    const saveButton = screen.getByRole("button", { name: /save settings/i });
-    expect(saveButton).not.toBeDisabled();
-    await user.click(saveButton);
-
     await waitFor(() => {
-      expect(vi.mocked(invoke)).toHaveBeenCalledWith("save_settings", { data: expect.objectContaining({ active_llm: "ollama" }) as unknown });
-    });
+      expect(vi.mocked(invoke)).toHaveBeenCalledWith("save_settings", { data: expect.objectContaining({ ollama_model: "llama3-updated" }) as unknown });
+    }, { timeout: 3000 });
   });
 
   it("loads settings on mount by calling get_settings", async () => {

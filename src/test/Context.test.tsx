@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { invoke } from "@tauri-apps/api/core";
-import { ask } from "@tauri-apps/plugin-dialog";
 import Context from "../components/Context";
 
 const sampleInsights = [
@@ -137,7 +136,6 @@ describe("Context", () => {
 
   it("calls delete_pinned_insight after confirm dialog", async () => {
     setupInvokeMock(true);
-    vi.mocked(ask).mockResolvedValue(true);
     const user = userEvent.setup();
 
     render(<Context />);
@@ -154,6 +152,9 @@ describe("Context", () => {
 
     const [firstDeleteButton] = screen.getAllByRole("button", { name: /delete insight/i });
     await user.click(firstDeleteButton);
+
+    const unpinButton = await screen.findByRole("button", { name: /unpin/i });
+    await user.click(unpinButton);
 
     await waitFor(() => {
       expect(vi.mocked(invoke)).toHaveBeenCalledWith("delete_pinned_insight", { id: 1 });
