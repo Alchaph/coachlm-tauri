@@ -11,6 +11,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card } from "@/components/ui/card";
 import type { ActivityItem, ActivityLap, ActivityZoneDistribution } from "@/components/dashboard/types";
+import LapPaceChart from "@/components/dashboard/LapPaceChart";
 import {
   formatDistance,
   formatDuration,
@@ -126,11 +127,7 @@ export default function ActivityDetailModal({
                     <span className="text-sm text-muted-foreground">No lap data available</span>
                   </Card>
                 ) : (
-                  <Card className="p-4 flex items-center justify-center h-[160px]">
-                    <span className="text-sm text-muted-foreground">
-                      Lap chart will render here
-                    </span>
-                  </Card>
+                  <LapPaceChart laps={laps} />
                 )}
               </div>
 
