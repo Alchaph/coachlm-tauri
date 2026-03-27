@@ -9,6 +9,7 @@ import StatsCards from "@/components/dashboard/StatsCards";
 import ActivityList from "@/components/dashboard/ActivityList";
 import ActivityChart from "@/components/dashboard/ActivityChart";
 import ActivityDetailModal from "@/components/dashboard/ActivityDetailModal";
+import AggregateZonePanel from "@/components/dashboard/AggregateZonePanel";
 import {
   computeWeeklyVolume,
   formatPace,
@@ -200,6 +201,8 @@ export default function Dashboard() {
         formatDuration={formatDuration}
         formatElevation={formatElevation}
       />
+
+      <AggregateZonePanel />
 
       <ActivityList
         filteredActivities={filteredActivities}
