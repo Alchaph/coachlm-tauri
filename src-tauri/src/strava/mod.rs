@@ -1,5 +1,5 @@
 use crate::error::AppError;
-use crate::models::{ActivityData, AuthStatus};
+use crate::models::{ActivityData, ActivityLap, ActivityZoneDistribution, AuthStatus};
 use crate::storage::Database;
 use std::sync::Arc;
 use tauri::Emitter;
@@ -318,6 +318,227 @@ pub async fn fetch_athlete_stats(db: &Database, athlete_id: &str) -> Result<(), 
     Ok(())
 }
 
+#[allow(dead_code)]
+pub async fn fetch_activity_laps(
+    db: &Database,
+    strava_id: &str,
+    activity_id: &str,
+    token: &str,
+) -> Result<Vec<ActivityLap>, AppError> {
+    if db
+        .has_activity_laps(activity_id)
+        .map_err(AppError::Database)?
+    {
+        return db
+            .get_activity_laps(activity_id)
+            .map_err(AppError::Database);
+    }
+
+    let client = reqwest::Client::new();
+    let url = format!("{STRAVA_API_BASE}/activities/{strava_id}/laps");
+
+    let response = loop {
+        let resp = client
+            .get(&url)
+            .bearer_auth(token)
+            .send()
+            .await
+            .map_err(AppError::Http)?;
+
+        if resp.status() == 429 {
+            let retry_after: u64 = resp
+                .headers()
+                .get("retry-after")
+                .and_then(|v| v.to_str().ok())
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(60);
+            tokio::time::sleep(tokio::time::Duration::from_secs(retry_after)).await;
+            continue;
+        }
+
+        break resp;
+    };
+
+    if response.status() == 403 {
+        return Err(AppError::Strava(format!(
+            "Access denied fetching laps for activity {strava_id}: insufficient permissions"
+        )));
+    }
+
+    if !response.status().is_success() {
+        return Err(AppError::Strava(format!(
+            "Strava API error fetching laps for activity {strava_id}: {}",
+            response.status()
+        )));
+    }
+
+    let raw: Vec<serde_json::Value> = response.json().await.map_err(AppError::Http)?;
+
+    if raw.is_empty() {
+        db.save_activity_laps(activity_id, &[])
+            .map_err(AppError::Database)?;
+        return Ok(Vec::new());
+    }
+
+    let laps: Vec<ActivityLap> = raw
+        .into_iter()
+        .enumerate()
+        .map(|(i, r)| {
+            #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+            let fallback_index = i as i64 + 1;
+            ActivityLap {
+                id: None,
+                activity_id: activity_id.to_string(),
+                lap_index: r["index"].as_i64().unwrap_or(fallback_index),
+                distance: r["distance"].as_f64().unwrap_or(0.0),
+                elapsed_time: r["elapsed_time"].as_i64().unwrap_or(0),
+                moving_time: r["moving_time"].as_i64().unwrap_or(0),
+                average_speed: r["average_speed"].as_f64().unwrap_or(0.0),
+                max_speed: r["max_speed"].as_f64(),
+                average_heartrate: r["average_heartrate"].as_f64(),
+                max_heartrate: r["max_heartrate"].as_f64(),
+                average_cadence: r["average_cadence"].as_f64(),
+                total_elevation_gain: r["total_elevation_gain"].as_f64(),
+            }
+        })
+        .collect();
+
+    db.save_activity_laps(activity_id, &laps)
+        .map_err(AppError::Database)?;
+
+    Ok(laps)
+}
+
+/// Fetch heart-rate zone time-in-zone data from the Strava zones endpoint for a single activity.
+///
+/// Returns an empty `Vec` when the activity has no heart-rate zone data (e.g. the response is
+/// empty or contains no `"heartrate"` type entry). Returns `AppError::Strava` for 403 responses
+/// (Strava Premium requirement). 429 responses are retried after the `Retry-After` header delay.
+/// Results are cached to the database before returning.
+#[allow(dead_code)]
+pub async fn fetch_activity_zones(
+    db: &Database,
+    strava_id: &str,
+    activity_id: &str,
+    token: &str,
+) -> Result<Vec<ActivityZoneDistribution>, AppError> {
+    if db
+        .has_activity_zone_distribution(activity_id)
+        .map_err(AppError::Database)?
+    {
+        return db
+            .get_activity_zone_distribution(activity_id)
+            .map_err(AppError::Database);
+    }
+
+    let client = reqwest::Client::new();
+    let url = format!("{STRAVA_API_BASE}/activities/{strava_id}/zones");
+
+    let response = loop {
+        let resp = client
+            .get(&url)
+            .bearer_auth(token)
+            .send()
+            .await
+            .map_err(AppError::Http)?;
+
+        if resp.status() == 429 {
+            let retry_after: u64 = resp
+                .headers()
+                .get("retry-after")
+                .and_then(|v| v.to_str().ok())
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(60);
+            tokio::time::sleep(tokio::time::Duration::from_secs(retry_after)).await;
+            continue;
+        }
+
+        break resp;
+    };
+
+    if response.status() == 403 {
+        return Err(AppError::Strava(
+            "HR zone data requires Strava Premium or is unavailable for this activity".into(),
+        ));
+    }
+
+    if !response.status().is_success() {
+        return Err(AppError::Strava(format!(
+            "Strava API error fetching zones for activity {strava_id}: {}",
+            response.status()
+        )));
+    }
+
+    let raw: serde_json::Value = response.json().await.map_err(AppError::Http)?;
+
+    // Response is an array of zone-type objects; extract only the "heartrate" entry.
+    let zones = if let Some(zone_types) = raw.as_array() {
+        let hr_entry = zone_types
+            .iter()
+            .find(|z| z["type"].as_str() == Some("heartrate"));
+
+        match hr_entry.and_then(|z| z["distribution_buckets"].as_array()) {
+            Some(buckets) => buckets
+                .iter()
+                .enumerate()
+                .map(|(i, b)| {
+                    #[allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
+                    let zone_index = i as i64;
+                    ActivityZoneDistribution {
+                        activity_id: activity_id.to_string(),
+                        zone_index,
+                        zone_min: b["min"].as_i64().unwrap_or(0),
+                        zone_max: b["max"].as_i64().unwrap_or(0),
+                        time_seconds: b["time"].as_i64().unwrap_or(0),
+                    }
+                })
+                .collect(),
+            None => Vec::new(),
+        }
+    } else {
+        Vec::new()
+    };
+
+    db.save_activity_zone_distribution(activity_id, &zones)
+        .map_err(AppError::Database)?;
+
+    Ok(zones)
+}
+
+/// Compute the pace coefficient of variation (CV = stddev/mean * 100) across laps.
+/// Pace per lap is `elapsed_time / distance` (seconds per metre). Zero-distance laps skipped.
+/// Returns `None` when fewer than two valid laps exist.
+#[allow(dead_code)]
+#[must_use]
+pub fn compute_pace_variance(laps: &[ActivityLap]) -> Option<f64> {
+    let paces: Vec<f64> = laps
+        .iter()
+        .filter(|l| l.distance > 0.0)
+        .map(|l| {
+            #[allow(clippy::cast_precision_loss)]
+            let elapsed = l.elapsed_time as f64;
+            elapsed / l.distance
+        })
+        .collect();
+
+    if paces.len() < 2 {
+        return None;
+    }
+
+    #[allow(clippy::cast_precision_loss)]
+    let count = paces.len() as f64;
+    let mean = paces.iter().sum::<f64>() / count;
+
+    if mean == 0.0 {
+        return None;
+    }
+
+    let variance = paces.iter().map(|p| (p - mean).powi(2)).sum::<f64>() / count;
+    let stddev = variance.sqrt();
+
+    Some(stddev / mean * 100.0)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -375,5 +596,75 @@ mod tests {
         let request = "GET /callback?code=&other=val HTTP/1.1\r\nHost: localhost";
         let result = extract_code_from_request(request);
         assert_eq!(result.as_deref(), Some(""));
+    }
+
+    fn make_lap(activity_id: &str, lap_index: i64, elapsed_time: i64, distance: f64) -> ActivityLap {
+        ActivityLap {
+            id: None,
+            activity_id: activity_id.to_string(),
+            lap_index,
+            distance,
+            elapsed_time,
+            moving_time: elapsed_time,
+            average_speed: if distance > 0.0 { distance / elapsed_time as f64 } else { 0.0 },
+            max_speed: None,
+            average_heartrate: None,
+            max_heartrate: None,
+            average_cadence: None,
+            total_elevation_gain: None,
+        }
+    }
+
+    #[test]
+    fn pace_variance_returns_none_for_empty_laps() {
+        assert!(compute_pace_variance(&[]).is_none());
+    }
+
+    #[test]
+    fn pace_variance_returns_none_for_single_lap() {
+        let laps = vec![make_lap("a1", 1, 300, 1000.0)];
+        assert!(compute_pace_variance(&laps).is_none());
+    }
+
+    #[test]
+    fn pace_variance_returns_none_when_all_laps_zero_distance() {
+        let laps = vec![
+            make_lap("a1", 1, 300, 0.0),
+            make_lap("a1", 2, 300, 0.0),
+        ];
+        assert!(compute_pace_variance(&laps).is_none());
+    }
+
+    #[test]
+    fn pace_variance_zero_for_identical_paces() {
+        let laps = vec![
+            make_lap("a1", 1, 300, 1000.0),
+            make_lap("a1", 2, 300, 1000.0),
+            make_lap("a1", 3, 300, 1000.0),
+        ];
+        let cv = compute_pace_variance(&laps).expect("should return Some");
+        assert!(cv.abs() < 1e-9, "identical paces should give CV near zero, got {cv}");
+    }
+
+    #[test]
+    fn pace_variance_positive_for_varying_paces() {
+        let laps = vec![
+            make_lap("a1", 1, 300, 1000.0),
+            make_lap("a1", 2, 360, 1000.0),
+            make_lap("a1", 3, 240, 1000.0),
+        ];
+        let cv = compute_pace_variance(&laps).expect("should return Some");
+        assert!(cv > 0.0, "varying paces should give positive CV, got {cv}");
+    }
+
+    #[test]
+    fn pace_variance_skips_zero_distance_laps() {
+        let laps = vec![
+            make_lap("a1", 1, 300, 1000.0),
+            make_lap("a1", 2, 0, 0.0),
+            make_lap("a1", 3, 300, 1000.0),
+        ];
+        let cv = compute_pace_variance(&laps).expect("should return Some");
+        assert!(cv.abs() < 1e-9, "identical valid laps should give CV near zero after skipping zero-distance, got {cv}");
     }
 }
