@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { toast } from "sonner";
 import {
   BarChart,
   Bar,
@@ -124,7 +125,7 @@ export default function AggregateZonePanel() {
   const [zones, setZones] = useState<ActivityZoneSummary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  const fetchZones = useCallback(async (days: RangePreset) => {
+   const fetchZones = useCallback(async (days: RangePreset) => {
     setIsLoading(true);
     try {
       const result = await invoke<ActivityZoneSummary[]>(
@@ -132,7 +133,8 @@ export default function AggregateZonePanel() {
         { days }
       );
       setZones(result);
-    } catch {
+    } catch (err: unknown) {
+      toast.error(typeof err === "string" ? err : "Failed to load zone data");
       setZones([]);
     } finally {
       setIsLoading(false);

@@ -86,7 +86,7 @@ export default function LapPaceChart({ laps }: LapPaceChartProps) {
   }
 
   const chartData: LapChartDatum[] = laps.map((lap) => ({
-    lapIndex: lap.lap_index + 1,
+    lapIndex: lap.lap_index,
     paceMinPerKm: paceToMinPerKm(lap.elapsed_time, lap.distance),
     distanceKm: lap.distance / 1000,
     avgHr: lap.average_heartrate !== null ? Math.round(lap.average_heartrate) : null,
