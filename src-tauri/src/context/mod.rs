@@ -1,4 +1,6 @@
-use crate::models::{ActivityData, PlanWeekWithSessions, ProfileData, TrainingPlan};
+use crate::models::{
+    ActivityData, ActivityZoneSummary, PlanWeekWithSessions, ProfileData, TrainingPlan,
+};
 use crate::storage::Database;
 use std::fmt::Write;
 
@@ -114,6 +116,13 @@ pub fn build_context(db: &Database) -> String {
     let training_summary = build_training_summary(db);
     if !training_summary.is_empty() {
         blocks.push((training_summary, false));
+    }
+
+    if let Ok(zones) = db.get_aggregated_zone_distribution(Some(7)) {
+        if !zones.is_empty() {
+            let zone_block = format_zone_distribution_block(&zones);
+            blocks.push((zone_block, false));
+        }
     }
 
     assemble_within_budget(&blocks, budget_chars)
@@ -270,7 +279,7 @@ fn build_training_summary(db: &Database) -> String {
         }
 
         match week_idx {
-            0 => summary.push_str(&format_this_week_summary(&week_activities)),
+            0 => summary.push_str(&format_this_week_summary(&week_activities, db)),
             1 => summary.push_str(&format_last_week_summary(&week_activities)),
             2 => summary.push_str(&format_older_week_summary("2 Weeks Ago", &week_activities)),
             3 => summary.push_str(&format_older_week_summary("3 Weeks Ago", &week_activities)),
@@ -281,7 +290,7 @@ fn build_training_summary(db: &Database) -> String {
     summary
 }
 
-fn format_this_week_summary(activities: &[&ActivityData]) -> String {
+fn format_this_week_summary(activities: &[&ActivityData], db: &Database) -> String {
     let mut out = format!("\n### This Week ({} runs)", activities.len());
     for a in activities {
         let dist = a.distance.unwrap_or(0.0) / 1000.0;
@@ -302,9 +311,18 @@ fn format_this_week_summary(activities: &[&ActivityData]) -> String {
         } else {
             String::new()
         };
+        let cv = if db.has_activity_laps(&a.activity_id).unwrap_or(false) {
+            db.get_activity_laps(&a.activity_id)
+                .ok()
+                .and_then(|laps| crate::strava::compute_pace_variance(&laps))
+                .map(|cv| format!(" | CV:{cv:.0}%"))
+                .unwrap_or_default()
+        } else {
+            String::new()
+        };
         let _ = write!(
             out,
-            "\n- {}: {dist:.1}km {time_min:.0}min{pace}{hr}",
+            "\n- {}: {dist:.1}km {time_min:.0}min{pace}{hr}{cv}",
             a.name.as_deref().unwrap_or("Run"),
         );
     }
@@ -335,9 +353,149 @@ fn format_older_week_summary(label: &str, activities: &[&ActivityData]) -> Strin
     )
 }
 
+fn format_zone_distribution_block(zones: &[ActivityZoneSummary]) -> String {
+    let mut block = String::from("\n\n## HR Zone Distribution (Last 7 Days)\n");
+    let entries: Vec<String> = zones
+        .iter()
+        .enumerate()
+        .map(|(i, z)| {
+            let n = i + 1;
+            let range = if z.zone_min == 0 {
+                format!("<{}", z.zone_max)
+            } else if z.zone_max == -1 || z.zone_max == 999 {
+                format!(">{}", z.zone_min)
+            } else {
+                format!("{}-{}", z.zone_min, z.zone_max)
+            };
+            let pct = z.percentage.round();
+            #[allow(clippy::cast_possible_truncation)]
+            let pct_i = pct as i64;
+            format!("Z{n}({range}): {pct_i}%")
+        })
+        .collect();
+    block.push_str(&entries.join(" | "));
+    if block.len() > 200 {
+        let boundary = block.floor_char_boundary(200);
+        block.truncate(boundary);
+    }
+    block
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::models::{ActivityData, ActivityLap, ActivityZoneDistribution};
+
+    fn temp_db() -> (Database, std::path::PathBuf) {
+        let dir = std::env::temp_dir().join(format!("coachlm_ctx_test_{}", uuid::Uuid::new_v4()));
+        let db = Database::new(&dir).expect("Failed to create test database");
+        (db, dir)
+    }
+
+    fn cleanup(dir: &std::path::PathBuf) {
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    fn minimal_activity(
+        activity_id: &str,
+        strava_id: &str,
+        dist_m: f64,
+        moving_secs: i64,
+    ) -> ActivityData {
+        ActivityData {
+            activity_id: activity_id.to_string(),
+            strava_id: Some(strava_id.to_string()),
+            name: Some("Test Run".to_string()),
+            activity_type: Some("Run".to_string()),
+            start_date: None,
+            distance: Some(dist_m),
+            moving_time: Some(moving_secs),
+            average_speed: None,
+            average_heartrate: None,
+            max_heartrate: None,
+            average_cadence: None,
+            gear_id: None,
+            elapsed_time: Some(moving_secs),
+            total_elevation_gain: None,
+            max_speed: None,
+            workout_type: None,
+            sport_type: None,
+            start_date_local: None,
+        }
+    }
+
+    fn make_lap(
+        activity_id: &str,
+        lap_index: i64,
+        distance: f64,
+        elapsed_time: i64,
+    ) -> ActivityLap {
+        ActivityLap {
+            id: None,
+            activity_id: activity_id.to_string(),
+            lap_index,
+            distance,
+            elapsed_time,
+            moving_time: elapsed_time,
+            average_speed: {
+                #[allow(clippy::cast_precision_loss)]
+                let et = elapsed_time as f64;
+                distance / et
+            },
+            max_speed: None,
+            average_heartrate: None,
+            max_heartrate: None,
+            average_cadence: None,
+            total_elevation_gain: None,
+        }
+    }
+
+    #[test]
+    fn test_context_pace_variance() {
+        let (db, dir) = temp_db();
+
+        let activity = minimal_activity("act-1", "strava-1", 10_000.0, 3000);
+        db.insert_activity(&activity)
+            .expect("insert_activity failed");
+
+        let laps = vec![
+            make_lap("act-1", 1, 1000.0, 300),
+            make_lap("act-1", 2, 1000.0, 360),
+        ];
+        db.save_activity_laps("act-1", &laps)
+            .expect("save_activity_laps failed");
+
+        let result = format_this_week_summary(&[&activity], &db);
+
+        assert!(
+            result.contains("CV:"),
+            "expected CV in output, got: {result}"
+        );
+        assert!(
+            result.contains('%'),
+            "expected percent sign in output, got: {result}"
+        );
+
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn test_context_no_laps_no_cv() {
+        let (db, dir) = temp_db();
+
+        let activity = minimal_activity("act-2", "strava-2", 5_000.0, 1500);
+        db.insert_activity(&activity)
+            .expect("insert_activity failed");
+
+        let result = format_this_week_summary(&[&activity], &db);
+
+        assert!(
+            !result.contains("CV:"),
+            "expected no CV when no laps, got: {result}"
+        );
+
+        cleanup(&dir);
+    }
 
     fn empty_profile() -> ProfileData {
         ProfileData {
@@ -515,5 +673,77 @@ mod tests {
             result2.contains("- Threshold pace: 5:05/km"),
             "result was: {result2}"
         );
+    }
+
+    #[test]
+    fn test_context_zone_summary() {
+        use chrono::Utc;
+        let (db, dir) = temp_db();
+
+        let mut activity = minimal_activity("act-z1", "strava-z1", 10_000.0, 3600);
+        activity.start_date = Some(Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string());
+        db.insert_activity(&activity)
+            .expect("insert_activity failed");
+
+        let zones = vec![
+            ActivityZoneDistribution {
+                activity_id: "act-z1".to_string(),
+                zone_index: 0,
+                zone_min: 0,
+                zone_max: 120,
+                time_seconds: 600,
+            },
+            ActivityZoneDistribution {
+                activity_id: "act-z1".to_string(),
+                zone_index: 1,
+                zone_min: 120,
+                zone_max: 150,
+                time_seconds: 1200,
+            },
+            ActivityZoneDistribution {
+                activity_id: "act-z1".to_string(),
+                zone_index: 2,
+                zone_min: 150,
+                zone_max: 999,
+                time_seconds: 1800,
+            },
+        ];
+        db.save_activity_zone_distribution("act-z1", &zones)
+            .expect("save_activity_zone_distribution failed");
+
+        let result = build_context(&db);
+
+        assert!(
+            result.contains("## HR Zone Distribution (Last 7 Days)"),
+            "expected zone header, got: {result}"
+        );
+        assert!(
+            result.contains("Z1(<120)"),
+            "expected Z1 with <120 format, got: {result}"
+        );
+        assert!(
+            result.contains("Z2(120-150)"),
+            "expected Z2 range format, got: {result}"
+        );
+        assert!(
+            result.contains("Z3(>150)"),
+            "expected Z3 with >150 format, got: {result}"
+        );
+
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn test_context_no_zone_data() {
+        let (db, dir) = temp_db();
+
+        let result = build_context(&db);
+
+        assert!(
+            !result.contains("## HR Zone Distribution"),
+            "expected no zone block when no data, got: {result}"
+        );
+
+        cleanup(&dir);
     }
 }
