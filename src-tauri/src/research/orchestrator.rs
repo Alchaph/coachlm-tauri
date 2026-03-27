@@ -40,7 +40,6 @@ fn emit_research_progress(
         .ok();
 }
 
-#[allow(clippy::too_many_lines)]
 pub async fn run_research(
     db: &Arc<Database>,
     app_handle: &tauri::AppHandle,
@@ -63,184 +62,24 @@ pub async fn run_research(
             break;
         }
 
-        emit_research_progress(
+        let should_break = run_research_iteration(
+            db,
             app_handle,
+            settings,
             session_id,
-            "thinking",
-            "Deciding next research action...",
+            user_query,
+            &limits,
             iteration,
-        );
+            &mut notebook,
+            &mut search_hits,
+            &mut searches_used,
+            &mut fetches_used,
+            &mut json_failures,
+        )
+        .await;
 
-        let action = if json_failures >= 2 {
-            run_dumb_fallback(
-                db,
-                app_handle,
-                session_id,
-                user_query,
-                &mut notebook,
-                &mut search_hits,
-                &mut searches_used,
-                &mut fetches_used,
-                &limits,
-                iteration,
-            )
-            .await;
+        if should_break {
             break;
-        } else {
-            match planner::select_action(
-                settings,
-                user_query,
-                &notebook,
-                &search_hits,
-                limits.max_searches.saturating_sub(searches_used),
-                limits.max_page_fetches.saturating_sub(fetches_used),
-            )
-            .await
-            {
-                Ok(action) => action,
-                Err(e) => {
-                    json_failures += 1;
-                    log::warn!("Action selection failed ({json_failures}/2): {e}");
-                    continue;
-                }
-            }
-        };
-
-        match action {
-            AgentAction::Search { query } => {
-                if searches_used >= limits.max_searches {
-                    log::info!("Search limit reached, forcing finish");
-                    break;
-                }
-                emit_research_progress(
-                    app_handle,
-                    session_id,
-                    "searching",
-                    &query,
-                    iteration,
-                );
-
-                let cache_key = format!("q:{}", query.to_lowercase());
-                let cached = {
-                    let conn = db.conn();
-                    ResearchCache::lookup(&conn, &cache_key, "search")
-                };
-
-                let results = if let Some(cached_json) = cached {
-                    serde_json::from_str::<Vec<SearchHitJson>>(&cached_json)
-                        .map(|v| {
-                            v.into_iter()
-                                .map(|h| SearchHit {
-                                    title: h.title,
-                                    url: h.url,
-                                    snippet: h.snippet,
-                                })
-                                .collect()
-                        })
-                        .unwrap_or_default()
-                } else {
-                    RATE_LIMITER.wait().await;
-                    match web_search::search_duckduckgo(&query, 5).await {
-                        Ok(ws_results) => {
-                            let hits: Vec<SearchHit> = ws_results
-                                .into_iter()
-                                .map(|r| SearchHit {
-                                    title: r.title,
-                                    url: r.url,
-                                    snippet: r.snippet,
-                                })
-                                .collect();
-                            let json_hits: Vec<SearchHitJson> = hits
-                                .iter()
-                                .map(|h| SearchHitJson {
-                                    title: h.title.clone(),
-                                    url: h.url.clone(),
-                                    snippet: h.snippet.clone(),
-                                })
-                                .collect();
-                            if let Ok(json) = serde_json::to_string(&json_hits) {
-                                let conn = db.conn();
-                                ResearchCache::store(&conn, &cache_key, &json, "search").ok();
-                            }
-                            hits
-                        }
-                        Err(e) => {
-                            log::warn!("Search failed: {e}");
-                            Vec::new()
-                        }
-                    }
-                };
-
-                search_hits = results;
-                searches_used += 1;
-            }
-
-            AgentAction::OpenResults { result_ids } => {
-                for &id in &result_ids {
-                    if fetches_used >= limits.max_page_fetches {
-                        break;
-                    }
-                    if id >= search_hits.len() {
-                        continue;
-                    }
-                    let hit = &search_hits[id];
-                    emit_research_progress(
-                        app_handle,
-                        session_id,
-                        "reading",
-                        &hit.title,
-                        iteration,
-                    );
-
-                    let page_cache_key = format!("p:{}", hit.url);
-                    let cached_page = {
-                        let conn = db.conn();
-                        ResearchCache::lookup(&conn, &page_cache_key, "page")
-                    };
-
-                    let text = if let Some(cached) = cached_page {
-                        cached
-                    } else {
-                        match fetch_page_text(&hit.url).await {
-                            Ok(text) => {
-                                let conn = db.conn();
-                                ResearchCache::store(
-                                    &conn,
-                                    &page_cache_key,
-                                    &text[..text.len().min(50_000)],
-                                    "page",
-                                )
-                                .ok();
-                                text
-                            }
-                            Err(e) => {
-                                log::warn!("Fetch failed for {}: {e}", hit.url);
-                                fetches_used += 1;
-                                continue;
-                            }
-                        }
-                    };
-
-                    let snippet: String = text.chars().take(2000).collect();
-                    notebook.add_entry(&format!(
-                        "From \"{}\":\n{}",
-                        hit.title, snippet
-                    ));
-                    notebook.add_citation(&hit.url, &hit.title);
-                    fetches_used += 1;
-                }
-            }
-
-            AgentAction::Finish { .. } => {
-                emit_research_progress(
-                    app_handle,
-                    session_id,
-                    "done",
-                    "Research complete",
-                    iteration,
-                );
-                break;
-            }
         }
     }
 
@@ -248,6 +87,230 @@ pub async fn run_research(
         brief: notebook.to_brief(),
         citations: notebook.citations().to_vec(),
     })
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn run_research_iteration(
+    db: &Arc<Database>,
+    app_handle: &tauri::AppHandle,
+    settings: &SettingsData,
+    session_id: &str,
+    user_query: &str,
+    limits: &ResearchLimits,
+    iteration: u8,
+    notebook: &mut Notebook,
+    search_hits: &mut Vec<SearchHit>,
+    searches_used: &mut u8,
+    fetches_used: &mut u8,
+    json_failures: &mut u8,
+) -> bool {
+    emit_research_progress(
+        app_handle,
+        session_id,
+        "thinking",
+        "Deciding next research action...",
+        iteration,
+    );
+
+    if *json_failures >= 2 {
+        run_dumb_fallback(
+            db,
+            app_handle,
+            session_id,
+            user_query,
+            notebook,
+            search_hits,
+            searches_used,
+            fetches_used,
+            limits,
+            iteration,
+        )
+        .await;
+        return true;
+    }
+
+    let action = match planner::select_action(
+        settings,
+        user_query,
+        notebook,
+        search_hits,
+        limits.max_searches.saturating_sub(*searches_used),
+        limits.max_page_fetches.saturating_sub(*fetches_used),
+    )
+    .await
+    {
+        Ok(action) => action,
+        Err(e) => {
+            *json_failures += 1;
+            log::warn!("Action selection failed ({json_failures}/2): {e}");
+            return false;
+        }
+    };
+
+    match action {
+        AgentAction::Search { query } => {
+            if *searches_used >= limits.max_searches {
+                log::info!("Search limit reached, forcing finish");
+                return true;
+            }
+            execute_search_action(
+                db,
+                app_handle,
+                session_id,
+                &query,
+                search_hits,
+                searches_used,
+                iteration,
+            )
+            .await;
+        }
+
+        AgentAction::OpenResults { result_ids } => {
+            execute_open_results_action(
+                db,
+                app_handle,
+                session_id,
+                &result_ids,
+                search_hits,
+                notebook,
+                fetches_used,
+                limits,
+                iteration,
+            )
+            .await;
+        }
+
+        AgentAction::Finish { .. } => {
+            emit_research_progress(app_handle, session_id, "done", "Research complete", iteration);
+            return true;
+        }
+    }
+
+    false
+}
+
+async fn execute_search_action(
+    db: &Arc<Database>,
+    app_handle: &tauri::AppHandle,
+    session_id: &str,
+    query: &str,
+    search_hits: &mut Vec<SearchHit>,
+    searches_used: &mut u8,
+    iteration: u8,
+) {
+    emit_research_progress(app_handle, session_id, "searching", query, iteration);
+
+    let cache_key = format!("q:{}", query.to_lowercase());
+    let cached = {
+        let conn = db.conn();
+        ResearchCache::lookup(&conn, &cache_key, "search")
+    };
+
+    let results = if let Some(cached_json) = cached {
+        serde_json::from_str::<Vec<SearchHitJson>>(&cached_json)
+            .map(|v| {
+                v.into_iter()
+                    .map(|h| SearchHit {
+                        title: h.title,
+                        url: h.url,
+                        snippet: h.snippet,
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
+    } else {
+        RATE_LIMITER.wait().await;
+        match web_search::search_duckduckgo(query, 5).await {
+            Ok(ws_results) => {
+                let hits: Vec<SearchHit> = ws_results
+                    .into_iter()
+                    .map(|r| SearchHit {
+                        title: r.title,
+                        url: r.url,
+                        snippet: r.snippet,
+                    })
+                    .collect();
+                let json_hits: Vec<SearchHitJson> = hits
+                    .iter()
+                    .map(|h| SearchHitJson {
+                        title: h.title.clone(),
+                        url: h.url.clone(),
+                        snippet: h.snippet.clone(),
+                    })
+                    .collect();
+                if let Ok(json) = serde_json::to_string(&json_hits) {
+                    let conn = db.conn();
+                    ResearchCache::store(&conn, &cache_key, &json, "search").ok();
+                }
+                hits
+            }
+            Err(e) => {
+                log::warn!("Search failed: {e}");
+                Vec::new()
+            }
+        }
+    };
+
+    *search_hits = results;
+    *searches_used += 1;
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn execute_open_results_action(
+    db: &Arc<Database>,
+    app_handle: &tauri::AppHandle,
+    session_id: &str,
+    result_ids: &[usize],
+    search_hits: &[SearchHit],
+    notebook: &mut Notebook,
+    fetches_used: &mut u8,
+    limits: &ResearchLimits,
+    iteration: u8,
+) {
+    for &id in result_ids {
+        if *fetches_used >= limits.max_page_fetches {
+            break;
+        }
+        if id >= search_hits.len() {
+            continue;
+        }
+        let hit = &search_hits[id];
+        emit_research_progress(app_handle, session_id, "reading", &hit.title, iteration);
+
+        let page_cache_key = format!("p:{}", hit.url);
+        let cached_page = {
+            let conn = db.conn();
+            ResearchCache::lookup(&conn, &page_cache_key, "page")
+        };
+
+        let text = if let Some(cached) = cached_page {
+            cached
+        } else {
+            match fetch_page_text(&hit.url).await {
+                Ok(text) => {
+                    let conn = db.conn();
+                    ResearchCache::store(
+                        &conn,
+                        &page_cache_key,
+                        &text[..text.len().min(50_000)],
+                        "page",
+                    )
+                    .ok();
+                    text
+                }
+                Err(e) => {
+                    log::warn!("Fetch failed for {}: {e}", hit.url);
+                    *fetches_used += 1;
+                    continue;
+                }
+            }
+        };
+
+        let snippet: String = text.chars().take(2000).collect();
+        notebook.add_entry(&format!("From \"{}\":\n{}", hit.title, snippet));
+        notebook.add_citation(&hit.url, &hit.title);
+        *fetches_used += 1;
+    }
 }
 
 #[allow(clippy::too_many_arguments)]

@@ -1,7 +1,7 @@
 ---
 id: S89
 title: Refactor large Rust functions
-status: in-progress
+status: done
 created: 2026-03-27
 updated: 2026-03-27
 ---
@@ -55,4 +55,5 @@ Break into: data fetching, summary formatting, token budget enforcement.
 
 | Date | Status | Notes |
 |---|---|---|
-| 2026-03-27 | draft | Created |
+| 2026-03-27 | in-progress | Started implementation |
+| 2026-03-27 | done | All three functions refactored, 171 tests pass, clippy clean |

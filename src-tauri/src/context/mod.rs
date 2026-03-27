@@ -270,80 +270,69 @@ fn build_training_summary(db: &Database) -> String {
         }
 
         match week_idx {
-            0 => {
-                let _ = write!(summary, "\n### This Week ({} runs)", week_activities.len());
-                for a in &week_activities {
-                    let dist = a.distance.unwrap_or(0.0) / 1000.0;
-                    #[allow(clippy::cast_precision_loss)]
-                    let time_min = a.moving_time.unwrap_or(0) as f64 / 60.0;
-                    let hr = a
-                        .average_heartrate
-                        .map(|h| format!(" HR:{h:.0}"))
-                        .unwrap_or_default();
-                    let pace = if dist > 0.0 {
-                        #[allow(clippy::cast_precision_loss)]
-                        let pace_s_km = (a.moving_time.unwrap_or(0) as f64) / dist;
-                        #[allow(clippy::cast_possible_truncation)]
-                        let pm = (pace_s_km / 60.0).floor() as i64;
-                        #[allow(clippy::cast_possible_truncation)]
-                        let ps = (pace_s_km % 60.0) as i64;
-                        format!(" {pm}:{ps:02}/km")
-                    } else {
-                        String::new()
-                    };
-                    let _ = write!(
-                        summary,
-                        "\n- {}: {dist:.1}km {time_min:.0}min{pace}{hr}",
-                        a.name.as_deref().unwrap_or("Run"),
-                    );
-                }
-            }
-            1 => {
-                let _ = write!(summary, "\n### Last Week ({} runs)", week_activities.len());
-                let total_dist: f64 = week_activities
-                    .iter()
-                    .map(|a| a.distance.unwrap_or(0.0))
-                    .sum::<f64>()
-                    / 1000.0;
-                let total_time: i64 = week_activities
-                    .iter()
-                    .map(|a| a.moving_time.unwrap_or(0))
-                    .sum();
-                let _ = write!(
-                    summary,
-                    "\n- Total: {total_dist:.1}km, {}min",
-                    total_time / 60
-                );
-            }
-            2 => {
-                let total_dist: f64 = week_activities
-                    .iter()
-                    .map(|a| a.distance.unwrap_or(0.0))
-                    .sum::<f64>()
-                    / 1000.0;
-                let _ = write!(
-                    summary,
-                    "\n### 2 Weeks Ago: {} runs, {total_dist:.1}km",
-                    week_activities.len(),
-                );
-            }
-            3 => {
-                let total_dist: f64 = week_activities
-                    .iter()
-                    .map(|a| a.distance.unwrap_or(0.0))
-                    .sum::<f64>()
-                    / 1000.0;
-                let _ = write!(
-                    summary,
-                    "\n### 3 Weeks Ago: {} runs, {total_dist:.1}km",
-                    week_activities.len(),
-                );
-            }
+            0 => summary.push_str(&format_this_week_summary(&week_activities)),
+            1 => summary.push_str(&format_last_week_summary(&week_activities)),
+            2 => summary.push_str(&format_older_week_summary("2 Weeks Ago", &week_activities)),
+            3 => summary.push_str(&format_older_week_summary("3 Weeks Ago", &week_activities)),
             _ => {}
         }
     }
 
     summary
+}
+
+fn format_this_week_summary(activities: &[&ActivityData]) -> String {
+    let mut out = format!("\n### This Week ({} runs)", activities.len());
+    for a in activities {
+        let dist = a.distance.unwrap_or(0.0) / 1000.0;
+        #[allow(clippy::cast_precision_loss)]
+        let time_min = a.moving_time.unwrap_or(0) as f64 / 60.0;
+        let hr = a
+            .average_heartrate
+            .map(|h| format!(" HR:{h:.0}"))
+            .unwrap_or_default();
+        let pace = if dist > 0.0 {
+            #[allow(clippy::cast_precision_loss)]
+            let pace_s_km = (a.moving_time.unwrap_or(0) as f64) / dist;
+            #[allow(clippy::cast_possible_truncation)]
+            let pm = (pace_s_km / 60.0).floor() as i64;
+            #[allow(clippy::cast_possible_truncation)]
+            let ps = (pace_s_km % 60.0) as i64;
+            format!(" {pm}:{ps:02}/km")
+        } else {
+            String::new()
+        };
+        let _ = write!(
+            out,
+            "\n- {}: {dist:.1}km {time_min:.0}min{pace}{hr}",
+            a.name.as_deref().unwrap_or("Run"),
+        );
+    }
+    out
+}
+
+fn format_last_week_summary(activities: &[&ActivityData]) -> String {
+    let total_dist: f64 = activities
+        .iter()
+        .map(|a| a.distance.unwrap_or(0.0))
+        .sum::<f64>()
+        / 1000.0;
+    let total_time: i64 = activities.iter().map(|a| a.moving_time.unwrap_or(0)).sum();
+    let mut out = format!("\n### Last Week ({} runs)", activities.len());
+    let _ = write!(out, "\n- Total: {total_dist:.1}km, {}min", total_time / 60);
+    out
+}
+
+fn format_older_week_summary(label: &str, activities: &[&ActivityData]) -> String {
+    let total_dist: f64 = activities
+        .iter()
+        .map(|a| a.distance.unwrap_or(0.0))
+        .sum::<f64>()
+        / 1000.0;
+    format!(
+        "\n### {label}: {} runs, {total_dist:.1}km",
+        activities.len(),
+    )
 }
 
 #[cfg(test)]
