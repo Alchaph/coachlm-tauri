@@ -1,8 +1,8 @@
 ---
 id: S90
 title: Add migration versioning table
-status: draft
-created: 2026-03-27
+status: done
+updated: 2026-03-27
 updated: 2026-03-27
 ---
 
@@ -16,13 +16,13 @@ so that **migrations run exactly once and new migrations are easy to add**.
 
 ## Acceptance criteria
 
-- [ ] A `schema_migrations` table exists with columns: `version INTEGER PRIMARY KEY`, `applied_at TEXT`
-- [ ] Each migration has a unique version number
-- [ ] `run_migrations` checks which versions have been applied and only runs new ones
-- [ ] Existing databases get all current migrations marked as applied (bootstrap)
-- [ ] New tables still get created correctly on fresh databases
-- [ ] `cargo clippy -- -D warnings` passes
-- [ ] `cargo test` passes
+- [x] A `schema_migrations` table exists with columns: `version INTEGER PRIMARY KEY`, `applied_at TEXT`
+- [x] Each migration has a unique version number
+- [x] `run_migrations` checks which versions have been applied and only runs new ones
+- [x] Existing databases get all current migrations marked as applied (bootstrap)
+- [x] New tables still get created correctly on fresh databases
+- [x] `cargo clippy -- -D warnings` passes
+- [x] `cargo test` passes
 
 ## Technical notes
 
@@ -63,3 +63,4 @@ Start at version 1 for the initial schema. Each subsequent ALTER TABLE or schema
 | Date | Status | Notes |
 |---|---|---|
 | 2026-03-27 | draft | Created |
+| 2026-03-27 | done | Implemented versioned migrations, all tests passing |

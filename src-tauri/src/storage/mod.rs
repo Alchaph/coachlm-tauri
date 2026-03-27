@@ -4,6 +4,7 @@ use argon2::Argon2;
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use rusqlite::{params, Connection, OptionalExtension, Result as SqlResult};
 use sha2::{Digest, Sha256};
+use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::Mutex;
 
@@ -71,6 +72,7 @@ impl Database {
             conn: Mutex::new(conn),
             encryption_key,
         };
+        db.create_migrations_table()?;
         db.run_migrations()?;
         Ok(db)
     }
@@ -110,15 +112,38 @@ impl Database {
         self.conn.lock().unwrap()
     }
 
+    fn create_migrations_table(&self) -> SqlResult<()> {
+        // Mutex poisoning is unrecoverable at startup — same justification as conn().
+        #[allow(clippy::unwrap_used)]
+        let conn = self.conn.lock().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE IF NOT EXISTS schema_migrations (
+                version    INTEGER PRIMARY KEY,
+                description TEXT NOT NULL,
+                applied_at  TEXT NOT NULL DEFAULT (datetime('now'))
+            );",
+        )
+    }
+
     fn run_migrations(&self) -> SqlResult<()> {
         // Mutex poisoning is unrecoverable at startup — same justification as conn().
         #[allow(clippy::unwrap_used)]
         let conn = self.conn.lock().unwrap();
-        create_core_tables(&conn)?;
-        create_chat_tables(&conn)?;
-        create_plan_tables(&conn)?;
-        run_alter_migrations(&conn)?;
-        crate::research::cache::ResearchCache::init_tables(&conn)?;
+
+        let mut stmt = conn.prepare("SELECT version FROM schema_migrations")?;
+        let applied: HashSet<i64> = stmt
+            .query_map([], |row| row.get(0))?
+            .collect::<SqlResult<HashSet<i64>>>()?;
+
+        for (version, description, migrate_fn) in MIGRATIONS {
+            if !applied.contains(version) {
+                migrate_fn(&conn)?;
+                conn.execute(
+                    "INSERT INTO schema_migrations (version, description) VALUES (?1, ?2)",
+                    params![version, description],
+                )?;
+            }
+        }
         Ok(())
     }
 
@@ -991,7 +1016,46 @@ impl Database {
     }
 }
 
-fn create_core_tables(conn: &Connection) -> SqlResult<()> {
+/// Each entry: (version, description, `migration_fn`).
+/// Migrations run in version order. Once applied, a migration is never re-run.
+/// CREATE TABLE IF NOT EXISTS is safe to re-run (idempotent).
+/// ALTER TABLE migrations check for column existence before running, so they are
+/// also safe when bootstrapping an existing database that already has those columns.
+type MigrationEntry = (i64, &'static str, fn(&Connection) -> SqlResult<()>);
+
+static MIGRATIONS: &[MigrationEntry] = &[
+    (1, "core tables", migration_01_core_tables),
+    (2, "chat tables", migration_02_chat_tables),
+    (3, "plan tables", migration_03_plan_tables),
+    (
+        4,
+        "add title column to chat_sessions",
+        migration_04_chat_sessions_title,
+    ),
+    (
+        5,
+        "add is_active to training_plans",
+        migration_05_training_plans_is_active,
+    ),
+    (
+        6,
+        "add enhanced activity columns",
+        migration_06_activity_columns,
+    ),
+    (
+        7,
+        "add cloud and web-search settings columns",
+        migration_07_settings_columns,
+    ),
+    (
+        8,
+        "add custom_notes to athlete_profile",
+        migration_08_athlete_profile_custom_notes,
+    ),
+    (9, "research cache table", migration_09_research_cache),
+];
+
+fn migration_01_core_tables(conn: &Connection) -> SqlResult<()> {
     conn.execute_batch(
         "
         CREATE TABLE IF NOT EXISTS oauth_tokens (
@@ -1075,7 +1139,7 @@ fn create_core_tables(conn: &Connection) -> SqlResult<()> {
     )
 }
 
-fn create_chat_tables(conn: &Connection) -> SqlResult<()> {
+fn migration_02_chat_tables(conn: &Connection) -> SqlResult<()> {
     conn.execute_batch(
         "
         CREATE TABLE IF NOT EXISTS chat_sessions (
@@ -1094,7 +1158,7 @@ fn create_chat_tables(conn: &Connection) -> SqlResult<()> {
     )
 }
 
-fn create_plan_tables(conn: &Connection) -> SqlResult<()> {
+fn migration_03_plan_tables(conn: &Connection) -> SqlResult<()> {
     conn.execute_batch(
         "
         CREATE TABLE IF NOT EXISTS races (
@@ -1146,22 +1210,23 @@ fn create_plan_tables(conn: &Connection) -> SqlResult<()> {
     )
 }
 
-fn run_alter_migrations(conn: &Connection) -> SqlResult<()> {
-    // Add title column to existing chat_sessions tables (safe to run if column already exists)
-    let has_title_col: bool = conn
+fn migration_04_chat_sessions_title(conn: &Connection) -> SqlResult<()> {
+    let has_title: bool = conn
         .prepare("SELECT title FROM chat_sessions LIMIT 0")
         .is_ok();
-    if !has_title_col {
+    if !has_title {
         conn.execute_batch("ALTER TABLE chat_sessions ADD COLUMN title TEXT")?;
     }
+    Ok(())
+}
 
-    // Add is_active column to training_plans (safe to run if column already exists)
-    let has_plan_active: bool = conn
+fn migration_05_training_plans_is_active(conn: &Connection) -> SqlResult<()> {
+    let has_is_active: bool = conn
         .prepare("SELECT is_active FROM training_plans LIMIT 0")
         .is_ok();
-    if !has_plan_active {
+    if !has_is_active {
         conn.execute_batch("ALTER TABLE training_plans ADD COLUMN is_active INTEGER DEFAULT 0")?;
-        // Migrate: set the most recent plan per active race as active
+        // Migrate: set the most recent plan per active race as active.
         conn.execute_batch(
             "UPDATE training_plans SET is_active = 1 WHERE id IN (
                 SELECT tp.id FROM training_plans tp
@@ -1171,9 +1236,11 @@ fn run_alter_migrations(conn: &Connection) -> SqlResult<()> {
             )",
         )?;
     }
+    Ok(())
+}
 
-    // Add enhanced activity columns (safe to run if columns already exist)
-    let new_activity_cols = [
+fn migration_06_activity_columns(conn: &Connection) -> SqlResult<()> {
+    let columns = [
         ("elapsed_time", "INTEGER"),
         ("total_elevation_gain", "REAL"),
         ("max_speed", "REAL"),
@@ -1181,7 +1248,7 @@ fn run_alter_migrations(conn: &Connection) -> SqlResult<()> {
         ("sport_type", "TEXT"),
         ("start_date_local", "TEXT"),
     ];
-    for (col, col_type) in new_activity_cols {
+    for (col, col_type) in columns {
         let exists: bool = conn
             .prepare(&format!("SELECT {col} FROM activities LIMIT 0"))
             .is_ok();
@@ -1191,15 +1258,18 @@ fn run_alter_migrations(conn: &Connection) -> SqlResult<()> {
             ))?;
         }
     }
+    Ok(())
+}
 
-    let new_settings_cols = [
+fn migration_07_settings_columns(conn: &Connection) -> SqlResult<()> {
+    let columns = [
         ("cloud_api_key", "TEXT"),
         ("cloud_model", "TEXT"),
         ("web_search_enabled", "INTEGER DEFAULT 0"),
         ("web_search_provider", "TEXT DEFAULT 'duckduckgo'"),
         ("web_augmentation_mode", "TEXT DEFAULT 'off'"),
     ];
-    for (col, col_type) in new_settings_cols {
+    for (col, col_type) in columns {
         let exists: bool = conn
             .prepare(&format!("SELECT {col} FROM settings LIMIT 0"))
             .is_ok();
@@ -1207,15 +1277,21 @@ fn run_alter_migrations(conn: &Connection) -> SqlResult<()> {
             conn.execute_batch(&format!("ALTER TABLE settings ADD COLUMN {col} {col_type}"))?;
         }
     }
+    Ok(())
+}
 
-    let has_custom_notes: bool = conn
+fn migration_08_athlete_profile_custom_notes(conn: &Connection) -> SqlResult<()> {
+    let has_col: bool = conn
         .prepare("SELECT custom_notes FROM athlete_profile LIMIT 0")
         .is_ok();
-    if !has_custom_notes {
+    if !has_col {
         conn.execute_batch("ALTER TABLE athlete_profile ADD COLUMN custom_notes TEXT")?;
     }
-
     Ok(())
+}
+
+fn migration_09_research_cache(conn: &Connection) -> SqlResult<()> {
+    crate::research::cache::ResearchCache::init_tables(conn)
 }
 
 fn derive_key_argon2(password: &[u8], salt: &[u8]) -> Result<[u8; 32], argon2::Error> {
@@ -2285,6 +2361,138 @@ mod tests {
         db.delete_plans_for_race("race-1").expect("delete failed");
         let plans = db.list_plans().expect("list failed");
         assert_eq!(plans.len(), 0);
+        cleanup(&dir);
+    }
+
+    // ── Schema Migrations ──────────────────────────────────────
+
+    #[test]
+    fn fresh_db_has_schema_migrations_table() {
+        let (db, dir) = temp_db();
+        let conn = db.conn();
+        let count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM schema_migrations", [], |row| {
+                row.get(0)
+            })
+            .expect("schema_migrations table should exist");
+        assert_eq!(
+            count,
+            MIGRATIONS.len() as i64,
+            "all migrations should be recorded on a fresh DB"
+        );
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn fresh_db_migrations_have_correct_versions() {
+        let (db, dir) = temp_db();
+        let conn = db.conn();
+        let mut stmt = conn
+            .prepare("SELECT version FROM schema_migrations ORDER BY version ASC")
+            .expect("prepare failed");
+        let versions: Vec<i64> = stmt
+            .query_map([], |row| row.get(0))
+            .expect("query failed")
+            .map(|r| r.expect("row failed"))
+            .collect();
+
+        let expected: Vec<i64> = MIGRATIONS.iter().map(|(v, _, _)| *v).collect();
+        assert_eq!(versions, expected);
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn run_migrations_twice_is_idempotent() {
+        let dir = std::env::temp_dir().join(format!("coachlm_test_{}", uuid::Uuid::new_v4()));
+        let db1 = Database::new(&dir).expect("first open failed");
+        drop(db1);
+
+        let db2 = Database::new(&dir).expect("second open failed");
+        let conn = db2.conn();
+        let count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM schema_migrations", [], |row| {
+                row.get(0)
+            })
+            .expect("count failed");
+        assert_eq!(
+            count,
+            MIGRATIONS.len() as i64,
+            "re-opening should not duplicate migration entries"
+        );
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn existing_db_bootstraps_without_error() {
+        let dir = std::env::temp_dir().join(format!("coachlm_test_{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).expect("mkdir failed");
+        let db_path = dir.join("coachlm.db");
+
+        {
+            let conn = Connection::open(&db_path).expect("open failed");
+            conn.execute_batch(
+                "PRAGMA journal_mode=WAL;
+                 PRAGMA foreign_keys=ON;
+                 CREATE TABLE IF NOT EXISTS kdf_salt (
+                     id INTEGER PRIMARY KEY CHECK (id = 1),
+                     salt BLOB NOT NULL
+                 );",
+            )
+            .expect("setup failed");
+
+            let mut salt = [0u8; 16];
+            use rand::RngCore;
+            rand::thread_rng().fill_bytes(&mut salt);
+            conn.execute(
+                "INSERT INTO kdf_salt (id, salt) VALUES (1, ?1)",
+                params![&salt[..]],
+            )
+            .expect("insert salt failed");
+
+            migration_01_core_tables(&conn).expect("core tables failed");
+            migration_02_chat_tables(&conn).expect("chat tables failed");
+            migration_03_plan_tables(&conn).expect("plan tables failed");
+            migration_04_chat_sessions_title(&conn).expect("migration 4 failed");
+            migration_05_training_plans_is_active(&conn).expect("migration 5 failed");
+            migration_06_activity_columns(&conn).expect("migration 6 failed");
+            migration_07_settings_columns(&conn).expect("migration 7 failed");
+            migration_08_athlete_profile_custom_notes(&conn).expect("migration 8 failed");
+            migration_09_research_cache(&conn).expect("migration 9 failed");
+        }
+
+        let db = Database::new(&dir).expect("Database::new should succeed on existing DB");
+        let conn = db.conn();
+        let count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM schema_migrations", [], |row| {
+                row.get(0)
+            })
+            .expect("count failed");
+        assert_eq!(count, MIGRATIONS.len() as i64);
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn new_migration_runs_only_once_after_bootstrap() {
+        let (db, dir) = temp_db();
+        let conn = db.conn();
+
+        let initial_count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM schema_migrations", [], |row| {
+                row.get(0)
+            })
+            .expect("count failed");
+
+        let max_version: i64 = conn
+            .query_row("SELECT MAX(version) FROM schema_migrations", [], |row| {
+                row.get(0)
+            })
+            .expect("max failed");
+
+        assert_eq!(initial_count, MIGRATIONS.len() as i64);
+        assert_eq!(
+            max_version,
+            MIGRATIONS.last().map(|(v, _, _)| *v).unwrap_or(0)
+        );
         cleanup(&dir);
     }
 }
