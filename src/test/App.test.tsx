@@ -42,6 +42,8 @@ function setupDefaultInvokeMock() {
         });
       case "get_active_plan":
         return Promise.resolve(null);
+      case "get_aggregated_zone_distribution":
+        return Promise.resolve([]);
       case "get_ollama_models":
         return Promise.resolve([]);
       default:
