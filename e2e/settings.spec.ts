@@ -61,8 +61,8 @@ test("shows strava connected status", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Settings" }).click();
 
-  const stravaSection = page.locator(".card", {
-    has: page.getByRole("heading", { name: "Strava Integration" }),
+  const stravaSection = page.locator('[data-slot="card"]', {
+    hasText: "Strava Integration",
   });
   await expect(stravaSection.getByText("Connected")).toBeVisible();
   await expect(page.getByRole("button", { name: "Disconnect" })).toBeVisible();

@@ -9,7 +9,7 @@ test.beforeEach(async ({ page }) => {
 
 test("shows profile form with empty fields", async ({ page }) => {
   await expect(page.getByRole("heading", { level: 1, name: "Context" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Athlete Profile" })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Athlete Profile" })).toBeVisible();
   
   const profileAgeInput = page.locator("#profile-age");
   const profileMaxHrInput = page.locator("#profile-max-hr");
@@ -49,7 +49,7 @@ test("shows pinned insights tab", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Context" }).click();
   
-  await page.getByRole("button", { name: /Pinned Insights/ }).click();
+  await page.getByRole("tab", { name: /Pinned Insights/ }).click();
   
   await expect(
     page.getByText("You should increase your long run distance gradually")

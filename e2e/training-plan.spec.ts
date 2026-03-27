@@ -8,25 +8,25 @@ test.beforeEach(async ({ page }) => {
 });
 
 test("shows sub-tab navigation", async ({ page }) => {
-  await expect(page.getByRole("button", { name: "My Plans" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Schedule" })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "My Plans" })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Schedule" })).toBeVisible();
 });
 
 test("can switch between tabs", async ({ page }) => {
-  const myPlansButton = page.getByRole("button", { name: "My Plans" });
-  const scheduleButton = page.getByRole("button", { name: "Schedule" });
+  const myPlansTab = page.getByRole("tab", { name: "My Plans" });
+  const scheduleTab = page.getByRole("tab", { name: "Schedule" });
 
-  await expect(myPlansButton).toBeVisible();
-  await expect(scheduleButton).toBeVisible();
+  await expect(myPlansTab).toBeVisible();
+  await expect(scheduleTab).toBeVisible();
 
-  await scheduleButton.click();
-  const scheduleStyle = await scheduleButton.evaluate(
+  await scheduleTab.click();
+  const scheduleStyle = await scheduleTab.evaluate(
     (el) => window.getComputedStyle(el).borderBottomColor,
   );
   expect(scheduleStyle).toBeTruthy();
 
-  await myPlansButton.click();
-  const myPlansStyle = await myPlansButton.evaluate(
+  await myPlansTab.click();
+  const myPlansStyle = await myPlansTab.evaluate(
     (el) => window.getComputedStyle(el).borderBottomColor,
   );
   expect(myPlansStyle).toBeTruthy();
@@ -53,7 +53,7 @@ test("displays race list on My Plans tab", async ({ page }) => {
   });
   await page.goto("/");
   await page.getByRole("button", { name: "Plans" }).click();
-  await page.getByRole("button", { name: "My Plans" }).click();
+  await page.getByRole("tab", { name: "My Plans" }).click();
 
   await expect(page.getByText("Test Marathon")).toBeVisible();
 });

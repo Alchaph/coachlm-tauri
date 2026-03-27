@@ -69,9 +69,8 @@ test("displays existing chat sessions in sidebar", async ({ page }) => {
   });
   await page.goto("/");
 
-  const sidebar = page.locator(".chat-sidebar");
-  await expect(sidebar.getByText("Training Talk")).toBeVisible();
-  await expect(sidebar.getByText("Race Prep")).toBeVisible();
+  await expect(page.getByText("Training Talk").first()).toBeVisible();
+  await expect(page.getByText("Race Prep").first()).toBeVisible();
 });
 
 test("creates new chat session", async ({ page }) => {

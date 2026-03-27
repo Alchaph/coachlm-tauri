@@ -20,6 +20,7 @@ const DEFAULT_MOCK_RESPONSES: Record<string, unknown> = {
     cloud_model: null,
     web_search_enabled: false,
     web_search_provider: "duckduckgo",
+    web_augmentation_mode: "off",
   },
   save_settings: null,
   get_strava_credentials_available: false,
