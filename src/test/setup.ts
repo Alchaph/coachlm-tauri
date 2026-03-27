@@ -1,5 +1,11 @@
 import "@testing-library/jest-dom";
 
+globalThis.ResizeObserver = class ResizeObserver {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+};
+
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
 }));

@@ -1,9 +1,44 @@
-import { useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Plus, X, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import type { Session } from "@/components/chat/types";
+
+function SessionLabel({ label }: { label: string }) {
+  const spanRef = useRef<HTMLSpanElement>(null);
+  const [isOverflowing, setIsOverflowing] = useState(false);
+
+  const checkOverflow = useCallback(() => {
+    const el = spanRef.current;
+    if (el) {
+      setIsOverflowing(el.scrollWidth > el.clientWidth);
+    }
+  }, []);
+
+  useEffect(() => {
+    checkOverflow();
+  }, [label, checkOverflow]);
+
+  useEffect(() => {
+    const el = spanRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver(() => { checkOverflow(); });
+    observer.observe(el);
+    return () => { observer.disconnect(); };
+  }, [checkOverflow]);
+
+  if (isOverflowing) {
+    return (
+      <Tooltip>
+        <TooltipTrigger render={<span className="max-w-[120px] truncate" ref={spanRef}>{label}</span>} />
+        <TooltipContent>{label}</TooltipContent>
+      </Tooltip>
+    );
+  }
+
+  return <span className="max-w-[120px] truncate" ref={spanRef}>{label}</span>;
+}
 
 interface ChatTabBarProps {
   sessions: Session[];
@@ -43,7 +78,7 @@ export default function ChatTabBar({
           onClick={() => { onLoadSession(s.id); }}
         >
           <MessageSquare size={12} className="shrink-0" />
-          <span className="max-w-[120px] truncate">{getSessionLabel(s)}</span>
+          <SessionLabel label={getSessionLabel(s)} />
           <span
             className="flex items-center justify-center rounded-sm p-0.5 opacity-0 group-hover:opacity-100 transition-opacity duration-150 hover:text-destructive"
             role="button"

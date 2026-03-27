@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { ask } from "@tauri-apps/plugin-dialog";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Send, Pin, Plus, X, MessageSquare, Globe, Pencil, Copy, RefreshCw, Square, HelpCircle } from "lucide-react";
@@ -11,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import OllamaSetupGuide from "@/components/OllamaSetupGuide";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
 interface Message {
   id: number;
@@ -76,6 +76,41 @@ function CollapsedStepsSummary({ steps }: { steps: ProgressStep[] }) {
   );
 }
 
+function SessionLabel({ label }: { label: string }) {
+  const spanRef = useRef<HTMLSpanElement>(null);
+  const [isOverflowing, setIsOverflowing] = useState(false);
+
+  const checkOverflow = useCallback(() => {
+    const el = spanRef.current;
+    if (el) {
+      setIsOverflowing(el.scrollWidth > el.clientWidth);
+    }
+  }, []);
+
+  useEffect(() => {
+    checkOverflow();
+  }, [label, checkOverflow]);
+
+  useEffect(() => {
+    const el = spanRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver(() => { checkOverflow(); });
+    observer.observe(el);
+    return () => { observer.disconnect(); };
+  }, [checkOverflow]);
+
+  if (isOverflowing) {
+    return (
+      <Tooltip>
+        <TooltipTrigger render={<span className="max-w-[120px] truncate" ref={spanRef}>{label}</span>} />
+        <TooltipContent>{label}</TooltipContent>
+      </Tooltip>
+    );
+  }
+
+  return <span className="max-w-[120px] truncate" ref={spanRef}>{label}</span>;
+}
+
 export default function Chat({ onStatusChange }: ChatProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
@@ -103,6 +138,7 @@ export default function Chat({ onStatusChange }: ChatProps) {
   const [ollamaEndpoint, setOllamaEndpoint] = useState("http://localhost:11434");
   const [activeLlm, setActiveLlm] = useState("ollama");
   const [showSetupGuide, setShowSetupGuide] = useState(false);
+  const [deleteSessionId, setDeleteSessionId] = useState<string | null>(null);
 
   const scrollToBottom = useCallback(() => {
     if (shouldAutoScroll.current) {
@@ -338,9 +374,11 @@ export default function Chat({ onStatusChange }: ChatProps) {
     }
   };
 
-  const closeSession = async (sessionId: string) => {
-    const confirmed = await ask("Delete this chat session?", { title: "CoachLM", kind: "warning" });
-    if (!confirmed) return;
+  const closeSession = (sessionId: string) => {
+    setDeleteSessionId(sessionId);
+  };
+
+  const doCloseSession = async (sessionId: string) => {
     try {
       await invoke("delete_chat_session", { sessionId });
       const remaining = sessions.filter((s) => s.id !== sessionId);
@@ -580,13 +618,13 @@ export default function Chat({ onStatusChange }: ChatProps) {
             onClick={() => { void loadSession(s.id); }}
           >
             <MessageSquare size={12} className="shrink-0" />
-            <span className="max-w-[120px] truncate">{getSessionLabel(s)}</span>
+            <SessionLabel label={getSessionLabel(s)} />
             <span
               className="flex items-center justify-center rounded-sm p-0.5 opacity-0 group-hover:opacity-100 transition-opacity duration-150 hover:text-destructive"
               role="button"
               tabIndex={0}
-              onClick={(e) => { e.stopPropagation(); void closeSession(s.id); }}
-              onKeyDown={(e) => { if (e.key === "Enter") { e.stopPropagation(); void closeSession(s.id); } }}
+              onClick={(e) => { e.stopPropagation(); closeSession(s.id); }}
+              onKeyDown={(e) => { if (e.key === "Enter") { e.stopPropagation(); closeSession(s.id); } }}
             >
               <X size={10} />
             </span>
@@ -853,8 +891,7 @@ export default function Chat({ onStatusChange }: ChatProps) {
         <div ref={messagesEndRef} />
       </div>
 
-      <div className="pt-3.5 px-5 border-t border-sidebar-border bg-card">
-        {webSearchSuggestion && (
+      <div className="pt-3.5 px-5 border-t border-sidebar-border bg-card">        {webSearchSuggestion && (
           <div className="flex items-center gap-3 px-4 py-3 bg-secondary border border-primary rounded-md mb-2 animate-in slide-in-from-bottom-1.5 duration-250">
             <Globe size={16} className="text-primary shrink-0" />
             <span className="flex-1 text-[13px] text-muted-foreground">
@@ -917,6 +954,14 @@ export default function Chat({ onStatusChange }: ChatProps) {
           </Button>
         </div>
       </div>
+      <ConfirmDialog
+        open={deleteSessionId !== null}
+        onOpenChange={(open) => { if (!open) setDeleteSessionId(null); }}
+        title="Delete Chat Session"
+        description="Delete this chat session? This action cannot be undone."
+        confirmLabel="Delete"
+        onConfirm={() => { if (deleteSessionId) { void doCloseSession(deleteSessionId); } setDeleteSessionId(null); }}
+      />
     </div>
   );
 }
