@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { Plus, Zap, Search, BookOpen, X } from "lucide-react";
+import { Plus, Zap, Search, Info, X } from "lucide-react";
 import { toast } from "sonner";
 import { type Shoe, BUILT_IN_SHOES } from "../data/shoes";
 import { cn } from "@/lib/utils";
@@ -14,6 +14,7 @@ import {
   AccordionTrigger,
   AccordionContent,
 } from "@/components/ui/accordion";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Table, TableHeader, TableHead, TableRow, TableCell, TableBody } from "@/components/ui/table";
 import { Checkbox } from "@/components/ui/checkbox";
 
@@ -679,124 +680,113 @@ export default function ShoeCalculator() {
           </Accordion>
         </Card>
 
-        <Card className="mb-6 overflow-hidden p-0">
-          <Accordion>
-            <AccordionItem value="how-it-works">
-              <AccordionTrigger
-                className="px-5 py-4 text-[15px] font-semibold text-foreground hover:no-underline [&>svg[data-slot=accordion-trigger-icon]]:hidden"
-              >
-                <BookOpen size={16} className="text-primary shrink-0" />
-                <span className="ml-2">How It Works</span>
-              </AccordionTrigger>
-              <AccordionContent className="px-6 pb-6 border-t border-border">
-                <div className="pt-5">
-                  <h3 className="text-sm font-bold text-foreground mb-2">
-                    Speed Benefit Percentage
-                  </h3>
-                  <p className="text-sm text-muted-foreground mb-4 leading-relaxed">
-                    Each shoe in this calculator has a speed benefit percentage representing how much faster you would finish
-                    a race compared to running in a basic, non-technical shoe. These values are derived from published
-                    biomechanics research and lab-tested shoe data. A 4% benefit means you would finish approximately
-                    4% faster — roughly 7 minutes saved on a 3-hour marathon.
-                  </p>
+        <Alert className="mb-6">
+          <Info className="size-4" />
+          <AlertDescription>
+            <h3 className="text-sm font-bold text-foreground mb-2">
+              Speed Benefit Percentage
+            </h3>
+            <p className="text-sm text-muted-foreground mb-4 leading-relaxed">
+              Each shoe in this calculator has a speed benefit percentage representing how much faster you would finish
+              a race compared to running in a basic, non-technical shoe. These values are derived from published
+              biomechanics research and lab-tested shoe data. A 4% benefit means you would finish approximately
+              4% faster — roughly 7 minutes saved on a 3-hour marathon.
+            </p>
 
-                  <h3 className="text-sm font-bold text-foreground mb-2">
-                    The Science
-                  </h3>
-                  <p className="text-sm text-muted-foreground mb-2 leading-relaxed">
-                    The landmark 2017 University of Colorado study (Hoogkamer et al.) found Nike Vaporfly shoes improved
-                    running economy by approximately 4% on average, with individual responses ranging from 1.6% to 6.3%.
-                    A 2026 meta-analysis of 14 studies covering 271 runners (Kobayashi et al.) confirmed that carbon-plated
-                    shoes reduce the metabolic cost of running by 2 to 3% on average.
-                  </p>
-                  <p className="text-sm text-muted-foreground mb-4 leading-relaxed">
-                    The benefits come from three factors working together: advanced PEBA foam (ZoomX, LightStrike Pro,
-                    PWRRUN HG) with 80-87% energy return versus 60-65% for standard EVA foam; a stiff carbon fiber plate
-                    that acts as a lever to propel the foot forward; and a rocker geometry that promotes an efficient
-                    forward rolling motion through the gait cycle.
-                  </p>
+            <h3 className="text-sm font-bold text-foreground mb-2">
+              The Science
+            </h3>
+            <p className="text-sm text-muted-foreground mb-2 leading-relaxed">
+              The landmark 2017 University of Colorado study (Hoogkamer et al.) found Nike Vaporfly shoes improved
+              running economy by approximately 4% on average, with individual responses ranging from 1.6% to 6.3%.
+              A 2026 meta-analysis of 14 studies covering 271 runners (Kobayashi et al.) confirmed that carbon-plated
+              shoes reduce the metabolic cost of running by 2 to 3% on average.
+            </p>
+            <p className="text-sm text-muted-foreground mb-4 leading-relaxed">
+              The benefits come from three factors working together: advanced PEBA foam (ZoomX, LightStrike Pro,
+              PWRRUN HG) with 80-87% energy return versus 60-65% for standard EVA foam; a stiff carbon fiber plate
+              that acts as a lever to propel the foot forward; and a rocker geometry that promotes an efficient
+              forward rolling motion through the gait cycle.
+            </p>
 
-                  <h3 className="text-sm font-bold text-foreground mb-2">
-                    How We Calculate
-                  </h3>
-                  <p className="text-sm text-muted-foreground mb-2 leading-relaxed">
-                    Time saved is calculated as:
-                  </p>
-                  <div className="bg-secondary border border-border rounded-md px-3.5 py-2.5 font-mono text-sm text-foreground mb-2">
-                    time_saved = baseline_time &times; (benefit% / (100 + benefit%))
-                  </div>
-                  <p className="text-sm text-muted-foreground mb-4 leading-relaxed">
-                    This formula accounts for the fact that a faster pace means less total time spent running, so the
-                    absolute saving is slightly less than a simple percentage of the original time. For example, a 4%
-                    benefit on a 3:00:00 marathon saves approximately 6 minutes 55 seconds — not 7 minutes 12 seconds —
-                    because you are also spending less time running at the improved pace.
-                  </p>
+            <h3 className="text-sm font-bold text-foreground mb-2">
+              How We Calculate
+            </h3>
+            <p className="text-sm text-muted-foreground mb-2 leading-relaxed">
+              Time saved is calculated as:
+            </p>
+            <div className="bg-secondary border border-border rounded-md px-3.5 py-2.5 font-mono text-sm text-foreground mb-2">
+              time_saved = baseline_time &times; (benefit% / (100 + benefit%))
+            </div>
+            <p className="text-sm text-muted-foreground mb-4 leading-relaxed">
+              This formula accounts for the fact that a faster pace means less total time spent running, so the
+              absolute saving is slightly less than a simple percentage of the original time. For example, a 4%
+              benefit on a 3:00:00 marathon saves approximately 6 minutes 55 seconds — not 7 minutes 12 seconds —
+              because you are also spending less time running at the improved pace.
+            </p>
 
-                  <h3 className="text-sm font-bold text-foreground mb-2">
-                    What Affects the Rating
-                  </h3>
-                  <div className="text-sm text-muted-foreground leading-relaxed mb-4">
-                    <div className="mb-1.5">
-                      <span className="font-semibold text-foreground">Carbon plate presence</span>
-                      {" — "}the biggest single factor, contributing +2 to 3% on its own.
-                    </div>
-                    <div className="mb-1.5">
-                      <span className="font-semibold text-foreground">Foam technology</span>
-                      {" — "}PEBA foam (ZoomX, LightStrike Pro) adds roughly 1.5 to 2%; standard TPU adds 0.5 to 1%;
-                      traditional EVA adds negligible benefit.
-                    </div>
-                    <div className="mb-1.5">
-                      <span className="font-semibold text-foreground">Stack height</span>
-                      {" — "}more foam means more stored energy. The optimal range for carbon racing shoes is 35 to 40mm.
-                      Very high stacks (45mm+) can reduce efficiency due to instability.
-                    </div>
-                    <div className="mb-1.5">
-                      <span className="font-semibold text-foreground">Shoe weight</span>
-                      {" — "}every 100g reduction in shoe mass improves running economy by approximately 1%.
-                    </div>
-                    <div>
-                      <span className="font-semibold text-foreground">Rocker geometry</span>
-                      {" — "}the curvature of the sole affects forward propulsion. Benefits vary by individual
-                      biomechanics and cadence.
-                    </div>
-                  </div>
+            <h3 className="text-sm font-bold text-foreground mb-2">
+              What Affects the Rating
+            </h3>
+            <div className="text-sm text-muted-foreground leading-relaxed mb-4">
+              <div className="mb-1.5">
+                <span className="font-semibold text-foreground">Carbon plate presence</span>
+                {" — "}the biggest single factor, contributing +2 to 3% on its own.
+              </div>
+              <div className="mb-1.5">
+                <span className="font-semibold text-foreground">Foam technology</span>
+                {" — "}PEBA foam (ZoomX, LightStrike Pro) adds roughly 1.5 to 2%; standard TPU adds 0.5 to 1%;
+                traditional EVA adds negligible benefit.
+              </div>
+              <div className="mb-1.5">
+                <span className="font-semibold text-foreground">Stack height</span>
+                {" — "}more foam means more stored energy. The optimal range for carbon racing shoes is 35 to 40mm.
+                Very high stacks (45mm+) can reduce efficiency due to instability.
+              </div>
+              <div className="mb-1.5">
+                <span className="font-semibold text-foreground">Shoe weight</span>
+                {" — "}every 100g reduction in shoe mass improves running economy by approximately 1%.
+              </div>
+              <div>
+                <span className="font-semibold text-foreground">Rocker geometry</span>
+                {" — "}the curvature of the sole affects forward propulsion. Benefits vary by individual
+                biomechanics and cadence.
+              </div>
+            </div>
 
-                  <h3 className="text-sm font-bold text-foreground mb-2">
-                    Limitations
-                  </h3>
-                  <div className="text-sm text-muted-foreground leading-relaxed mb-4">
-                    <div className="mb-1.5">
-                      Individual results vary significantly. Some runners respond much more strongly to super shoes
-                      than others, depending on running mechanics, cadence, and foot strike pattern.
-                    </div>
-                    <div className="mb-1.5">
-                      Published studies measure benefits in controlled lab conditions. Real-world race gains may differ
-                      due to terrain, weather, fatigue, and pacing strategy.
-                    </div>
-                    <div className="mb-1.5">
-                      PEBA foam degrades after roughly 400 to 500 km of use. Traditional EVA foam maintains performance
-                      characteristics longer, typically 600 to 800 km.
-                    </div>
-                    <div>
-                      Most research focuses on flat road running at race pace. Trail shoes and ultra-distance running
-                      show different benefit patterns due to terrain variability and slower paces.
-                    </div>
-                  </div>
+            <h3 className="text-sm font-bold text-foreground mb-2">
+              Limitations
+            </h3>
+            <div className="text-sm text-muted-foreground leading-relaxed mb-4">
+              <div className="mb-1.5">
+                Individual results vary significantly. Some runners respond much more strongly to super shoes
+                than others, depending on running mechanics, cadence, and foot strike pattern.
+              </div>
+              <div className="mb-1.5">
+                Published studies measure benefits in controlled lab conditions. Real-world race gains may differ
+                due to terrain, weather, fatigue, and pacing strategy.
+              </div>
+              <div className="mb-1.5">
+                PEBA foam degrades after roughly 400 to 500 km of use. Traditional EVA foam maintains performance
+                characteristics longer, typically 600 to 800 km.
+              </div>
+              <div>
+                Most research focuses on flat road running at race pace. Trail shoes and ultra-distance running
+                show different benefit patterns due to terrain variability and slower paces.
+              </div>
+            </div>
 
-                  <h3 className="text-sm font-bold text-foreground mb-2">
-                    Sources
-                  </h3>
-                  <div className="text-xs text-muted-foreground leading-relaxed">
-                    <div>Hoogkamer et al. (2017) — Original Vaporfly 4% study, Sports Medicine</div>
-                    <div>Kobayashi et al. (2026) — Carbon plate meta-analysis (14 studies, 271 runners), Frontiers in Sports</div>
-                    <div>Bolliger et al. (2026) — Speed-independent benefits of carbon-plated shoes, Sports Medicine Open</div>
-                    <div>RunRepeat shoe database — 700+ shoes lab-tested for running economy</div>
-                  </div>
-                </div>
-              </AccordionContent>
-            </AccordionItem>
-          </Accordion>
-        </Card>
+            <h3 className="text-sm font-bold text-foreground mb-2">
+              Sources
+            </h3>
+            <div className="text-xs text-muted-foreground leading-relaxed">
+              <div>Hoogkamer et al. (2017) — Original Vaporfly 4% study, Sports Medicine</div>
+              <div>Kobayashi et al. (2026) — Carbon plate meta-analysis (14 studies, 271 runners), Frontiers in Sports</div>
+              <div>Bolliger et al. (2026) — Speed-independent benefits of carbon-plated shoes, Sports Medicine Open</div>
+              <div>RunRepeat shoe database — 700+ shoes lab-tested for running economy</div>
+            </div>
+          </AlertDescription>
+        </Alert>
       </div>
     </div>
   );
