@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import StatsCards from "@/components/dashboard/StatsCards";
 import ActivityList from "@/components/dashboard/ActivityList";
 import ActivityChart from "@/components/dashboard/ActivityChart";
+import ActivityDetailModal from "@/components/dashboard/ActivityDetailModal";
 import {
   computeWeeklyVolume,
   formatPace,
@@ -27,6 +28,8 @@ export default function Dashboard() {
   const [typeFilter, setTypeFilter] = useState("All");
   const [hasMore, setHasMore] = useState(true);
   const [dataLoaded, setDataLoaded] = useState(false);
+  const [selectedActivity, setSelectedActivity] = useState<ActivityItem | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
 
   useEffect(() => {
     void loadData();
@@ -89,6 +92,11 @@ export default function Dashboard() {
 
   const loadMore = () => {
     void loadData(activities.length);
+  };
+
+  const handleActivityClick = (activity: ActivityItem) => {
+    setSelectedActivity(activity);
+    setDetailOpen(true);
   };
 
   const handleSync = async () => {
@@ -200,11 +208,18 @@ export default function Dashboard() {
         authStatus={authStatus}
         activitiesCount={activities.length}
         onLoadMore={loadMore}
+        onActivityClick={handleActivityClick}
       />
 
       {dataLoaded && activities.length > 0 && (
         <ActivityChart weeklyVolume={weeklyVolume} maxWeekKm={maxWeekKm} />
       )}
+
+      <ActivityDetailModal
+        activity={selectedActivity}
+        open={detailOpen}
+        onOpenChange={setDetailOpen}
+      />
     </div>
   );
 }

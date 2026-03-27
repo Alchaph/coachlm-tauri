@@ -44,6 +44,7 @@ interface ActivityListProps {
   authStatus: AuthStatus;
   activitiesCount: number;
   onLoadMore: () => void;
+  onActivityClick?: (activity: ActivityItem) => void;
 }
 
 export default function ActivityList({
@@ -53,6 +54,7 @@ export default function ActivityList({
   authStatus,
   activitiesCount,
   onLoadMore,
+  onActivityClick,
 }: ActivityListProps) {
   const tableContainerRef = useRef<HTMLDivElement>(null);
 
@@ -146,7 +148,11 @@ export default function ActivityList({
                     {virtualItems.map((virtualRow) => {
                       const a = filteredActivities[virtualRow.index];
                       return (
-                        <TableRow key={a.activity_id} className="border-b border-border">
+                        <TableRow
+                          key={a.activity_id}
+                          className={cn("border-b border-border", onActivityClick && "cursor-pointer hover:bg-muted/50")}
+                          onClick={() => { onActivityClick?.(a); }}
+                        >
                           <TableCell className="px-3.5 py-2.5 text-[13px] text-muted-foreground">
                             {a.start_date ? new Date(a.start_date).toLocaleDateString() : "\u2014"}
                           </TableCell>
