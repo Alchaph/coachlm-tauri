@@ -1,4 +1,5 @@
 mod context;
+mod error;
 mod fit;
 mod llm;
 mod models;
@@ -8,6 +9,7 @@ mod storage;
 mod strava;
 mod web_search;
 
+use error::AppError;
 use models::{
     ActivityData, AuthStatus, ExportData, InsightData, MessageData, OllamaMessage, PlanWeekWithSessions,
     ProfileData, Race, SessionData, SessionStatus, SettingsData, SettingsMeta, StatsData, TrainingPlan,
@@ -24,8 +26,6 @@ pub struct AppState {
     pub web_search_pending: std::sync::Mutex<Option<tokio::sync::oneshot::Sender<bool>>>,
 }
 
-/// Returns the cached LLM context string, building and caching it if not present.
-/// Lock is never held across await points.
 fn get_or_build_context(state: &AppState) -> String {
     if let Ok(cache) = state.cached_context.lock() {
         if let Some(ref ctx) = *cache {
@@ -41,23 +41,52 @@ fn get_or_build_context(state: &AppState) -> String {
     ctx
 }
 
-/// Invalidates the context cache so the next request rebuilds it.
 fn invalidate_context_cache(state: &AppState) {
     if let Ok(mut cache) = state.cached_context.lock() {
         *cache = None;
     }
 }
 
-#[tauri::command]
-#[allow(clippy::needless_pass_by_value)]
-fn get_settings(state: tauri::State<'_, AppState>) -> Result<Option<SettingsData>, String> {
-    state.db.get_settings().map_err(|e| e.to_string())
+fn validate_file_path(path: &str, allowed_extensions: &[&str]) -> Result<std::path::PathBuf, AppError> {
+    let path_buf = std::path::PathBuf::from(path);
+
+    // Reject path traversal
+    for component in path_buf.components() {
+        if matches!(component, std::path::Component::ParentDir) {
+            return Err(AppError::Validation("Path must not contain '..\' components".into()));
+        }
+    }
+
+    // Validate extension
+    let ext = path_buf
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(str::to_lowercase);
+
+    let has_valid_ext = allowed_extensions.iter().any(|&allowed| {
+        ext.as_deref() == Some(allowed.trim_start_matches('.'))
+    });
+
+    if !has_valid_ext {
+        return Err(AppError::Validation(format!(
+            "Invalid file extension. Allowed: {}",
+            allowed_extensions.join(", ")
+        )));
+    }
+
+    Ok(path_buf)
 }
 
 #[tauri::command]
 #[allow(clippy::needless_pass_by_value)]
-fn save_settings(state: tauri::State<'_, AppState>, data: SettingsData) -> Result<(), String> {
-    state.db.save_settings(&data).map_err(|e| e.to_string())?;
+fn get_settings(state: tauri::State<'_, AppState>) -> Result<Option<SettingsData>, AppError> {
+    state.db.get_settings().map_err(AppError::Database)
+}
+
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
+fn save_settings(state: tauri::State<'_, AppState>, data: SettingsData) -> Result<(), AppError> {
+    state.db.save_settings(&data)?;
     invalidate_context_cache(&state);
     Ok(())
 }
@@ -77,29 +106,32 @@ fn get_strava_credentials_available() -> bool {
 async fn start_strava_auth(
     state: tauri::State<'_, AppState>,
     app_handle: tauri::AppHandle,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     strava::start_auth(state.db.clone(), app_handle).await
 }
 
 #[tauri::command]
 #[allow(clippy::needless_pass_by_value)]
-fn get_strava_auth_status(state: tauri::State<'_, AppState>) -> Result<AuthStatus, String> {
+fn get_strava_auth_status(state: tauri::State<'_, AppState>) -> Result<AuthStatus, AppError> {
     strava::get_auth_status(&state.db)
 }
 
 #[tauri::command]
 #[allow(clippy::needless_pass_by_value)]
-fn disconnect_strava(state: tauri::State<'_, AppState>) -> Result<(), String> {
-    state.db.delete_oauth_tokens().map_err(|e| e.to_string())
+fn disconnect_strava(state: tauri::State<'_, AppState>) -> Result<(), AppError> {
+    state.db.delete_oauth_tokens().map_err(AppError::Database)
 }
 
 #[tauri::command]
 async fn sync_strava_activities(
     state: tauri::State<'_, AppState>,
     app_handle: tauri::AppHandle,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     strava::sync_activities(state.db.clone(), app_handle).await?;
-    let fresh_ctx = context::build_context(&state.db);
+    let db_for_ctx = state.db.clone();
+    let fresh_ctx = tokio::task::spawn_blocking(move || context::build_context(&db_for_ctx))
+        .await
+        .map_err(|e| AppError::Internal(e.to_string()))?;
     if let Ok(mut cache) = state.cached_context.lock() {
         *cache = Some(fresh_ctx);
     }
@@ -112,20 +144,20 @@ fn get_recent_activities(
     state: tauri::State<'_, AppState>,
     limit: u32,
     offset: u32,
-) -> Result<Vec<ActivityData>, String> {
-    state.db.get_recent_activities(limit, offset).map_err(|e| e.to_string())
+) -> Result<Vec<ActivityData>, AppError> {
+    state.db.get_recent_activities(limit, offset).map_err(AppError::Database)
 }
 
 #[tauri::command]
 #[allow(clippy::needless_pass_by_value)]
-fn get_activity_stats(state: tauri::State<'_, AppState>) -> Result<StatsData, String> {
-    state.db.get_activity_stats().map_err(|e| e.to_string())
+fn get_activity_stats(state: tauri::State<'_, AppState>) -> Result<StatsData, AppError> {
+    state.db.get_activity_stats().map_err(AppError::Database)
 }
 
 #[tauri::command]
 #[allow(clippy::needless_pass_by_value)]
-fn get_profile_data(state: tauri::State<'_, AppState>) -> Result<Option<ProfileData>, String> {
-    state.db.get_profile().map_err(|e| e.to_string())
+fn get_profile_data(state: tauri::State<'_, AppState>) -> Result<Option<ProfileData>, AppError> {
+    state.db.get_profile().map_err(AppError::Database)
 }
 
 #[tauri::command]
@@ -133,8 +165,8 @@ fn get_profile_data(state: tauri::State<'_, AppState>) -> Result<Option<ProfileD
 fn save_profile_data(
     state: tauri::State<'_, AppState>,
     data: ProfileData,
-) -> Result<(), String> {
-    state.db.save_profile(&data).map_err(|e| e.to_string())?;
+) -> Result<(), AppError> {
+    state.db.save_profile(&data)?;
     invalidate_context_cache(&state);
     Ok(())
 }
@@ -150,30 +182,29 @@ fn get_context_preview(state: tauri::State<'_, AppState>) -> String {
 fn save_pinned_insight(
     state: tauri::State<'_, AppState>,
     content: String,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     let session_id = state
         .current_session_id
         .lock()
-        .map_err(|e| e.to_string())?
+        .map_err(|e| AppError::Internal(e.to_string()))?
         .clone();
     state
         .db
-        .save_pinned_insight(&content, session_id.as_deref())
-        .map_err(|e| e.to_string())?;
+        .save_pinned_insight(&content, session_id.as_deref())?;
     invalidate_context_cache(&state);
     Ok(())
 }
 
 #[tauri::command]
 #[allow(clippy::needless_pass_by_value)]
-fn get_pinned_insights(state: tauri::State<'_, AppState>) -> Result<Vec<InsightData>, String> {
-    state.db.get_pinned_insights().map_err(|e| e.to_string())
+fn get_pinned_insights(state: tauri::State<'_, AppState>) -> Result<Vec<InsightData>, AppError> {
+    state.db.get_pinned_insights().map_err(AppError::Database)
 }
 
 #[tauri::command]
 #[allow(clippy::needless_pass_by_value)]
-fn delete_pinned_insight(state: tauri::State<'_, AppState>, id: i64) -> Result<(), String> {
-    state.db.delete_pinned_insight(id).map_err(|e| e.to_string())?;
+fn delete_pinned_insight(state: tauri::State<'_, AppState>, id: i64) -> Result<(), AppError> {
+    state.db.delete_pinned_insight(id)?;
     invalidate_context_cache(&state);
     Ok(())
 }
@@ -228,7 +259,7 @@ async fn query_and_save_response(
     user_content: &str,
     llm_ctx: &str,
     web_search_pending: &std::sync::Mutex<Option<tokio::sync::oneshot::Sender<bool>>>,
-) -> Result<String, String> {
+) -> Result<String, AppError> {
     let mut web_search_context = String::new();
     match settings.effective_web_mode() {
         WebAugmentationMode::Off => {}
@@ -298,7 +329,11 @@ async fn query_and_save_response(
     }
 
     emit_chat_progress(app_handle, session_id, "Gathering context...");
-    let history = db.get_chat_messages(session_id).map_err(|e| e.to_string())?;
+    let db_clone = db.clone();
+    let session_id_owned = session_id.to_string();
+    let history = tokio::task::spawn_blocking(move || db_clone.get_chat_messages(&session_id_owned))
+        .await
+        .map_err(|e| AppError::Internal(e.to_string()))??;
 
     let mut system_content = llm_ctx.to_string();
     if !web_search_context.is_empty() {
@@ -321,8 +356,14 @@ async fn query_and_save_response(
     let response = llm::chat_stream(settings, messages, app_handle, session_id).await?;
 
     emit_chat_progress(app_handle, session_id, "Saving response...");
-    db.insert_chat_message(session_id, "assistant", &response)
-        .map_err(|e| e.to_string())?;
+    let db_clone2 = db.clone();
+    let session_id_owned2 = session_id.to_string();
+    let response_clone = response.clone();
+    tokio::task::spawn_blocking(move || {
+        db_clone2.insert_chat_message(&session_id_owned2, "assistant", &response_clone)
+    })
+    .await
+    .map_err(|e| AppError::Internal(e.to_string()))??;
 
     Ok(response)
 }
@@ -332,36 +373,51 @@ async fn send_message(
     state: tauri::State<'_, AppState>,
     app_handle: tauri::AppHandle,
     content: String,
-) -> Result<String, String> {
-    // Phase 1: Prepare session
+) -> Result<String, AppError> {
     emit_chat_progress(&app_handle, "", "Preparing session...");
-    let session_id = {
-        let mut sid = state
-            .current_session_id
-            .lock()
-            .map_err(|e| e.to_string())?;
-        if sid.is_none() {
-            let session = state.db.create_chat_session().map_err(|e| e.to_string())?;
-            *sid = Some(session.id.clone());
+    let existing_sid = state
+        .current_session_id
+        .lock()
+        .map_err(|e| AppError::Internal(e.to_string()))?
+        .clone();
+
+    let session_id = if let Some(id) = existing_sid {
+        id
+    } else {
+        let db_clone = state.db.clone();
+        let new_session = tokio::task::spawn_blocking(move || db_clone.create_chat_session())
+            .await
+            .map_err(|e| AppError::Internal(e.to_string()))??;
+        let new_id = new_session.id.clone();
+        if let Ok(mut sid) = state.current_session_id.lock() {
+            *sid = Some(new_id.clone());
         }
-        sid.clone().ok_or("Session ID missing after creation")?
+        new_id
     };
 
-    state
-        .db
-        .insert_chat_message(&session_id, "user", &content)
-        .map_err(|e| e.to_string())?;
+    let db_clone = state.db.clone();
+    let session_id_clone = session_id.clone();
+    let content_clone = content.clone();
+    tokio::task::spawn_blocking(move || {
+        db_clone.insert_chat_message(&session_id_clone, "user", &content_clone)
+    })
+    .await
+    .map_err(|e| AppError::Internal(e.to_string()))??;
 
-    let settings = state
-        .db
-        .get_settings()
-        .map_err(|e| e.to_string())?
-        .ok_or("Settings not configured. Complete the setup wizard first.")?;
-
-    // Phase 2: Generate title (fire-and-forget for first message)
-    let sessions = state.db.get_chat_sessions().map_err(|e| e.to_string())?;
-    let current = sessions.iter().find(|s| s.id == session_id);
-    let needs_title = current.is_some_and(|s| s.title.is_none());
+    let db_clone2 = state.db.clone();
+    let session_id_clone2 = session_id.clone();
+    let (settings, needs_title) =
+        tokio::task::spawn_blocking(move || -> Result<_, AppError> {
+            let settings = db_clone2
+                .get_settings()?
+                .ok_or_else(|| AppError::Config("Settings not configured. Complete the setup wizard first.".into()))?;
+            let sessions = db_clone2.get_chat_sessions()?;
+            let current = sessions.iter().find(|s| s.id == session_id_clone2);
+            let needs_title = current.is_some_and(|s| s.title.is_none());
+            Ok((settings, needs_title))
+        })
+        .await
+        .map_err(|e| AppError::Internal(e.to_string()))??;
     if needs_title {
         emit_chat_progress(&app_handle, &session_id, "Generating title...");
         let title_settings = settings.clone();
@@ -387,24 +443,23 @@ async fn edit_and_resend(
     session_id: String,
     message_id: i64,
     content: String,
-) -> Result<String, String> {
+) -> Result<String, AppError> {
     emit_chat_progress(&app_handle, &session_id, "Updating message...");
 
-    state
-        .db
-        .update_chat_message_content(&session_id, message_id, &content)
-        .map_err(|e| e.to_string())?;
-
-    state
-        .db
-        .delete_chat_messages_after(&session_id, message_id)
-        .map_err(|e| e.to_string())?;
-
-    let settings = state
-        .db
-        .get_settings()
-        .map_err(|e| e.to_string())?
-        .ok_or("Settings not configured. Complete the setup wizard first.")?;
+    let db_clone = state.db.clone();
+    let session_id_clone = session_id.clone();
+    let content_clone = content.clone();
+    let settings =
+        tokio::task::spawn_blocking(move || -> Result<_, AppError> {
+            db_clone.update_chat_message_content(&session_id_clone, message_id, &content_clone)?;
+            db_clone.delete_chat_messages_after(&session_id_clone, message_id)?;
+            let settings = db_clone
+                .get_settings()?
+                .ok_or_else(|| AppError::Config("Settings not configured. Complete the setup wizard first.".into()))?;
+            Ok(settings)
+        })
+        .await
+        .map_err(|e| AppError::Internal(e.to_string()))??;
 
     let llm_ctx = get_or_build_context(&state);
     query_and_save_response(&state.db, &app_handle, &settings, &session_id, &content, &llm_ctx, &state.web_search_pending).await
@@ -425,8 +480,8 @@ fn respond_web_search_suggestion(
 
 #[tauri::command]
 #[allow(clippy::needless_pass_by_value)]
-fn get_chat_sessions(state: tauri::State<'_, AppState>) -> Result<Vec<SessionData>, String> {
-    state.db.get_chat_sessions().map_err(|e| e.to_string())
+fn get_chat_sessions(state: tauri::State<'_, AppState>) -> Result<Vec<SessionData>, AppError> {
+    state.db.get_chat_sessions().map_err(AppError::Database)
 }
 
 #[tauri::command]
@@ -434,18 +489,18 @@ fn get_chat_sessions(state: tauri::State<'_, AppState>) -> Result<Vec<SessionDat
 fn get_chat_messages(
     state: tauri::State<'_, AppState>,
     session_id: String,
-) -> Result<Vec<MessageData>, String> {
-    state.db.get_chat_messages(&session_id).map_err(|e| e.to_string())
+) -> Result<Vec<MessageData>, AppError> {
+    state.db.get_chat_messages(&session_id).map_err(AppError::Database)
 }
 
 #[tauri::command]
 #[allow(clippy::needless_pass_by_value)]
-fn create_chat_session(state: tauri::State<'_, AppState>) -> Result<SessionData, String> {
-    let session = state.db.create_chat_session().map_err(|e| e.to_string())?;
+fn create_chat_session(state: tauri::State<'_, AppState>) -> Result<SessionData, AppError> {
+    let session = state.db.create_chat_session()?;
     let mut sid = state
         .current_session_id
         .lock()
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| AppError::Internal(e.to_string()))?;
     *sid = Some(session.id.clone());
     Ok(session)
 }
@@ -455,8 +510,8 @@ fn create_chat_session(state: tauri::State<'_, AppState>) -> Result<SessionData,
 fn delete_chat_session(
     state: tauri::State<'_, AppState>,
     session_id: String,
-) -> Result<(), String> {
-    state.db.delete_chat_session(&session_id).map_err(|e| e.to_string())
+) -> Result<(), AppError> {
+    state.db.delete_chat_session(&session_id).map_err(AppError::Database)
 }
 
 #[tauri::command]
@@ -465,24 +520,23 @@ fn rename_chat_session(
     state: tauri::State<'_, AppState>,
     session_id: String,
     title: String,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     state
         .db
         .update_chat_session_title(&session_id, &title)
-        .map_err(|e| e.to_string())
+        .map_err(AppError::Database)
 }
 
 #[tauri::command]
-async fn get_ollama_models(endpoint: String) -> Result<Vec<String>, String> {
+async fn get_ollama_models(endpoint: String) -> Result<Vec<String>, AppError> {
     llm::get_ollama_models(&endpoint).await
 }
 
 #[tauri::command]
-async fn check_ollama_status(endpoint: String) -> Result<bool, String> {
+async fn check_ollama_status(endpoint: String) -> Result<bool, AppError> {
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(3))
-        .build()
-        .map_err(|e| format!("Failed to create HTTP client: {e}"))?;
+        .build()?;
     let url = format!("{}/api/tags", endpoint.trim_end_matches('/'));
     match client.get(&url).send().await {
         Ok(resp) => Ok(resp.status().is_success()),
@@ -495,8 +549,9 @@ async fn check_ollama_status(endpoint: String) -> Result<bool, String> {
 fn import_fit_file(
     state: tauri::State<'_, AppState>,
     file_path: String,
-) -> Result<u32, String> {
-    let activities = fit::import_fit_file(&file_path)?;
+) -> Result<u32, AppError> {
+    let validated_path = validate_file_path(&file_path, &[".fit"])?;
+    let activities = fit::import_fit_file(&validated_path.to_string_lossy())?;
     let mut imported = 0u32;
     for activity in activities {
         if state.db.insert_activity(&activity).is_ok() {
@@ -511,11 +566,11 @@ fn import_fit_file(
 fn export_context(
     state: tauri::State<'_, AppState>,
     file_path: String,
-) -> Result<(), String> {
-    let profile = state.db.get_profile().map_err(|e| e.to_string())?;
-    let activities = state.db.get_recent_activities(10000, 0).map_err(|e| e.to_string())?;
-    let insights = state.db.get_pinned_insights().map_err(|e| e.to_string())?;
-    let settings = state.db.get_settings().map_err(|e| e.to_string())?;
+) -> Result<(), AppError> {
+    let profile = state.db.get_profile()?;
+    let activities = state.db.get_recent_activities(10000, 0)?;
+    let insights = state.db.get_pinned_insights()?;
+    let settings = state.db.get_settings()?;
 
     let export = ExportData {
         schema_version: 1,
@@ -528,8 +583,9 @@ fn export_context(
         },
     };
 
-    let json = serde_json::to_string_pretty(&export).map_err(|e| e.to_string())?;
-    std::fs::write(&file_path, json).map_err(|e| e.to_string())?;
+    let validated_path = validate_file_path(&file_path, &[".json"])?;
+    let json = serde_json::to_string_pretty(&export)?;
+    std::fs::write(&validated_path, json)?;
     Ok(())
 }
 
@@ -539,29 +595,30 @@ fn import_context(
     state: tauri::State<'_, AppState>,
     file_path: String,
     replace_all: bool,
-) -> Result<(), String> {
-    let content = std::fs::read_to_string(&file_path).map_err(|e| e.to_string())?;
-    let data: ExportData = serde_json::from_str(&content).map_err(|e| format!("Invalid file: {e}"))?;
+) -> Result<(), AppError> {
+    let validated_path = validate_file_path(&file_path, &[".json"])?;
+    let content = std::fs::read_to_string(&validated_path)?;
+    let data: ExportData = serde_json::from_str(&content)
+        .map_err(|e| AppError::Validation(format!("Invalid file: {e}")))?;
 
     if data.schema_version != 1 {
-        return Err(format!("Unsupported schema version: {}", data.schema_version));
+        return Err(AppError::Validation(format!("Unsupported schema version: {}", data.schema_version)));
     }
 
     if replace_all {
         let conn = state.db.conn();
-        conn.execute("DELETE FROM pinned_insights", []).map_err(|e| e.to_string())?;
+        conn.execute("DELETE FROM pinned_insights", []).map_err(AppError::Database)?;
         drop(conn);
     }
 
     if let Some(profile) = data.athlete_profile {
-        state.db.save_profile(&profile).map_err(|e| e.to_string())?;
+        state.db.save_profile(&profile)?;
     }
 
     for insight in data.pinned_insights {
         state
             .db
-            .save_pinned_insight(&insight.content, insight.source_session_id.as_deref())
-            .map_err(|e| e.to_string())?;
+            .save_pinned_insight(&insight.content, insight.source_session_id.as_deref())?;
     }
 
     let mut failed_count: usize = 0;
@@ -576,7 +633,7 @@ fn import_context(
     }
 
     if failed_count > 0 {
-        return Err(format!("Failed to import {failed_count} activities"));
+        return Err(AppError::Internal(format!("Failed to import {failed_count} activities")));
     }
 
     invalidate_context_cache(&state);
@@ -585,7 +642,7 @@ fn import_context(
 
 #[tauri::command]
 #[allow(clippy::needless_pass_by_value)]
-fn create_race(state: tauri::State<'_, AppState>, race: Race) -> Result<Race, String> {
+fn create_race(state: tauri::State<'_, AppState>, race: Race) -> Result<Race, AppError> {
     let mut r = race;
     if r.id.is_empty() {
         r.id = uuid::Uuid::new_v4().to_string();
@@ -593,32 +650,32 @@ fn create_race(state: tauri::State<'_, AppState>, race: Race) -> Result<Race, St
     if r.created_at.is_empty() {
         r.created_at = chrono::Utc::now().to_rfc3339();
     }
-    state.db.create_race(&r).map_err(|e| e.to_string())?;
+    state.db.create_race(&r)?;
     Ok(r)
 }
 
 #[tauri::command]
 #[allow(clippy::needless_pass_by_value)]
-fn update_race(state: tauri::State<'_, AppState>, race: Race) -> Result<(), String> {
-    state.db.update_race(&race).map_err(|e| e.to_string())
+fn update_race(state: tauri::State<'_, AppState>, race: Race) -> Result<(), AppError> {
+    state.db.update_race(&race).map_err(AppError::Database)
 }
 
 #[tauri::command]
 #[allow(clippy::needless_pass_by_value)]
-fn delete_race(state: tauri::State<'_, AppState>, id: String) -> Result<(), String> {
-    state.db.delete_race(&id).map_err(|e| e.to_string())
+fn delete_race(state: tauri::State<'_, AppState>, id: String) -> Result<(), AppError> {
+    state.db.delete_race(&id).map_err(AppError::Database)
 }
 
 #[tauri::command]
 #[allow(clippy::needless_pass_by_value)]
-fn list_races(state: tauri::State<'_, AppState>) -> Result<Vec<Race>, String> {
-    state.db.list_races().map_err(|e| e.to_string())
+fn list_races(state: tauri::State<'_, AppState>) -> Result<Vec<Race>, AppError> {
+    state.db.list_races().map_err(AppError::Database)
 }
 
 #[tauri::command]
 #[allow(clippy::needless_pass_by_value)]
-fn set_active_race(state: tauri::State<'_, AppState>, id: String) -> Result<(), String> {
-    state.db.set_active_race(&id).map_err(|e| e.to_string())
+fn set_active_race(state: tauri::State<'_, AppState>, id: String) -> Result<(), AppError> {
+    state.db.set_active_race(&id).map_err(AppError::Database)
 }
 
 #[tauri::command]
@@ -626,7 +683,7 @@ async fn generate_plan_cmd(
     state: tauri::State<'_, AppState>,
     app_handle: tauri::AppHandle,
     race_id: String,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     let db = state.db.clone();
     let llm_ctx = get_or_build_context(&state);
     app_handle.emit("plan:generate:start", ()).ok();
@@ -636,7 +693,7 @@ async fn generate_plan_cmd(
                 app_handle.emit("plan:generate:complete", &plan).ok();
             }
             Err(e) => {
-                app_handle.emit("plan:generate:error", serde_json::json!({ "message": e })).ok();
+                app_handle.emit("plan:generate:error", serde_json::json!({ "message": e.to_string() })).ok();
             }
         }
     });
@@ -645,14 +702,14 @@ async fn generate_plan_cmd(
 
 #[tauri::command]
 #[allow(clippy::needless_pass_by_value)]
-fn get_active_plan(state: tauri::State<'_, AppState>) -> Result<Option<TrainingPlan>, String> {
-    state.db.get_active_plan().map_err(|e| e.to_string())
+fn get_active_plan(state: tauri::State<'_, AppState>) -> Result<Option<TrainingPlan>, AppError> {
+    state.db.get_active_plan().map_err(AppError::Database)
 }
 
 #[tauri::command]
 #[allow(clippy::needless_pass_by_value)]
-fn list_plans(state: tauri::State<'_, AppState>) -> Result<Vec<TrainingPlanSummary>, String> {
-    state.db.list_plans().map_err(|e| e.to_string())
+fn list_plans(state: tauri::State<'_, AppState>) -> Result<Vec<TrainingPlanSummary>, AppError> {
+    state.db.list_plans().map_err(AppError::Database)
 }
 
 #[tauri::command]
@@ -660,8 +717,8 @@ fn list_plans(state: tauri::State<'_, AppState>) -> Result<Vec<TrainingPlanSumma
 fn set_active_plan(
     state: tauri::State<'_, AppState>,
     plan_id: String,
-) -> Result<(), String> {
-    state.db.set_active_plan(&plan_id).map_err(|e| e.to_string())?;
+) -> Result<(), AppError> {
+    state.db.set_active_plan(&plan_id)?;
     invalidate_context_cache(&state);
     Ok(())
 }
@@ -671,8 +728,8 @@ fn set_active_plan(
 fn delete_plan(
     state: tauri::State<'_, AppState>,
     plan_id: String,
-) -> Result<(), String> {
-    state.db.delete_plan(&plan_id).map_err(|e| e.to_string())?;
+) -> Result<(), AppError> {
+    state.db.delete_plan(&plan_id)?;
     invalidate_context_cache(&state);
     Ok(())
 }
@@ -682,8 +739,8 @@ fn delete_plan(
 fn get_plan_weeks(
     state: tauri::State<'_, AppState>,
     plan_id: String,
-) -> Result<Vec<PlanWeekWithSessions>, String> {
-    state.db.get_plan_weeks(&plan_id).map_err(|e| e.to_string())
+) -> Result<Vec<PlanWeekWithSessions>, AppError> {
+    state.db.get_plan_weeks(&plan_id).map_err(AppError::Database)
 }
 
 #[tauri::command]
@@ -692,7 +749,7 @@ fn update_session_status(
     state: tauri::State<'_, AppState>,
     session_id: String,
     status: SessionStatus,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     state
         .db
         .update_session_status(
@@ -701,17 +758,16 @@ fn update_session_status(
             status.actual_duration_min,
             status.actual_distance_km,
         )
-        .map_err(|e| e.to_string())
+        .map_err(AppError::Database)
 }
 
 #[tauri::command]
 #[allow(clippy::needless_pass_by_value)]
-fn get_athlete_summary(state: tauri::State<'_, AppState>) -> Result<Option<serde_json::Value>, String> {
-    let raw = state.db.get_athlete_stats().map_err(|e| e.to_string())?;
+fn get_athlete_summary(state: tauri::State<'_, AppState>) -> Result<Option<serde_json::Value>, AppError> {
+    let raw = state.db.get_athlete_stats()?;
     match raw {
         Some(json_str) => {
-            let val: serde_json::Value =
-                serde_json::from_str(&json_str).map_err(|e| e.to_string())?;
+            let val: serde_json::Value = serde_json::from_str(&json_str)?;
             Ok(Some(val))
         }
         None => Ok(None),
@@ -720,12 +776,11 @@ fn get_athlete_summary(state: tauri::State<'_, AppState>) -> Result<Option<serde
 
 #[tauri::command]
 #[allow(clippy::needless_pass_by_value)]
-fn get_athlete_zones_data(state: tauri::State<'_, AppState>) -> Result<Option<serde_json::Value>, String> {
-    let raw = state.db.get_athlete_zones().map_err(|e| e.to_string())?;
+fn get_athlete_zones_data(state: tauri::State<'_, AppState>) -> Result<Option<serde_json::Value>, AppError> {
+    let raw = state.db.get_athlete_zones()?;
     match raw {
         Some(json_str) => {
-            let val: serde_json::Value =
-                serde_json::from_str(&json_str).map_err(|e| e.to_string())?;
+            let val: serde_json::Value = serde_json::from_str(&json_str)?;
             Ok(Some(val))
         }
         None => Ok(None),
@@ -884,5 +939,43 @@ mod tests {
         assert_eq!(ctx1, ctx2);
         assert!(state.cached_context.lock().expect("lock failed").is_some());
         std::fs::remove_dir_all(&db_dir).ok();
+    }
+
+    #[test]
+    fn validate_file_path_accepts_valid_fit_extension() {
+        let result = validate_file_path("/some/path/activity.fit", &[".fit"]);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn validate_file_path_accepts_valid_json_extension() {
+        let result = validate_file_path("/some/path/export.json", &[".json"]);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn validate_file_path_rejects_path_traversal() {
+        let result = validate_file_path("/some/../etc/passwd", &[".json"]);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains(".."));
+    }
+
+    #[test]
+    fn validate_file_path_rejects_wrong_extension() {
+        let result = validate_file_path("/some/path/file.exe", &[".fit"]);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("extension"));
+    }
+
+    #[test]
+    fn validate_file_path_rejects_no_extension() {
+        let result = validate_file_path("/some/path/noext", &[".json"]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn validate_file_path_case_insensitive_extension() {
+        let result = validate_file_path("/some/path/file.FIT", &[".fit"]);
+        assert!(result.is_ok());
     }
 }

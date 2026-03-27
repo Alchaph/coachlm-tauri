@@ -1,6 +1,7 @@
 use futures_util::StreamExt;
 use tauri::Emitter;
 
+use crate::error::AppError;
 use crate::models::{
     ChatMessage, CloudProvider, OllamaChatRequest, OllamaChatResponse, OllamaMessage,
     OllamaTagsResponse, OpenAiChatRequest, OpenAiChatResponse, SettingsData,
@@ -9,19 +10,19 @@ use crate::models::{
 pub async fn chat(
     settings: &SettingsData,
     messages: Vec<OllamaMessage>,
-) -> Result<String, String> {
+) -> Result<String, AppError> {
     match settings.active_llm.as_str() {
         "groq" | "openrouter" => {
             let base_url = CloudProvider::base_url(&settings.active_llm)
-                .ok_or_else(|| format!("Unknown cloud provider: {}", settings.active_llm))?;
+                .ok_or_else(|| AppError::Llm(format!("Unknown cloud provider: {}", settings.active_llm)))?;
             let api_key = settings
                 .cloud_api_key
                 .as_deref()
-                .ok_or("API key not configured for cloud provider")?;
+                .ok_or_else(|| AppError::Config("API key not configured for cloud provider".into()))?;
             let model = settings
                 .cloud_model
                 .as_deref()
-                .ok_or("Model not configured for cloud provider")?;
+                .ok_or_else(|| AppError::Config("Model not configured for cloud provider".into()))?;
             chat_with_cloud(base_url, api_key, model, messages).await
         }
         _ => {
@@ -35,11 +36,10 @@ async fn chat_with_cloud(
     api_key: &str,
     model: &str,
     messages: Vec<OllamaMessage>,
-) -> Result<String, String> {
+) -> Result<String, AppError> {
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_mins(2))
-        .build()
-        .map_err(|e| format!("Failed to create HTTP client: {e}"))?;
+        .build()?;
     let url = format!("{}/chat/completions", base_url.trim_end_matches('/'));
 
     let chat_messages: Vec<ChatMessage> = messages
@@ -64,37 +64,37 @@ async fn chat_with_cloud(
         .json(&request)
         .send()
         .await
-        .map_err(|e| format!("Failed to reach cloud provider: {e}"))?;
+        .map_err(|e| AppError::Llm(format!("Failed to reach cloud provider: {e}")))?;
 
     if !response.status().is_success() {
         let status = response.status();
         let body = response.text().await.unwrap_or_default();
-        return Err(format!("Cloud provider returned status {status}: {body}"));
+        return Err(AppError::Llm(format!("Cloud provider returned status {status}: {body}")));
     }
 
     let text = response
         .text()
         .await
-        .map_err(|e| format!("Failed to read cloud response: {e}"))?;
+        .map_err(|e| AppError::Llm(format!("Failed to read cloud response: {e}")))?;
     let body: OpenAiChatResponse = serde_json::from_str(&text).map_err(|e| {
-        format!(
+        AppError::Llm(format!(
             "Failed to parse cloud response: {e}\nRaw response: {}",
             &text[..text.len().min(500)]
-        )
+        ))
     })?;
 
     body.choices
         .into_iter()
         .next()
         .map(|c| c.message.content)
-        .ok_or_else(|| "Empty response from cloud provider".to_string())
+        .ok_or_else(|| AppError::Llm("Empty response from cloud provider".into()))
 }
 
 pub async fn chat_with_ollama(
     endpoint: &str,
     model: &str,
     messages: Vec<OllamaMessage>,
-) -> Result<String, String> {
+) -> Result<String, AppError> {
     let client = reqwest::Client::new();
     let url = format!("{}/api/chat", endpoint.trim_end_matches('/'));
 
@@ -111,23 +111,23 @@ pub async fn chat_with_ollama(
         .await
         .map_err(|e| {
             if e.is_connect() {
-                "Ollama is not running. Start it with 'ollama serve' and try again.".to_string()
+                AppError::Llm("Ollama is not running. Start it with 'ollama serve' and try again.".into())
             } else {
-                format!("Failed to reach Ollama: {e}")
+                AppError::Llm(format!("Failed to reach Ollama: {e}"))
             }
         })?;
 
     if !response.status().is_success() {
-        return Err(format!("Ollama returned status {}", response.status()));
+        return Err(AppError::Llm(format!("Ollama returned status {}", response.status())));
     }
 
-    let body: OllamaChatResponse = response.json().await.map_err(|e| e.to_string())?;
+    let body: OllamaChatResponse = response.json().await?;
     body.message
         .map(|m| m.content)
-        .ok_or_else(|| "Empty response from Ollama".to_string())
+        .ok_or_else(|| AppError::Llm("Empty response from Ollama".into()))
 }
 
-pub async fn get_ollama_models(endpoint: &str) -> Result<Vec<String>, String> {
+pub async fn get_ollama_models(endpoint: &str) -> Result<Vec<String>, AppError> {
     let client = reqwest::Client::new();
     let url = format!("{}/api/tags", endpoint.trim_end_matches('/'));
 
@@ -137,17 +137,17 @@ pub async fn get_ollama_models(endpoint: &str) -> Result<Vec<String>, String> {
         .await
         .map_err(|e| {
             if e.is_connect() {
-                "Ollama is not running. Start it with 'ollama serve' and try again.".to_string()
+                AppError::Llm("Ollama is not running. Start it with 'ollama serve' and try again.".into())
             } else {
-                format!("Failed to reach Ollama: {e}")
+                AppError::Llm(format!("Failed to reach Ollama: {e}"))
             }
         })?;
 
     if !response.status().is_success() {
-        return Err(format!("Ollama returned status {}", response.status()));
+        return Err(AppError::Llm(format!("Ollama returned status {}", response.status())));
     }
 
-    let body: OllamaTagsResponse = response.json().await.map_err(|e| e.to_string())?;
+    let body: OllamaTagsResponse = response.json().await?;
     Ok(body.models.into_iter().map(|m| m.name).collect())
 }
 
@@ -156,15 +156,15 @@ pub async fn chat_stream(
     messages: Vec<OllamaMessage>,
     app_handle: &tauri::AppHandle,
     session_id: &str,
-) -> Result<String, String> {
+) -> Result<String, AppError> {
     match settings.active_llm.as_str() {
         "groq" | "openrouter" => {
             let base_url = CloudProvider::base_url(&settings.active_llm)
-                .ok_or_else(|| format!("Unknown cloud provider: {}", settings.active_llm))?;
+                .ok_or_else(|| AppError::Llm(format!("Unknown cloud provider: {}", settings.active_llm)))?;
             let api_key = settings.cloud_api_key.as_deref()
-                .ok_or("API key not configured for cloud provider")?;
+                .ok_or_else(|| AppError::Config("API key not configured for cloud provider".into()))?;
             let model = settings.cloud_model.as_deref()
-                .ok_or("Model not configured for cloud provider")?;
+                .ok_or_else(|| AppError::Config("Model not configured for cloud provider".into()))?;
             stream_cloud(base_url, api_key, model, messages, app_handle, session_id).await
         }
         _ => {
@@ -179,7 +179,7 @@ async fn stream_ollama(
     messages: Vec<OllamaMessage>,
     app_handle: &tauri::AppHandle,
     session_id: &str,
-) -> Result<String, String> {
+) -> Result<String, AppError> {
     let client = reqwest::Client::new();
     let url = format!("{}/api/chat", endpoint.trim_end_matches('/'));
 
@@ -196,14 +196,14 @@ async fn stream_ollama(
         .await
         .map_err(|e| {
             if e.is_connect() {
-                "Ollama is not running. Start it with 'ollama serve' and try again.".to_string()
+                AppError::Llm("Ollama is not running. Start it with 'ollama serve' and try again.".into())
             } else {
-                format!("Failed to reach Ollama: {e}")
+                AppError::Llm(format!("Failed to reach Ollama: {e}"))
             }
         })?;
 
     if !response.status().is_success() {
-        return Err(format!("Ollama returned status {}", response.status()));
+        return Err(AppError::Llm(format!("Ollama returned status {}", response.status())));
     }
 
     let mut full_response = String::new();
@@ -211,7 +211,7 @@ async fn stream_ollama(
     let mut buffer = String::new();
 
     while let Some(chunk_result) = stream.next().await {
-        let chunk = chunk_result.map_err(|e| format!("Stream error: {e}"))?;
+        let chunk = chunk_result.map_err(|e| AppError::Llm(format!("Stream error: {e}")))?;
         buffer.push_str(&String::from_utf8_lossy(&chunk));
 
         while let Some(newline_pos) = buffer.find('\n') {
@@ -249,7 +249,7 @@ async fn stream_ollama(
     }
 
     if full_response.is_empty() {
-        return Err("Empty response from Ollama".to_string());
+        return Err(AppError::Llm("Empty response from Ollama".into()));
     }
 
     Ok(full_response)
@@ -262,11 +262,10 @@ async fn stream_cloud(
     messages: Vec<OllamaMessage>,
     app_handle: &tauri::AppHandle,
     session_id: &str,
-) -> Result<String, String> {
+) -> Result<String, AppError> {
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_mins(2))
-        .build()
-        .map_err(|e| format!("Failed to create HTTP client: {e}"))?;
+        .build()?;
     let url = format!("{}/chat/completions", base_url.trim_end_matches('/'));
 
     let chat_messages: Vec<ChatMessage> = messages
@@ -291,12 +290,12 @@ async fn stream_cloud(
         .json(&request)
         .send()
         .await
-        .map_err(|e| format!("Failed to reach cloud provider: {e}"))?;
+        .map_err(|e| AppError::Llm(format!("Failed to reach cloud provider: {e}")))?;
 
     if !response.status().is_success() {
         let status = response.status();
         let body = response.text().await.unwrap_or_default();
-        return Err(format!("Cloud provider returned status {status}: {body}"));
+        return Err(AppError::Llm(format!("Cloud provider returned status {status}: {body}")));
     }
 
     let mut full_response = String::new();
@@ -304,7 +303,7 @@ async fn stream_cloud(
     let mut buffer = String::new();
 
     while let Some(chunk_result) = stream.next().await {
-        let chunk = chunk_result.map_err(|e| format!("Stream error: {e}"))?;
+        let chunk = chunk_result.map_err(|e| AppError::Llm(format!("Stream error: {e}")))?;
         buffer.push_str(&String::from_utf8_lossy(&chunk));
 
         while let Some(double_newline) = buffer.find("\n\n") {
@@ -346,7 +345,7 @@ async fn stream_cloud(
     }
 
     if full_response.is_empty() {
-        return Err("Empty response from cloud provider".to_string());
+        return Err(AppError::Llm("Empty response from cloud provider".into()));
     }
 
     Ok(full_response)
@@ -386,13 +385,13 @@ const JSON_RETRY_LIMIT: u8 = 2;
 pub async fn chat_json<T: serde::de::DeserializeOwned>(
     settings: &SettingsData,
     messages: Vec<OllamaMessage>,
-) -> Result<T, String> {
-    let mut last_error = String::new();
+) -> Result<T, AppError> {
+    let mut last_error = AppError::Llm(String::new());
     for attempt in 0..=JSON_RETRY_LIMIT {
         let raw = match chat(settings, messages.clone()).await {
             Ok(r) => r,
             Err(e) => {
-                last_error = format!("LLM call failed (attempt {attempt}): {e}");
+                last_error = AppError::Llm(format!("LLM call failed (attempt {attempt}): {e}"));
                 continue;
             }
         };
@@ -400,11 +399,12 @@ pub async fn chat_json<T: serde::de::DeserializeOwned>(
         match serde_json::from_str::<T>(json_str) {
             Ok(parsed) => return Ok(parsed),
             Err(e) => {
-                last_error = format!(
+                let msg = format!(
                     "JSON parse failed (attempt {attempt}): {e}\nRaw: {}",
                     &raw[..raw.len().min(300)]
                 );
-                log::warn!("{last_error}");
+                log::warn!("{msg}");
+                last_error = AppError::Llm(msg);
             }
         }
     }
@@ -456,7 +456,7 @@ mod tests {
         settings.cloud_api_key = None;
         let result = chat(&settings, sample_messages()).await;
         assert!(result.is_err());
-        let err = result.expect_err("already checked is_err");
+        let err = result.expect_err("already checked is_err").to_string();
         assert!(err.contains("API key not configured"), "error: {err}");
     }
 
@@ -466,7 +466,7 @@ mod tests {
         settings.cloud_model = None;
         let result = chat(&settings, sample_messages()).await;
         assert!(result.is_err());
-        let err = result.expect_err("already checked is_err");
+        let err = result.expect_err("already checked is_err").to_string();
         assert!(err.contains("Model not configured"), "error: {err}");
     }
 
@@ -480,7 +480,7 @@ mod tests {
         };
         let result = chat(&settings, sample_messages()).await;
         assert!(result.is_err());
-        let err = result.expect_err("already checked is_err");
+        let err = result.expect_err("already checked is_err").to_string();
         assert!(err.contains("API key not configured"), "error: {err}");
     }
 
@@ -490,7 +490,7 @@ mod tests {
         settings.ollama_endpoint = "http://127.0.0.1:1".to_string();
         let result = chat(&settings, sample_messages()).await;
         assert!(result.is_err(), "should fail on connection, not validation");
-        let err = result.expect_err("already checked is_err");
+        let err = result.expect_err("already checked is_err").to_string();
         assert!(!err.contains("API key"), "should not be a cloud validation error: {err}");
         assert!(!err.contains("Model not configured"), "should not be a cloud validation error: {err}");
     }
@@ -502,7 +502,7 @@ mod tests {
         settings.ollama_endpoint = "http://127.0.0.1:1".to_string();
         let result = chat(&settings, sample_messages()).await;
         assert!(result.is_err(), "should fail on connection, not validation");
-        let err = result.expect_err("already checked is_err");
+        let err = result.expect_err("already checked is_err").to_string();
         assert!(!err.contains("API key"), "should not be a cloud validation error: {err}");
     }
 

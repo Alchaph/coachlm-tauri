@@ -1,3 +1,4 @@
+use crate::error::AppError;
 use crate::models::{ActivityData, AuthStatus};
 use crate::storage::Database;
 use std::sync::Arc;
@@ -24,9 +25,9 @@ pub fn credentials_available() -> bool {
     get_client_id().is_some() && get_client_secret().is_some()
 }
 
-pub async fn start_auth(db: Arc<Database>, app_handle: tauri::AppHandle) -> Result<(), String> {
-    let client_id = get_client_id().ok_or("Strava client ID not configured")?;
-    let client_secret = get_client_secret().ok_or("Strava client secret not configured")?;
+pub async fn start_auth(db: Arc<Database>, app_handle: tauri::AppHandle) -> Result<(), AppError> {
+    let client_id = get_client_id().ok_or_else(|| AppError::Config("Strava client ID not configured".into()))?;
+    let client_secret = get_client_secret().ok_or_else(|| AppError::Config("Strava client secret not configured".into()))?;
     let redirect_uri = format!("http://localhost:{REDIRECT_PORT}/callback");
 
     let auth_url = format!(
@@ -35,21 +36,21 @@ pub async fn start_auth(db: Arc<Database>, app_handle: tauri::AppHandle) -> Resu
 
     let listener = tokio::net::TcpListener::bind(format!("127.0.0.1:{REDIRECT_PORT}"))
         .await
-        .map_err(|e| format!("Failed to start callback server: {e}"))?;
+        .map_err(|e| AppError::Strava(format!("Failed to start callback server: {e}")))?;
 
-    open::that(&auth_url).map_err(|e| format!("Failed to open browser: {e}"))?;
+    open::that(&auth_url).map_err(|e| AppError::Strava(format!("Failed to open browser: {e}")))?;
 
-    let (stream, _) = listener.accept().await.map_err(|e| e.to_string())?;
+    let (stream, _) = listener.accept().await?;
     let mut buf = vec![0u8; 4096];
-    stream.readable().await.map_err(|e| e.to_string())?;
-    let n = stream.try_read(&mut buf).map_err(|e| e.to_string())?;
+    stream.readable().await?;
+    let n = stream.try_read(&mut buf)?;
     let request = String::from_utf8_lossy(&buf[..n]);
 
     let code = extract_code_from_request(&request)
-        .ok_or("No authorization code received")?;
+        .ok_or_else(|| AppError::Strava("No authorization code received".into()))?;
 
     let success_html = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n<html><body><h2>Connected to Strava!</h2><p>You can close this tab.</p></body></html>";
-    stream.writable().await.map_err(|e| e.to_string())?;
+    stream.writable().await?;
     stream.try_write(success_html.as_bytes()).ok();
 
     let client = reqwest::Client::new();
@@ -63,16 +64,15 @@ pub async fn start_auth(db: Arc<Database>, app_handle: tauri::AppHandle) -> Resu
         ])
         .send()
         .await
-        .map_err(|e| format!("Token exchange failed: {e}"))?;
+        .map_err(|e| AppError::Strava(format!("Token exchange failed: {e}")))?;
 
-    let token_data: serde_json::Value = token_response.json().await.map_err(|e| e.to_string())?;
+    let token_data: serde_json::Value = token_response.json().await?;
 
-    let access_token = token_data["access_token"].as_str().ok_or("Missing access_token")?;
-    let refresh_token = token_data["refresh_token"].as_str().ok_or("Missing refresh_token")?;
-    let expires_at = token_data["expires_at"].as_i64().ok_or("Missing expires_at")?;
+    let access_token = token_data["access_token"].as_str().ok_or_else(|| AppError::Strava("Missing access_token".into()))?;
+    let refresh_token = token_data["refresh_token"].as_str().ok_or_else(|| AppError::Strava("Missing refresh_token".into()))?;
+    let expires_at = token_data["expires_at"].as_i64().ok_or_else(|| AppError::Strava("Missing expires_at".into()))?;
 
-    db.save_oauth_tokens(access_token, refresh_token, expires_at)
-        .map_err(|e| e.to_string())?;
+    db.save_oauth_tokens(access_token, refresh_token, expires_at)?;
 
     app_handle.emit("strava:auth:complete", ()).ok();
 
@@ -100,8 +100,8 @@ fn extract_code_from_request(request: &str) -> Option<String> {
     None
 }
 
-pub fn get_auth_status(db: &Database) -> Result<AuthStatus, String> {
-    match db.get_oauth_tokens().map_err(|e| e.to_string())? {
+pub fn get_auth_status(db: &Database) -> Result<AuthStatus, AppError> {
+    match db.get_oauth_tokens()? {
         Some((_, _, expires_at)) => Ok(AuthStatus {
             connected: true,
             expires_at: Some(expires_at),
@@ -113,19 +113,18 @@ pub fn get_auth_status(db: &Database) -> Result<AuthStatus, String> {
     }
 }
 
-async fn get_valid_token(db: &Database) -> Result<String, String> {
+async fn get_valid_token(db: &Database) -> Result<String, AppError> {
     let (access, refresh, expires_at) = db
-        .get_oauth_tokens()
-        .map_err(|e| e.to_string())?
-        .ok_or("Not connected to Strava")?;
+        .get_oauth_tokens()?
+        .ok_or_else(|| AppError::Strava("Not connected to Strava".into()))?;
 
     let now = chrono::Utc::now().timestamp();
     if now < expires_at - 60 {
         return Ok(access);
     }
 
-    let client_id = get_client_id().ok_or("Strava client ID not configured")?;
-    let client_secret = get_client_secret().ok_or("Strava client secret not configured")?;
+    let client_id = get_client_id().ok_or_else(|| AppError::Config("Strava client ID not configured".into()))?;
+    let client_secret = get_client_secret().ok_or_else(|| AppError::Config("Strava client secret not configured".into()))?;
 
     let client = reqwest::Client::new();
     let response = client
@@ -138,15 +137,14 @@ async fn get_valid_token(db: &Database) -> Result<String, String> {
         ])
         .send()
         .await
-        .map_err(|e| format!("Token refresh failed: {e}"))?;
+        .map_err(|e| AppError::Strava(format!("Token refresh failed: {e}")))?;
 
-    let data: serde_json::Value = response.json().await.map_err(|e| e.to_string())?;
-    let new_access = data["access_token"].as_str().ok_or("Missing access_token")?;
+    let data: serde_json::Value = response.json().await?;
+    let new_access = data["access_token"].as_str().ok_or_else(|| AppError::Strava("Missing access_token".into()))?;
     let new_refresh = data["refresh_token"].as_str().unwrap_or(&refresh);
-    let new_expires = data["expires_at"].as_i64().ok_or("Missing expires_at")?;
+    let new_expires = data["expires_at"].as_i64().ok_or_else(|| AppError::Strava("Missing expires_at".into()))?;
 
-    db.save_oauth_tokens(new_access, new_refresh, new_expires)
-        .map_err(|e| e.to_string())?;
+    db.save_oauth_tokens(new_access, new_refresh, new_expires)?;
 
     Ok(new_access.to_string())
 }
@@ -178,9 +176,9 @@ fn emit_sync_error(app_handle: &tauri::AppHandle, msg: &str) {
     app_handle.emit("strava:sync:error", serde_json::json!({ "message": msg })).ok();
 }
 
-pub async fn sync_activities(db: Arc<Database>, app_handle: tauri::AppHandle) -> Result<(), String> {
+pub async fn sync_activities(db: Arc<Database>, app_handle: tauri::AppHandle) -> Result<(), AppError> {
     let token = get_valid_token(&db).await.inspect_err(|e| {
-        emit_sync_error(&app_handle, e);
+        emit_sync_error(&app_handle, &e.to_string());
     })?;
     let client = reqwest::Client::new();
 
@@ -200,7 +198,7 @@ pub async fn sync_activities(db: Arc<Database>, app_handle: tauri::AppHandle) ->
             .map_err(|e| {
                 let msg = format!("Failed to fetch activities: {e}");
                 emit_sync_error(&app_handle, &msg);
-                msg
+                AppError::Http(e)
             })?;
 
         if response.status() == 429 {
@@ -217,13 +215,13 @@ pub async fn sync_activities(db: Arc<Database>, app_handle: tauri::AppHandle) ->
         if !response.status().is_success() {
             let msg = format!("Strava API error: {}", response.status());
             emit_sync_error(&app_handle, &msg);
-            return Err(msg);
+            return Err(AppError::Strava(msg));
         }
 
         let activities: Vec<serde_json::Value> = response.json().await.map_err(|e| {
             let msg = format!("Failed to parse activities: {e}");
             emit_sync_error(&app_handle, &msg);
-            msg
+            AppError::Http(e)
         })?;
         if activities.is_empty() {
             break;
@@ -256,7 +254,7 @@ pub async fn sync_activities(db: Arc<Database>, app_handle: tauri::AppHandle) ->
     let stats = db.get_activity_stats().map_err(|e| {
         let msg = e.to_string();
         emit_sync_error(&app_handle, &msg);
-        msg
+        AppError::Database(e)
     })?;
     app_handle
         .emit("strava:sync:complete", serde_json::json!({
@@ -280,7 +278,7 @@ pub async fn sync_activities(db: Arc<Database>, app_handle: tauri::AppHandle) ->
     Ok(())
 }
 
-async fn get_athlete_id(token: &str) -> Result<String, String> {
+async fn get_athlete_id(token: &str) -> Result<String, AppError> {
     let client = reqwest::Client::new();
     let url = format!("{STRAVA_API_BASE}/athlete");
     let response = client
@@ -288,34 +286,34 @@ async fn get_athlete_id(token: &str) -> Result<String, String> {
         .bearer_auth(token)
         .send()
         .await
-        .map_err(|e| format!("Failed to fetch athlete: {e}"))?;
-    let data: serde_json::Value = response.json().await.map_err(|e| e.to_string())?;
+        .map_err(|e| AppError::Strava(format!("Failed to fetch athlete: {e}")))?;
+    let data: serde_json::Value = response.json().await?;
     data["id"]
         .as_i64()
         .map(|id| id.to_string())
-        .ok_or_else(|| "Missing athlete ID in response".to_string())
+        .ok_or_else(|| AppError::Strava("Missing athlete ID in response".into()))
 }
 
-pub async fn fetch_athlete_zones(db: &Database) -> Result<(), String> {
+pub async fn fetch_athlete_zones(db: &Database) -> Result<(), AppError> {
     let token = get_valid_token(db).await?;
     let client = reqwest::Client::new();
     let url = format!("{STRAVA_API_BASE}/athlete/zones");
-    let response = client.get(&url).bearer_auth(&token).send().await.map_err(|e| e.to_string())?;
+    let response = client.get(&url).bearer_auth(&token).send().await?;
     if response.status().is_success() {
-        let data: serde_json::Value = response.json().await.map_err(|e| e.to_string())?;
-        db.save_athlete_zones(&data.to_string()).map_err(|e| e.to_string())?;
+        let data: serde_json::Value = response.json().await?;
+        db.save_athlete_zones(&data.to_string())?;
     }
     Ok(())
 }
 
-pub async fn fetch_athlete_stats(db: &Database, athlete_id: &str) -> Result<(), String> {
+pub async fn fetch_athlete_stats(db: &Database, athlete_id: &str) -> Result<(), AppError> {
     let token = get_valid_token(db).await?;
     let client = reqwest::Client::new();
     let url = format!("{STRAVA_API_BASE}/athletes/{athlete_id}/stats");
-    let response = client.get(&url).bearer_auth(&token).send().await.map_err(|e| e.to_string())?;
+    let response = client.get(&url).bearer_auth(&token).send().await?;
     if response.status().is_success() {
-        let data: serde_json::Value = response.json().await.map_err(|e| e.to_string())?;
-        db.save_athlete_stats(&data.to_string()).map_err(|e| e.to_string())?;
+        let data: serde_json::Value = response.json().await?;
+        db.save_athlete_stats(&data.to_string())?;
     }
     Ok(())
 }

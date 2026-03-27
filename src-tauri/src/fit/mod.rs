@@ -1,3 +1,4 @@
+use crate::error::AppError;
 use crate::models::ActivityData;
 use fitparser::de::from_reader_with_options;
 use fitparser::profile::MesgNum;
@@ -10,12 +11,13 @@ use std::fs::File;
 /// Each FIT file may contain one or more Session records. Each session
 /// becomes an `ActivityData` entry. If no session records exist, an error
 /// is returned.
-pub fn import_fit_file(file_path: &str) -> Result<Vec<ActivityData>, String> {
-    let mut file = File::open(file_path).map_err(|e| format!("Failed to open FIT file: {e}"))?;
+pub fn import_fit_file(file_path: &str) -> Result<Vec<ActivityData>, AppError> {
+    let mut file = File::open(file_path)
+        .map_err(|e| AppError::Fit(format!("Failed to open FIT file: {e}")))?;
 
     let opts = HashSet::new();
     let records = from_reader_with_options(&mut file, &opts)
-        .map_err(|e| format!("Failed to parse FIT file: {e}"))?;
+        .map_err(|e| AppError::Fit(format!("Failed to parse FIT file: {e}")))?;
 
     let mut activities: Vec<ActivityData> = Vec::new();
 
@@ -37,7 +39,7 @@ pub fn import_fit_file(file_path: &str) -> Result<Vec<ActivityData>, String> {
     }
 
     if activities.is_empty() {
-        return Err("No session data found in FIT file".to_string());
+        return Err(AppError::Fit("No session data found in FIT file".into()));
     }
 
     Ok(activities)
@@ -131,7 +133,6 @@ fn parse_session_record(record: fitparser::FitDataRecord) -> ActivityData {
     activity
 }
 
-/// Try to extract an f64 from a fitparser Value.
 fn try_as_f64(value: &Value) -> Option<f64> {
     match value {
         Value::Float64(f) => Some(*f),
@@ -146,7 +147,6 @@ fn try_as_f64(value: &Value) -> Option<f64> {
     }
 }
 
-/// Try to extract a String from a fitparser Value.
 fn try_as_string(value: &Value) -> Option<String> {
     match value {
         Value::String(s) => Some(s.clone()),
@@ -196,6 +196,6 @@ mod tests {
     fn test_import_nonexistent_file() {
         let result = import_fit_file("/tmp/does_not_exist.fit");
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("Failed to open"));
+        assert!(result.unwrap_err().to_string().contains("Failed to open"));
     }
 }

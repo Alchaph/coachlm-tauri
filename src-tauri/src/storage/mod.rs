@@ -1,7 +1,8 @@
 use aes_gcm::aead::Aead;
 use aes_gcm::{Aes256Gcm, KeyInit, Nonce};
+use argon2::Argon2;
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
-use rusqlite::{params, Connection, Result as SqlResult};
+use rusqlite::{params, Connection, OptionalExtension, Result as SqlResult};
 use sha2::{Digest, Sha256};
 use std::path::PathBuf;
 use std::sync::Mutex;
@@ -22,11 +23,49 @@ impl Database {
              PRAGMA busy_timeout=5000;",
         )?;
 
-        // Derive encryption key from data directory path
-        let mut hasher = Sha256::new();
-        hasher.update(app_data_dir.to_string_lossy().as_bytes());
-        hasher.update(b"coachlm-encryption-salt-v1");
-        let encryption_key: [u8; 32] = hasher.finalize().into();
+        conn.execute_batch(
+            "CREATE TABLE IF NOT EXISTS kdf_salt (
+                id   INTEGER PRIMARY KEY CHECK (id = 1),
+                salt BLOB NOT NULL
+            );",
+        )?;
+
+        let password = app_data_dir.to_string_lossy().into_owned().into_bytes();
+
+        let existing_salt: Option<Vec<u8>> = conn
+            .query_row("SELECT salt FROM kdf_salt WHERE id = 1", [], |row| {
+                row.get(0)
+            })
+            .optional()?;
+
+        let encryption_key = if let Some(salt) = existing_salt {
+            derive_key_argon2(&password, &salt)
+                .map_err(|e| rusqlite::Error::InvalidParameterName(e.to_string()))?
+        } else {
+            use rand::RngCore;
+            let mut salt = [0u8; 16];
+            rand::thread_rng().fill_bytes(&mut salt);
+
+            let table_exists: bool = conn
+                .query_row(
+                    "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='oauth_tokens'",
+                    [],
+                    |row| row.get::<_, i64>(0),
+                )
+                .is_ok_and(|n| n > 0);
+
+            if table_exists {
+                migrate_oauth_tokens(&conn, &password, &salt)?;
+            }
+
+            conn.execute(
+                "INSERT INTO kdf_salt (id, salt) VALUES (1, ?1)",
+                params![&salt[..]],
+            )?;
+
+            derive_key_argon2(&password, &salt)
+                .map_err(|e| rusqlite::Error::InvalidParameterName(e.to_string()))?
+        };
 
         let db = Database {
             conn: Mutex::new(conn),
@@ -1161,6 +1200,83 @@ impl Database {
     }
 }
 
+fn derive_key_argon2(password: &[u8], salt: &[u8]) -> Result<[u8; 32], argon2::Error> {
+    let mut key = [0u8; 32];
+    Argon2::default().hash_password_into(password, salt, &mut key)?;
+    Ok(key)
+}
+
+fn derive_key_sha256(password: &[u8]) -> [u8; 32] {
+    let mut hasher = Sha256::new();
+    hasher.update(password);
+    hasher.update(b"coachlm-encryption-salt-v1");
+    hasher.finalize().into()
+}
+
+fn encrypt_with_key(key: &[u8; 32], plaintext: &str) -> Result<String, String> {
+    use rand::RngCore;
+    let cipher = Aes256Gcm::new_from_slice(key).map_err(|e| e.to_string())?;
+    let mut nonce_bytes = [0u8; 12];
+    rand::thread_rng().fill_bytes(&mut nonce_bytes);
+    let nonce = Nonce::from_slice(&nonce_bytes);
+    let ciphertext = cipher
+        .encrypt(nonce, plaintext.as_bytes())
+        .map_err(|e| e.to_string())?;
+    let mut combined = nonce_bytes.to_vec();
+    combined.extend_from_slice(&ciphertext);
+    Ok(BASE64.encode(&combined))
+}
+
+fn decrypt_with_key(key: &[u8; 32], encrypted: &str) -> Result<String, String> {
+    let combined = BASE64.decode(encrypted).map_err(|e| e.to_string())?;
+    if combined.len() < 12 {
+        return Err("Invalid encrypted data".to_string());
+    }
+    let (nonce_bytes, ciphertext) = combined.split_at(12);
+    let cipher = Aes256Gcm::new_from_slice(key).map_err(|e| e.to_string())?;
+    let nonce = Nonce::from_slice(nonce_bytes);
+    let plaintext = cipher
+        .decrypt(nonce, ciphertext)
+        .map_err(|e| e.to_string())?;
+    String::from_utf8(plaintext).map_err(|e| e.to_string())
+}
+
+fn migrate_oauth_tokens(conn: &Connection, password: &[u8], new_salt: &[u8]) -> SqlResult<()> {
+    let row: Option<(String, String, i64)> = conn
+        .query_row(
+            "SELECT access_token, refresh_token, token_expires_at FROM oauth_tokens WHERE id = 1",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )
+        .optional()?;
+
+    let Some((enc_access, enc_refresh, _expires_at)) = row else {
+        return Ok(());
+    };
+
+    let old_key = derive_key_sha256(password);
+
+    let access =
+        decrypt_with_key(&old_key, &enc_access).map_err(rusqlite::Error::InvalidParameterName)?;
+    let refresh =
+        decrypt_with_key(&old_key, &enc_refresh).map_err(rusqlite::Error::InvalidParameterName)?;
+
+    let new_key = derive_key_argon2(password, new_salt)
+        .map_err(|e| rusqlite::Error::InvalidParameterName(e.to_string()))?;
+
+    let new_enc_access =
+        encrypt_with_key(&new_key, &access).map_err(rusqlite::Error::InvalidParameterName)?;
+    let new_enc_refresh =
+        encrypt_with_key(&new_key, &refresh).map_err(rusqlite::Error::InvalidParameterName)?;
+
+    conn.execute(
+        "UPDATE oauth_tokens SET access_token = ?1, refresh_token = ?2 WHERE id = 1",
+        params![new_enc_access, new_enc_refresh],
+    )?;
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1178,6 +1294,123 @@ mod tests {
 
     fn cleanup(dir: &PathBuf) {
         std::fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn fresh_db_creates_salt_and_derives_key() {
+        let (db, dir) = temp_db();
+        assert_ne!(db.encryption_key, [0u8; 32]);
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn second_open_produces_same_key() {
+        let dir = std::env::temp_dir().join(format!("coachlm_test_{}", uuid::Uuid::new_v4()));
+        let db1 = Database::new(&dir).expect("first open failed");
+        let key1 = db1.encryption_key;
+        drop(db1);
+        let db2 = Database::new(&dir).expect("second open failed");
+        let key2 = db2.encryption_key;
+        drop(db2);
+        assert_eq!(key1, key2);
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn argon2_encrypt_decrypt_roundtrip() {
+        let password = b"test-password";
+        let salt = b"0123456789abcdef";
+        let key = derive_key_argon2(password, salt).expect("key derivation failed");
+        let plaintext = "hello, world!";
+        let encrypted = encrypt_with_key(&key, plaintext).expect("encrypt failed");
+        let decrypted = decrypt_with_key(&key, &encrypted).expect("decrypt failed");
+        assert_eq!(plaintext, decrypted);
+    }
+
+    #[test]
+    fn argon2_different_salts_give_different_keys() {
+        let password = b"same-password";
+        let salt1 = b"0123456789abcdef";
+        let salt2 = b"fedcba9876543210";
+        let key1 = derive_key_argon2(password, salt1).expect("key1 failed");
+        let key2 = derive_key_argon2(password, salt2).expect("key2 failed");
+        assert_ne!(key1, key2);
+    }
+
+    #[test]
+    fn migration_from_sha256_to_argon2_succeeds() {
+        let dir = std::env::temp_dir().join(format!("coachlm_test_{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).expect("mkdir failed");
+        let db_path = dir.join("coachlm.db");
+
+        let password = dir.to_string_lossy().into_owned().into_bytes();
+        let old_key = derive_key_sha256(&password);
+
+        {
+            let conn = rusqlite::Connection::open(&db_path).expect("open failed");
+            conn.execute_batch(
+                "PRAGMA journal_mode=WAL;
+                 CREATE TABLE IF NOT EXISTS oauth_tokens (
+                     id INTEGER PRIMARY KEY DEFAULT 1,
+                     access_token TEXT NOT NULL,
+                     refresh_token TEXT NOT NULL,
+                     token_expires_at INTEGER NOT NULL
+                 );",
+            )
+            .expect("setup failed");
+
+            let enc_access =
+                encrypt_with_key(&old_key, "sha256_access").expect("encrypt access failed");
+            let enc_refresh =
+                encrypt_with_key(&old_key, "sha256_refresh").expect("encrypt refresh failed");
+            conn.execute(
+                "INSERT INTO oauth_tokens (id, access_token, refresh_token, token_expires_at)
+                 VALUES (1, ?1, ?2, 999)",
+                params![enc_access, enc_refresh],
+            )
+            .expect("insert failed");
+        }
+
+        let db = Database::new(&dir).expect("Database::new failed after migration");
+
+        let (access, refresh, _) = db
+            .get_oauth_tokens()
+            .expect("get_oauth_tokens failed")
+            .expect("tokens should exist after migration");
+
+        assert_eq!(access, "sha256_access");
+        assert_eq!(refresh, "sha256_refresh");
+
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn migration_is_idempotent() {
+        let dir = std::env::temp_dir().join(format!("coachlm_test_{}", uuid::Uuid::new_v4()));
+
+        let db = Database::new(&dir).expect("first open failed");
+        db.save_oauth_tokens("access_val", "refresh_val", 12345)
+            .expect("save failed");
+        drop(db);
+
+        let db2 = Database::new(&dir).expect("second open failed");
+        let (access, refresh, _) = db2
+            .get_oauth_tokens()
+            .expect("get failed")
+            .expect("tokens should exist");
+        assert_eq!(access, "access_val");
+        assert_eq!(refresh, "refresh_val");
+
+        drop(db2);
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn migration_no_op_when_no_tokens() {
+        let (db, dir) = temp_db();
+        let tokens = db.get_oauth_tokens().expect("get failed");
+        assert!(tokens.is_none());
+        cleanup(&dir);
     }
 
     fn sample_settings() -> SettingsData {

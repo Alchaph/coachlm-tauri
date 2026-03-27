@@ -1,3 +1,4 @@
+use crate::error::AppError;
 use crate::models::{OllamaMessage, PlanSession, PlanWeek, ProfileData, Race, TrainingPlan};
 use crate::storage::Database;
 use std::fmt::Write;
@@ -9,17 +10,17 @@ pub async fn generate_plan(
     race_id: &str,
     app_handle: &tauri::AppHandle,
     context: &str,
-) -> Result<TrainingPlan, String> {
-    let races = db.list_races().map_err(|e| e.to_string())?;
+) -> Result<TrainingPlan, AppError> {
+    let races = db.list_races()?;
     let race = races.iter().find(|r| r.id == race_id)
-        .ok_or("Race not found")?;
+        .ok_or_else(|| AppError::NotFound("Race not found".into()))?;
 
-    let settings = db.get_settings().map_err(|e| e.to_string())?
-        .ok_or("Settings not configured")?;
+    let settings = db.get_settings()?
+        .ok_or_else(|| AppError::Config("Settings not configured".into()))?;
 
     app_handle.emit("plan:generate:progress", serde_json::json!({ "status": "Loading athlete profile..." })).ok();
 
-    let profile = db.get_profile().map_err(|e| e.to_string())?.unwrap_or(ProfileData {
+    let profile = db.get_profile()?.unwrap_or(ProfileData {
         age: None, max_hr: None, resting_hr: None, threshold_pace_secs: None,
         weekly_mileage_target: None, race_goals: None, injury_history: None,
         experience_level: None, training_days_per_week: None, preferred_terrain: None,
@@ -28,12 +29,12 @@ pub async fn generate_plan(
 
     let now = chrono::Utc::now();
     let race_date = chrono::NaiveDate::parse_from_str(&race.race_date, "%Y-%m-%d")
-        .map_err(|e| format!("Invalid race date: {e}"))?;
+        .map_err(|e| AppError::Validation(format!("Invalid race date: {e}")))?;
     #[allow(clippy::cast_precision_loss, clippy::cast_possible_truncation)]
     let weeks_to_race = (((race_date - now.date_naive()).num_days() as f64 / 7.0).ceil() as i64).min(26);
 
     if weeks_to_race <= 0 {
-        return Err("Race date is in the past".to_string());
+        return Err(AppError::Validation("Race date is in the past".into()));
     }
 
     app_handle.emit("plan:generate:progress", serde_json::json!({ "status": "Building training context..." })).ok();
@@ -79,10 +80,10 @@ pub async fn generate_plan(
                     is_active: true,
                 };
 
-                db.deactivate_all_plans().map_err(|e| e.to_string())?;
+                db.deactivate_all_plans()?;
                 app_handle.emit("plan:generate:progress", serde_json::json!({ "status": "Saving plan..." })).ok();
-                db.delete_plans_for_race(&race.id).map_err(|e| e.to_string())?;
-                db.save_training_plan(&plan).map_err(|e| e.to_string())?;
+                db.delete_plans_for_race(&race.id)?;
+                db.save_training_plan(&plan)?;
 
                 for (week_num, sessions) in parsed {
                     let week_id = uuid::Uuid::new_v4().to_string();
@@ -94,13 +95,13 @@ pub async fn generate_plan(
                         week_number: i64::from(week_num),
                         week_start,
                     };
-                    db.save_plan_week(&week).map_err(|e| e.to_string())?;
+                    db.save_plan_week(&week)?;
 
                     for session in sessions {
                         let mut s = session;
                         s.id = uuid::Uuid::new_v4().to_string();
                         s.week_id.clone_from(&week_id);
-                        db.save_plan_session(&s).map_err(|e| e.to_string())?;
+                        db.save_plan_session(&s)?;
                     }
                 }
 
@@ -112,7 +113,7 @@ pub async fn generate_plan(
         }
     }
 
-    Err(format!("Failed to generate plan after 3 attempts: {last_error}"))
+    Err(AppError::Llm(format!("Failed to generate plan after 3 attempts: {last_error}")))
 }
 
 fn build_plan_prompt(profile: &ProfileData, race: &Race, weeks: i64) -> String {

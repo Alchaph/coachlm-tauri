@@ -68,7 +68,7 @@ pub async fn select_action(
         fetches_left,
     );
 
-    crate::llm::chat_json::<AgentAction>(settings, messages).await
+    crate::llm::chat_json::<AgentAction>(settings, messages).await.map_err(|e| e.to_string())
 }
 
 #[cfg(test)]

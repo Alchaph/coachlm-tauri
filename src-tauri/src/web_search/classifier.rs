@@ -155,7 +155,7 @@ async fn classify_with_llm(settings: &SettingsData, message: &str) -> Result<boo
         ),
     };
 
-    let response = llm::chat(settings, vec![system, user]).await?;
+    let response = llm::chat(settings, vec![system, user]).await.map_err(|e| e.to_string())?;
     let trimmed = response.trim().to_lowercase();
 
     Ok(trimmed.starts_with("yes"))
