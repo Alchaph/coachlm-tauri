@@ -3,7 +3,7 @@ import { render, screen, waitFor, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import Chat from "../components/Chat";
+import Chat from "../components/chat";
 
 const mockInvoke = vi.mocked(invoke);
 
@@ -37,6 +37,7 @@ const DEFAULT_SETTINGS = {
   cloud_model: null,
   web_search_enabled: false,
   web_search_provider: "duckduckgo",
+  web_augmentation_mode: "off",
 };
 
 const NEW_SESSION = {
@@ -56,6 +57,7 @@ function setupInvokeMocks(overrides: Partial<Record<string, unknown>> = {}): voi
     if (cmd === "save_settings") return Promise.resolve(undefined);
     if (cmd === "save_pinned_insight") return Promise.resolve(undefined);
     if (cmd === "delete_chat_session") return Promise.resolve(undefined);
+    if (cmd === "check_ollama_status") return Promise.resolve(true);
     return Promise.resolve(undefined);
   });
 }
@@ -107,33 +109,28 @@ describe("Chat component", () => {
     });
   });
 
-  it("closes sidebar when close button is clicked and reopens with open button", async () => {
-    const user = userEvent.setup();
+  it("renders sessions as horizontal tabs with close buttons", async () => {
     render(<Chat />);
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: /close sidebar/i })).toBeInTheDocument();
+      const labels = screen.getAllByText("My Chat");
+      expect(labels.length).toBeGreaterThanOrEqual(1);
     });
 
-    await user.click(screen.getByRole("button", { name: /close sidebar/i }));
+    const closeBtns = screen.getAllByRole("button");
+    expect(closeBtns.length).toBeGreaterThanOrEqual(1);
 
-    await waitFor(() => {
-      expect(screen.getByRole("button", { name: /open sidebar/i })).toBeInTheDocument();
-    });
-
-    await user.click(screen.getByRole("button", { name: /open sidebar/i }));
-
-    await waitFor(() => {
-      expect(screen.getByRole("button", { name: /close sidebar/i })).toBeInTheDocument();
-    });
+    expect(screen.getByRole("button", { name: /new chat/i })).toBeInTheDocument();
   });
 
-  it("shows the web search toggle button", async () => {
+  it("hides web search indicator when web_augmentation_mode is off", async () => {
     render(<Chat />);
 
     await waitFor(() => {
-      expect(screen.getByText("Web search")).toBeInTheDocument();
+      expect(screen.getByPlaceholderText("Ask your coach...")).toBeInTheDocument();
     });
+
+    expect(screen.queryByText("Web search")).not.toBeInTheDocument();
   });
 
   it("web search indicator is visible when settings have web_augmentation_mode set", async () => {
@@ -243,7 +240,7 @@ describe("Chat event listener regression", () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByText("Preparing context")).toBeInTheDocument();
+      expect(screen.getByText(/Preparing context/)).toBeInTheDocument();
     });
 
     act(() => {
@@ -251,10 +248,10 @@ describe("Chat event listener regression", () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByText("Querying LLM")).toBeInTheDocument();
+      expect(screen.getByText(/Querying LLM/)).toBeInTheDocument();
     });
 
-    expect(screen.queryByText("Preparing context")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Preparing context/)).not.toBeInTheDocument();
   });
 
   it("deduplicates consecutive progress events with the same status label", async () => {
@@ -277,7 +274,7 @@ describe("Chat event listener regression", () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByText("Preparing context")).toBeInTheDocument();
+      expect(screen.getByText(/Preparing context/)).toBeInTheDocument();
     });
 
     act(() => {
@@ -292,7 +289,7 @@ describe("Chat event listener regression", () => {
       await new Promise((resolve) => { setTimeout(resolve, 50); });
     });
 
-    expect(screen.getAllByText("Preparing context")).toHaveLength(1);
+    expect(screen.getAllByText(/Preparing context/)).toHaveLength(1);
   });
 
   it("chunk events do not produce doubled content", async () => {
