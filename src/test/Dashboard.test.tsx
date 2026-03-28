@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import { invoke } from "@tauri-apps/api/core";
-import Dashboard from "../components/Dashboard";
+import Dashboard from "../components/dashboard";
 
 vi.mock("@tanstack/react-virtual", () => ({
   useVirtualizer: () => ({
@@ -64,6 +64,7 @@ function setupInvokeMock(overrides?: Partial<Record<string, unknown>>) {
       },
       get_recent_activities: [mockActivity],
       get_strava_auth_status: { connected: true, expires_at: 9999999999 },
+      get_aggregated_zone_distribution: [],
     };
     const merged = { ...defaults, ...overrides };
     if (command in merged) {
