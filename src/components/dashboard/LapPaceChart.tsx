@@ -120,13 +120,13 @@ export default function LapPaceChart({ laps }: LapPaceChartProps) {
                 dataKey="lapIndex"
                 tickLine={false}
                 axisLine={false}
-                tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+                tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
                 label={{
                   value: "Lap",
                   position: "insideBottom",
                   offset: -2,
                   fontSize: 11,
-                  fill: "hsl(var(--muted-foreground))",
+                  fill: "var(--muted-foreground)",
                 }}
               />
               <YAxis
@@ -134,14 +134,14 @@ export default function LapPaceChart({ laps }: LapPaceChartProps) {
                 reversed
                 tickLine={false}
                 axisLine={false}
-                tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+                tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
                 tickFormatter={(v: number) => formatPaceLabel(v)}
                 width={38}
               />
-              <Tooltip content={<CustomTooltip />} cursor={{ fill: "hsl(var(--muted))" }} />
+              <Tooltip content={<CustomTooltip />} cursor={{ fill: "var(--muted)" }} />
               <Bar
                 dataKey="paceMinPerKm"
-                fill="hsl(var(--chart-1))"
+                fill="var(--chart-1)"
                 radius={[3, 3, 0, 0]}
                 maxBarSize={48}
               />

@@ -23,11 +23,11 @@ interface ActivityZoneChartProps {
 }
 
 const ZONE_COLORS = [
-  "hsl(var(--chart-2))",
-  "hsl(var(--chart-3))",
-  "hsl(var(--chart-4))",
-  "hsl(var(--chart-5))",
-  "hsl(var(--chart-1))",
+  "var(--chart-2)",
+  "var(--chart-3)",
+  "var(--chart-4)",
+  "var(--chart-5)",
+  "var(--chart-1)",
 ] as const;
 
 function getZoneColor(index: number): string {
@@ -79,7 +79,7 @@ interface BarShapeArgs {
 }
 
 function ZoneBarShape({ x = 0, y = 0, width = 0, height = 0, payload }: BarShapeArgs) {
-  const fill = payload?.fill ?? "hsl(var(--chart-1))";
+  const fill = payload?.fill ?? "var(--chart-1)";
   const rx = Math.min(3, height / 2);
   return (
     <rect
@@ -127,7 +127,7 @@ export default function ActivityZoneChart({ zones }: ActivityZoneChartProps) {
                 type="number"
                 tickLine={false}
                 axisLine={false}
-                tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+                tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
                 tickFormatter={(v: number) => `${v.toFixed(0)}m`}
               />
               <YAxis
@@ -136,9 +136,9 @@ export default function ActivityZoneChart({ zones }: ActivityZoneChartProps) {
                 width={30}
                 tickLine={false}
                 axisLine={false}
-                tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+                tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
               />
-              <Tooltip content={<CustomTooltip />} cursor={{ fill: "hsl(var(--muted))" }} />
+              <Tooltip content={<CustomTooltip />} cursor={{ fill: "var(--muted)" }} />
               <Bar dataKey="timeMinutes" maxBarSize={28} shape={<ZoneBarShape />} />
             </BarChart>
           </ResponsiveContainer>
