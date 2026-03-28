@@ -1,6 +1,6 @@
 import {
-  BarChart,
-  Bar,
+  LineChart,
+  Line,
   XAxis,
   YAxis,
   Tooltip,
@@ -70,26 +70,21 @@ function CustomTooltip({ active, payload }: CustomTooltipProps) {
   );
 }
 
-interface BarShapeArgs {
-  x?: number;
-  y?: number;
-  width?: number;
-  height?: number;
-  payload?: ZoneChartDatum;
+interface DotProps {
+  cx?: number;
+  cy?: number;
+  index?: number;
 }
 
-function ZoneBarShape({ x = 0, y = 0, width = 0, height = 0, payload }: BarShapeArgs) {
-  const fill = payload?.fill ?? "var(--chart-1)";
-  const rx = Math.min(3, height / 2);
+function ZoneDot({ cx = 0, cy = 0, index = 0 }: DotProps) {
   return (
-    <rect
-      x={x}
-      y={y}
-      width={Math.max(0, width)}
-      height={Math.max(0, height)}
-      rx={rx}
-      ry={rx}
-      fill={fill}
+    <circle
+      cx={cx}
+      cy={cy}
+      r={4}
+      fill={getZoneColor(index)}
+      stroke="var(--background)"
+      strokeWidth={2}
     />
   );
 }
@@ -118,29 +113,33 @@ export default function ActivityZoneChart({ zones }: ActivityZoneChartProps) {
         </CardHeader>
         <CardContent className="pt-0">
           <ResponsiveContainer width="100%" height={200}>
-            <BarChart
+            <LineChart
               data={chartData}
-              layout="vertical"
               margin={{ top: 4, right: 12, bottom: 4, left: 0 }}
             >
               <XAxis
-                type="number"
+                dataKey="zoneName"
+                tickLine={false}
+                axisLine={false}
+                tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
+              />
+              <YAxis
                 tickLine={false}
                 axisLine={false}
                 tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
                 tickFormatter={(v: number) => `${v.toFixed(0)}m`}
+                width={38}
               />
-              <YAxis
-                dataKey="zoneName"
-                type="category"
-                width={30}
-                tickLine={false}
-                axisLine={false}
-                tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
+              <Tooltip content={<CustomTooltip />} cursor={{ stroke: "var(--muted)" }} />
+              <Line
+                type="monotone"
+                dataKey="timeMinutes"
+                stroke="var(--chart-1)"
+                strokeWidth={2}
+                dot={<ZoneDot />}
+                activeDot={{ r: 6, fill: "var(--chart-1)", stroke: "var(--background)", strokeWidth: 2 }}
               />
-              <Tooltip content={<CustomTooltip />} cursor={{ fill: "var(--muted)" }} />
-              <Bar dataKey="timeMinutes" maxBarSize={28} shape={<ZoneBarShape />} />
-            </BarChart>
+            </LineChart>
           </ResponsiveContainer>
 
           <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
