@@ -780,6 +780,23 @@ impl Database {
         rows.collect()
     }
 
+    /// Returns `(activity_id, strava_id)` pairs for all Strava-synced activities
+    /// that do not yet have zone distribution data.
+    pub fn get_activities_missing_zones(&self) -> SqlResult<Vec<(String, String)>> {
+        let conn = self.conn();
+        let mut stmt = conn.prepare(
+            "SELECT a.activity_id, a.strava_id
+             FROM activities a
+             WHERE a.strava_id IS NOT NULL
+               AND NOT EXISTS (
+                   SELECT 1 FROM activity_zone_distribution z
+                   WHERE z.activity_id = a.activity_id
+               )",
+        )?;
+        let rows = stmt.query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?;
+        rows.collect()
+    }
+
     pub fn has_activity_zone_distribution(&self, activity_id: &str) -> SqlResult<bool> {
         let conn = self.conn();
         conn.query_row(
@@ -817,11 +834,11 @@ impl Database {
 
         let rows: Vec<super::models::ActivityZoneSummary> = if let Some(n) = days {
             let mut stmt = conn.prepare(
-                "SELECT z.zone_index, z.zone_min, z.zone_max, SUM(z.time_seconds) AS zone_time
+                "SELECT z.zone_index, MAX(z.zone_min), MAX(z.zone_max), SUM(z.time_seconds) AS zone_time
                  FROM activity_zone_distribution z
                  JOIN activities a ON z.activity_id = a.activity_id
                  WHERE a.start_date >= datetime('now', ?1)
-                 GROUP BY z.zone_index, z.zone_min, z.zone_max
+                 GROUP BY z.zone_index
                  ORDER BY z.zone_index ASC",
             )?;
             let mapped = stmt.query_map(params![format!("-{n} days")], |row| {
@@ -837,9 +854,9 @@ impl Database {
             mapped.collect::<SqlResult<Vec<_>>>()?
         } else {
             let mut stmt = conn.prepare(
-                "SELECT zone_index, zone_min, zone_max, SUM(time_seconds) AS zone_time
+                "SELECT zone_index, MAX(zone_min), MAX(zone_max), SUM(time_seconds) AS zone_time
                  FROM activity_zone_distribution
-                 GROUP BY zone_index, zone_min, zone_max
+                 GROUP BY zone_index
                  ORDER BY zone_index ASC",
             )?;
             let mapped = stmt.query_map([], |row| {
@@ -3116,6 +3133,112 @@ mod tests {
             (pct_sum - 100.0).abs() < 0.1,
             "percentages should sum to ~100%, got {pct_sum}"
         );
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn test_aggregated_zones_merge_different_boundaries() {
+        use chrono::Utc;
+        let (db, dir) = temp_db();
+
+        let mut act1 = sample_activity("act-merge-1", None);
+        act1.start_date = Some(Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string());
+        db.insert_activity(&act1).expect("insert act1 failed");
+
+        let mut act2 = sample_activity("act-merge-2", Some("strava-merge-2"));
+        act2.start_date = Some(Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string());
+        db.insert_activity(&act2).expect("insert act2 failed");
+
+        let zones_old = vec![
+            super::super::models::ActivityZoneDistribution {
+                activity_id: "act-merge-1".to_string(),
+                zone_index: 0,
+                zone_min: 0,
+                zone_max: 115,
+                time_seconds: 200,
+            },
+            super::super::models::ActivityZoneDistribution {
+                activity_id: "act-merge-1".to_string(),
+                zone_index: 1,
+                zone_min: 115,
+                zone_max: 140,
+                time_seconds: 400,
+            },
+        ];
+        db.save_activity_zone_distribution("act-merge-1", &zones_old)
+            .expect("save old zones failed");
+
+        let zones_new = vec![
+            super::super::models::ActivityZoneDistribution {
+                activity_id: "act-merge-2".to_string(),
+                zone_index: 0,
+                zone_min: 0,
+                zone_max: 120,
+                time_seconds: 300,
+            },
+            super::super::models::ActivityZoneDistribution {
+                activity_id: "act-merge-2".to_string(),
+                zone_index: 1,
+                zone_min: 120,
+                zone_max: 145,
+                time_seconds: 500,
+            },
+        ];
+        db.save_activity_zone_distribution("act-merge-2", &zones_new)
+            .expect("save new zones failed");
+
+        let result = db
+            .get_aggregated_zone_distribution(None)
+            .expect("aggregated failed");
+        assert_eq!(
+            result.len(),
+            2,
+            "should have 2 zone entries (merged by zone_index), got {}",
+            result.len()
+        );
+
+        let z0 = result
+            .iter()
+            .find(|z| z.zone_index == 0)
+            .expect("missing zone 0");
+        assert_eq!(z0.total_time_seconds, 500, "zone 0 time should be 200+300");
+        assert_eq!(z0.zone_max, 120, "zone 0 boundary should use MAX(zone_max)");
+
+        let z1 = result
+            .iter()
+            .find(|z| z.zone_index == 1)
+            .expect("missing zone 1");
+        assert_eq!(z1.total_time_seconds, 900, "zone 1 time should be 400+500");
+        assert_eq!(z1.zone_max, 145, "zone 1 boundary should use MAX(zone_max)");
+
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn test_get_activities_missing_zones() {
+        let (db, dir) = temp_db();
+
+        let act_with_zones = sample_activity("act-has-zones", Some("strava-1"));
+        db.insert_activity(&act_with_zones).expect("insert failed");
+        db.save_activity_zone_distribution("act-has-zones", &sample_zones("act-has-zones"))
+            .expect("save zones failed");
+
+        let act_without_zones = sample_activity("act-no-zones", Some("strava-2"));
+        db.insert_activity(&act_without_zones)
+            .expect("insert failed");
+
+        let act_no_strava = sample_activity("act-local", None);
+        db.insert_activity(&act_no_strava).expect("insert failed");
+
+        let missing = db.get_activities_missing_zones().expect("query failed");
+        assert_eq!(
+            missing.len(),
+            1,
+            "only one activity should be missing zones"
+        );
+        assert_eq!(missing[0].0, "act-no-zones");
+        assert_eq!(missing[0].1, "strava-2");
+
         cleanup(&dir);
     }
 }

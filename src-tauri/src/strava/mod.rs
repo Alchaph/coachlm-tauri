@@ -272,6 +272,8 @@ pub async fn sync_activities(db: Arc<Database>, app_handle: tauri::AppHandle) ->
         }
     }
 
+    backfill_activity_zones(&db, &token).await;
+
     let context_preview = crate::context::build_context(&db);
     app_handle.emit("strava:sync:context-ready", context_preview).ok();
 
@@ -501,6 +503,29 @@ pub async fn fetch_activity_zones(
         .map_err(AppError::Database)?;
 
     Ok(zones)
+}
+
+async fn backfill_activity_zones(db: &std::sync::Arc<crate::storage::Database>, token: &str) {
+    let missing = match db.get_activities_missing_zones() {
+        Ok(m) => m,
+        Err(e) => {
+            log::warn!("Failed to query activities missing zones: {e}");
+            return;
+        }
+    };
+
+    for (activity_id, strava_id) in &missing {
+        match fetch_activity_zones(db, strava_id, activity_id, token).await {
+            Ok(_) => {}
+            Err(AppError::Strava(msg)) if msg.contains("Premium") => {
+                log::info!("Zone data requires Strava Premium — skipping backfill");
+                break;
+            }
+            Err(e) => {
+                log::warn!("Failed to fetch zones for activity {activity_id}: {e}");
+            }
+        }
+    }
 }
 
 /// Compute the pace coefficient of variation (CV = stddev/mean * 100) across laps.
