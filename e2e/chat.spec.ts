@@ -74,7 +74,7 @@ test("displays existing chat sessions in sidebar", async ({ page }) => {
 });
 
 test("creates new chat session", async ({ page }) => {
-  const newChatButton = page.locator('[aria-label="New chat"]');
+  const newChatButton = page.getByRole("button", { name: "New Chat" });
   await newChatButton.click();
 
   const log = await getInvokeLog(page);

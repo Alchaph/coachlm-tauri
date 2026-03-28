@@ -25,11 +25,14 @@ test("saves profile data", async ({ page }) => {
   await profileAgeInput.fill("30");
   await profileMaxHrInput.fill("185");
   
-  await page.getByRole("button", { name: "Save Profile" }).click();
+  // Trigger blur to flush the debounced save
+  await profileMaxHrInput.blur();
   
-  const invokeLog = await getInvokeLog(page);
-  const hasSaveProfile = invokeLog.some((call) => call.cmd === "save_profile_data");
-  expect(hasSaveProfile).toBe(true);
+  await expect(async () => {
+    const invokeLog = await getInvokeLog(page);
+    const hasSaveProfile = invokeLog.some((call) => call.cmd === "save_profile_data");
+    expect(hasSaveProfile).toBe(true);
+  }).toPass({ timeout: 3000 });
 });
 
 test("shows pinned insights tab", async ({ page }) => {

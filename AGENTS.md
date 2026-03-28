@@ -57,7 +57,7 @@ Every task follows this exact sequence. No exceptions.
 5. UPDATE: Set story status to `done` (or `failed` with notes).
 6. COMMIT: git commit with message format: `feat|fix|docs(SXX): short description`.
 7. RELEASE: Create and push a semver tag (e.g. `v1.8.2`). This triggers the release pipeline.
-8. CHECK: use gh to check if the build pipelines are green. this should be if the local tests are also green
+8. CHECK: After pushing the tag, use `gh run list` and `gh run view <id> --log-failed` to verify that **both the CI and Release pipelines pass**. Wait for in-progress runs to finish. If a pipeline fails due to changes you made, fix the issue, bump the version again, and create a new tag. Do not consider the release done until all pipelines are green.
 
 If a story file does not exist for what you are about to build, stop and create one first.
 

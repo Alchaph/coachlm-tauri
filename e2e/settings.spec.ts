@@ -14,22 +14,21 @@ test("loads and displays settings", async ({ page }) => {
   await expect(page.getByLabel("Ollama Endpoint URL")).toBeVisible();
 });
 
-test("saves settings when form is dirty", async ({ page }) => {
+test("auto-saves settings after editing a field", async ({ page }) => {
   await page.getByRole("button", { name: "Settings" }).click();
-
-  const saveButton = page.getByRole("button", { name: "Save Settings" });
-  await expect(saveButton).toBeDisabled();
 
   const modelInput = page.locator("#ollama-model");
   await modelInput.fill("mistral");
 
-  await expect(saveButton).toBeEnabled();
+  // Trigger blur to flush the debounced save
+  await modelInput.blur();
 
-  await saveButton.click();
-
-  const invokeLog = await getInvokeLog(page);
-  const hasSaveSettings = invokeLog.some((call) => call.cmd === "save_settings");
-  expect(hasSaveSettings).toBe(true);
+  // Wait for the debounced save to invoke the backend
+  await expect(async () => {
+    const invokeLog = await getInvokeLog(page);
+    const hasSaveSettings = invokeLog.some((call) => call.cmd === "save_settings");
+    expect(hasSaveSettings).toBe(true);
+  }).toPass({ timeout: 3000 });
 });
 
 test("fetches ollama models", async ({ page }) => {
