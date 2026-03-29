@@ -35,10 +35,13 @@ function setupDefaultInvokeMock() {
         return Promise.resolve([]);
       case "get_activity_stats":
         return Promise.resolve({
-          total_runs: 0,
+          total_activities: 0,
           total_distance_km: 0,
-          total_duration_min: 0,
-          avg_pace_sec_per_km: 0,
+          earliest_date: null,
+          latest_date: null,
+          total_elevation_m: 0,
+          total_moving_time_s: 0,
+          this_week_distance_km: 0,
         });
       case "get_active_plan":
         return Promise.resolve(null);
