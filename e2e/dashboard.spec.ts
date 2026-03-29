@@ -19,6 +19,9 @@ test("shows stats cards when activities exist", async ({ page }) => {
         total_distance_km: 42.5,
         earliest_date: "2025-01-01",
         latest_date: "2025-03-01",
+        total_elevation_m: 250,
+        total_moving_time_s: 15000,
+        this_week_distance_km: 10.0,
       },
       get_recent_activities: [
         {

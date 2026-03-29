@@ -50,6 +50,9 @@ const DEFAULT_MOCK_RESPONSES: Record<string, unknown> = {
     total_distance_km: 0,
     earliest_date: null,
     latest_date: null,
+    total_elevation_m: 0,
+    total_moving_time_s: 0,
+    this_week_distance_km: 0,
   },
 
   // Activity detail
