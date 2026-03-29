@@ -850,18 +850,43 @@ impl Database {
                AND NOT EXISTS (
                    SELECT 1 FROM activity_zone_distribution z
                    WHERE z.activity_id = a.activity_id
+                     AND z.time_seconds > 0
                )",
         )?;
         let rows = stmt.query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?;
         rows.collect()
     }
 
+    /// Returns `true` only when the activity has zone rows **with at least one
+    /// non-zero `time_seconds`** value.  Rows that were fetched with an
+    /// insufficient OAuth scope contain zone boundaries but zero time — we
+    /// treat those as missing so `backfill_activity_zones` will re-fetch them
+    /// once the user re-authenticates with the correct scope.
     pub fn has_activity_zone_distribution(&self, activity_id: &str) -> SqlResult<bool> {
         let conn = self.conn();
         conn.query_row(
-            "SELECT COUNT(*) > 0 FROM activity_zone_distribution WHERE activity_id = ?1",
+            "SELECT EXISTS(
+                SELECT 1 FROM activity_zone_distribution
+                WHERE activity_id = ?1 AND time_seconds > 0
+            )",
             params![activity_id],
             |row| row.get(0),
+        )
+    }
+
+    /// Removes all zone-distribution rows where every row for the activity has
+    /// `time_seconds = 0`.  These are artefacts of fetching with an
+    /// insufficient OAuth scope and will be re-fetched after re-auth.
+    pub fn clear_stale_zone_data(&self) -> SqlResult<usize> {
+        let conn = self.conn();
+        conn.execute(
+            "DELETE FROM activity_zone_distribution
+             WHERE activity_id IN (
+                 SELECT activity_id FROM activity_zone_distribution
+                 GROUP BY activity_id
+                 HAVING MAX(time_seconds) = 0
+             )",
+            [],
         )
     }
 
@@ -3326,6 +3351,80 @@ mod tests {
         );
         assert_eq!(missing[0].0, "act-no-zones");
         assert_eq!(missing[0].1, "strava-2");
+
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn test_has_zone_distribution_ignores_zero_time_rows() {
+        let (db, dir) = temp_db();
+        let activity = sample_activity("act-zero-time", None);
+        db.insert_activity(&activity).expect("insert failed");
+
+        let stale_zones = vec![
+            super::super::models::ActivityZoneDistribution {
+                activity_id: "act-zero-time".to_string(),
+                zone_index: 0,
+                zone_min: 0,
+                zone_max: 120,
+                time_seconds: 0,
+            },
+            super::super::models::ActivityZoneDistribution {
+                activity_id: "act-zero-time".to_string(),
+                zone_index: 1,
+                zone_min: 120,
+                zone_max: 145,
+                time_seconds: 0,
+            },
+        ];
+        db.save_activity_zone_distribution("act-zero-time", &stale_zones)
+            .expect("save failed");
+
+        assert!(
+            !db.has_activity_zone_distribution("act-zero-time")
+                .expect("has_zone failed"),
+            "all-zero time_seconds should be treated as missing"
+        );
+
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn test_clear_stale_zone_data_removes_zero_time_rows() {
+        let (db, dir) = temp_db();
+
+        let act_stale = sample_activity("act-stale", None);
+        db.insert_activity(&act_stale).expect("insert failed");
+        let stale_zones = vec![super::super::models::ActivityZoneDistribution {
+            activity_id: "act-stale".to_string(),
+            zone_index: 0,
+            zone_min: 0,
+            zone_max: 120,
+            time_seconds: 0,
+        }];
+        db.save_activity_zone_distribution("act-stale", &stale_zones)
+            .expect("save failed");
+
+        let act_good = sample_activity("act-good", None);
+        db.insert_activity(&act_good).expect("insert failed");
+        db.save_activity_zone_distribution("act-good", &sample_zones("act-good"))
+            .expect("save failed");
+
+        let deleted = db.clear_stale_zone_data().expect("clear failed");
+        assert_eq!(deleted, 1, "should delete 1 stale zone row");
+
+        let remaining = db
+            .get_activity_zone_distribution("act-good")
+            .expect("get failed");
+        assert!(!remaining.is_empty(), "valid zone data should be preserved");
+
+        let stale_remaining = db
+            .get_activity_zone_distribution("act-stale")
+            .expect("get failed");
+        assert!(
+            stale_remaining.is_empty(),
+            "stale zone data should be cleared"
+        );
 
         cleanup(&dir);
     }

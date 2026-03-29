@@ -27,6 +27,9 @@ The Strava `/athlete/zones` endpoint requires the `profile:read_all` OAuth scope
 - [x] Settings page shows a re-auth notice in the Strava section when `needs_reauth` is true
 - [x] ActivityDetailModal fetches laps and zones independently so one failure does not block the other
 - [x] All existing tests updated and passing
+- [x] Zero-time zone data (fetched with insufficient scope) is not treated as cached
+- [x] Stale zero-time zone data is cleared on re-auth
+- [x] Backfill limited to 50 activities per sync to respect Strava rate limits
 
 ## Technical notes
 
@@ -35,6 +38,10 @@ The Strava `/athlete/zones` endpoint requires the `profile:read_all` OAuth scope
 - `scope_is_stale()` uses HashSet comparison; empty scope (pre-upgrade tokens) is treated as stale
 - `save_oauth_tokens_with_scope()` stores scope alongside tokens; original `save_oauth_tokens()` kept as backward-compatible wrapper
 - Re-auth flow: disconnect existing tokens then start fresh OAuth to get new scope grant
+- `has_activity_zone_distribution` and `get_activities_missing_zones` now require at least one non-zero `time_seconds` value
+- `clear_stale_zone_data()` removes all-zero zone rows; called during re-auth to allow re-fetch
+- `fetch_activity_zones` only saves zones to DB when at least one zone has non-zero time
+- Backfill capped at 50 activities per sync to stay within Strava API rate limits
 
 ## Tests required
 

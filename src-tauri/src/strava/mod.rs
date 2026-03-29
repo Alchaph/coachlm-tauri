@@ -73,6 +73,7 @@ pub async fn start_auth(db: Arc<Database>, app_handle: tauri::AppHandle) -> Resu
     let refresh_token = token_data["refresh_token"].as_str().ok_or_else(|| AppError::Strava("Missing refresh_token".into()))?;
     let expires_at = token_data["expires_at"].as_i64().ok_or_else(|| AppError::Strava("Missing expires_at".into()))?;
 
+    db.clear_stale_zone_data().ok();
     db.save_oauth_tokens_with_scope(access_token, refresh_token, expires_at, Some(REQUIRED_SCOPE))?;
 
     app_handle.emit("strava:auth:complete", ()).ok();
@@ -532,13 +533,18 @@ pub async fn fetch_activity_zones(
         Vec::new()
     };
 
-    db.save_activity_zone_distribution(activity_id, &zones)
-        .map_err(AppError::Database)?;
+    let has_nonzero_time = zones.iter().any(|z| z.time_seconds > 0);
+    if has_nonzero_time {
+        db.save_activity_zone_distribution(activity_id, &zones)
+            .map_err(AppError::Database)?;
+    }
 
     Ok(zones)
 }
 
 async fn backfill_activity_zones(db: &std::sync::Arc<crate::storage::Database>, token: &str) {
+    const BATCH_LIMIT: usize = 50;
+
     let missing = match db.get_activities_missing_zones() {
         Ok(m) => m,
         Err(e) => {
@@ -547,7 +553,7 @@ async fn backfill_activity_zones(db: &std::sync::Arc<crate::storage::Database>, 
         }
     };
 
-    for (activity_id, strava_id) in &missing {
+    for (activity_id, strava_id) in missing.iter().take(BATCH_LIMIT) {
         match fetch_activity_zones(db, strava_id, activity_id, token).await {
             Ok(_) => {}
             Err(AppError::Strava(msg)) if msg.contains("Premium") => {
