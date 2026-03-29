@@ -50,7 +50,7 @@ export default function App() {
         const firstRun = await invoke<boolean>("is_first_run");
         setShowOnboarding(firstRun);
         if (!firstRun) {
-          const auth = await invoke<{ connected: boolean; expires_at: number | null }>("get_strava_auth_status");
+          const auth = await invoke<{ connected: boolean; expires_at: number | null; needs_reauth: boolean }>("get_strava_auth_status");
           if (auth.connected) {
             invoke("sync_strava_activities").catch((err: unknown) => {
               setSyncResult("error");

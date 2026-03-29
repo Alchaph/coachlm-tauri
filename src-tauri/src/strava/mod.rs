@@ -8,6 +8,7 @@ const STRAVA_AUTH_URL: &str = "https://www.strava.com/oauth/authorize";
 const STRAVA_TOKEN_URL: &str = "https://www.strava.com/oauth/token";
 const STRAVA_API_BASE: &str = "https://www.strava.com/api/v3";
 const REDIRECT_PORT: u16 = 9876;
+const REQUIRED_SCOPE: &str = "read,activity:read_all,profile:read_all";
 
 fn get_client_id() -> Option<String> {
     option_env!("STRAVA_CLIENT_ID")
@@ -31,7 +32,7 @@ pub async fn start_auth(db: Arc<Database>, app_handle: tauri::AppHandle) -> Resu
     let redirect_uri = format!("http://localhost:{REDIRECT_PORT}/callback");
 
     let auth_url = format!(
-        "{STRAVA_AUTH_URL}?client_id={client_id}&redirect_uri={redirect_uri}&response_type=code&scope=read,activity:read_all",
+        "{STRAVA_AUTH_URL}?client_id={client_id}&redirect_uri={redirect_uri}&response_type=code&scope={REQUIRED_SCOPE}",
     );
 
     let listener = tokio::net::TcpListener::bind(format!("127.0.0.1:{REDIRECT_PORT}"))
@@ -72,7 +73,7 @@ pub async fn start_auth(db: Arc<Database>, app_handle: tauri::AppHandle) -> Resu
     let refresh_token = token_data["refresh_token"].as_str().ok_or_else(|| AppError::Strava("Missing refresh_token".into()))?;
     let expires_at = token_data["expires_at"].as_i64().ok_or_else(|| AppError::Strava("Missing expires_at".into()))?;
 
-    db.save_oauth_tokens(access_token, refresh_token, expires_at)?;
+    db.save_oauth_tokens_with_scope(access_token, refresh_token, expires_at, Some(REQUIRED_SCOPE))?;
 
     app_handle.emit("strava:auth:complete", ()).ok();
 
@@ -102,15 +103,35 @@ fn extract_code_from_request(request: &str) -> Option<String> {
 
 pub fn get_auth_status(db: &Database) -> Result<AuthStatus, AppError> {
     match db.get_oauth_tokens()? {
-        Some((_, _, expires_at)) => Ok(AuthStatus {
-            connected: true,
-            expires_at: Some(expires_at),
-        }),
+        Some((_, _, expires_at)) => {
+            let needs_reauth = scope_is_stale(db);
+            Ok(AuthStatus {
+                connected: true,
+                expires_at: Some(expires_at),
+                needs_reauth,
+            })
+        }
         None => Ok(AuthStatus {
             connected: false,
             expires_at: None,
+            needs_reauth: false,
         }),
     }
+}
+
+/// Returns `true` when the stored `granted_scope` is missing any
+/// of the scopes listed in [`REQUIRED_SCOPE`].
+fn scope_is_stale(db: &Database) -> bool {
+    let Ok(Some(stored)) = db.get_oauth_granted_scope() else {
+        return true; // no scope stored → assume stale (pre-upgrade token)
+    };
+    if stored.is_empty() {
+        return true;
+    }
+    let stored_parts: std::collections::HashSet<&str> = stored.split(',').collect();
+    REQUIRED_SCOPE
+        .split(',')
+        .any(|required| !stored_parts.contains(required))
 }
 
 pub(crate) async fn get_valid_token(db: &Database) -> Result<String, AppError> {

@@ -21,7 +21,7 @@ function setupInvokeMock() {
       case "get_settings":
         return Promise.resolve(defaultSettings);
       case "get_strava_auth_status":
-        return Promise.resolve({ connected: false, expires_at: null });
+        return Promise.resolve({ connected: false, expires_at: null, needs_reauth: false });
       case "get_strava_credentials_available":
         return Promise.resolve(false);
       case "check_ollama_status":

@@ -161,6 +161,7 @@ pub struct GearData {
 pub struct AuthStatus {
     pub connected: bool,
     pub expires_at: Option<i64>,
+    pub needs_reauth: bool,
 }
 
 #[allow(clippy::struct_field_names)]

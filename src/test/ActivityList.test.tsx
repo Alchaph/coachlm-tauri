@@ -41,7 +41,7 @@ const mockActivity: ActivityItem = {
   start_date_local: "2025-01-15T09:00:00",
 };
 
-const defaultAuthStatus: AuthStatus = { connected: true, expires_at: 9999999999 };
+const defaultAuthStatus: AuthStatus = { connected: true, expires_at: 9999999999, needs_reauth: false };
 
 beforeEach(() => {
   vi.clearAllMocks();

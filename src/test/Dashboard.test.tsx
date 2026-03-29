@@ -66,7 +66,7 @@ function setupInvokeMock(overrides?: Partial<Record<string, unknown>>) {
         this_week_distance_km: 10.0,
       },
       get_recent_activities: [mockActivity],
-      get_strava_auth_status: { connected: true, expires_at: 9999999999 },
+      get_strava_auth_status: { connected: true, expires_at: 9999999999, needs_reauth: false },
       get_aggregated_zone_distribution: [],
     };
     const merged = { ...defaults, ...overrides };
@@ -129,7 +129,7 @@ describe("Dashboard", () => {
 
   it("does not show sync button when strava is not connected", async () => {
     setupInvokeMock({
-      get_strava_auth_status: { connected: false, expires_at: null },
+      get_strava_auth_status: { connected: false, expires_at: null, needs_reauth: false },
     });
 
     render(<Dashboard />);
@@ -151,7 +151,7 @@ describe("Dashboard", () => {
         this_week_distance_km: 0,
       },
       get_recent_activities: [],
-      get_strava_auth_status: { connected: false, expires_at: null },
+      get_strava_auth_status: { connected: false, expires_at: null, needs_reauth: false },
     });
 
     render(<Dashboard />);

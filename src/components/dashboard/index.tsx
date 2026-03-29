@@ -1,10 +1,11 @@
 import { useState, useEffect, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 import StatsCards from "@/components/dashboard/StatsCards";
 import ActivityList from "@/components/dashboard/ActivityList";
 import ActivityChart from "@/components/dashboard/ActivityChart";
@@ -22,7 +23,7 @@ export default function Dashboard() {
   const PAGE_SIZE = 50;
   const [activities, setActivities] = useState<ActivityItem[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
-  const [authStatus, setAuthStatus] = useState<AuthStatus>({ connected: false, expires_at: null });
+  const [authStatus, setAuthStatus] = useState<AuthStatus>({ connected: false, expires_at: null, needs_reauth: false });
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [typeFilter, setTypeFilter] = useState("All");
@@ -111,6 +112,15 @@ export default function Dashboard() {
     }
   };
 
+  const handleReconnect = async () => {
+    try {
+      await invoke("disconnect_strava");
+      await invoke("start_strava_auth");
+    } catch {
+      toast.error("Failed to reconnect Strava");
+    }
+  };
+
   const activityTypes = useMemo(() => {
     const types = new Set<string>();
     for (const a of activities) {
@@ -166,6 +176,18 @@ export default function Dashboard() {
       </div>
 
       {error && <div className="mb-4 text-sm text-destructive bg-destructive/10 border border-destructive/30 rounded-md px-3 py-2">{error}</div>}
+
+      {authStatus.needs_reauth && (
+        <div className="mb-4 flex items-center gap-3 text-sm bg-amber-500/10 border border-amber-500/30 rounded-md px-3 py-2">
+          <AlertTriangle size={16} className="text-amber-500 shrink-0" />
+          <span className="flex-1 text-foreground">
+            Strava permissions need updating to enable heart rate zone data.
+          </span>
+          <Button size="sm" variant="outline" onClick={() => void handleReconnect()}>
+            Reconnect
+          </Button>
+        </div>
+      )}
 
       <StatsCards
         stats={stats}

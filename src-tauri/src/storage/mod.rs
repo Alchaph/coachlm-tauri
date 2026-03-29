@@ -212,6 +212,16 @@ impl Database {
         refresh_token: &str,
         expires_at: i64,
     ) -> SqlResult<()> {
+        self.save_oauth_tokens_with_scope(access_token, refresh_token, expires_at, None)
+    }
+
+    pub fn save_oauth_tokens_with_scope(
+        &self,
+        access_token: &str,
+        refresh_token: &str,
+        expires_at: i64,
+        scope: Option<&str>,
+    ) -> SqlResult<()> {
         let conn = self.conn();
         let enc_access = self.encrypt(access_token).map_err(|e| {
             rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::other(e)))
@@ -219,10 +229,11 @@ impl Database {
         let enc_refresh = self.encrypt(refresh_token).map_err(|e| {
             rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::other(e)))
         })?;
+        let granted_scope = scope.unwrap_or("");
         conn.execute(
-            "INSERT OR REPLACE INTO oauth_tokens (id, access_token, refresh_token, token_expires_at)
-             VALUES (1, ?1, ?2, ?3)",
-            params![enc_access, enc_refresh, expires_at],
+            "INSERT OR REPLACE INTO oauth_tokens (id, access_token, refresh_token, token_expires_at, granted_scope)
+             VALUES (1, ?1, ?2, ?3, ?4)",
+            params![enc_access, enc_refresh, expires_at, granted_scope],
         )?;
         Ok(())
     }
@@ -257,6 +268,19 @@ impl Database {
         let conn = self.conn();
         conn.execute("DELETE FROM oauth_tokens", [])?;
         Ok(())
+    }
+
+    pub fn get_oauth_granted_scope(&self) -> SqlResult<Option<String>> {
+        let conn = self.conn();
+        match conn.query_row(
+            "SELECT granted_scope FROM oauth_tokens WHERE id = 1",
+            [],
+            |row| row.get::<_, String>(0),
+        ) {
+            Ok(scope) => Ok(Some(scope)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(e),
+        }
     }
 
     // ── Athlete Profile ────────────────────────────────────────
@@ -1367,6 +1391,11 @@ static MIGRATIONS: &[MigrationEntry] = &[
         "activity laps and zone distribution tables",
         migration_10_laps_and_zones,
     ),
+    (
+        11,
+        "add granted_scope to oauth_tokens",
+        migration_11_oauth_scope,
+    ),
 ];
 
 fn migration_01_core_tables(conn: &Connection) -> SqlResult<()> {
@@ -1632,6 +1661,12 @@ fn migration_10_laps_and_zones(conn: &Connection) -> SqlResult<()> {
           time_seconds INTEGER NOT NULL,
           PRIMARY KEY (activity_id, zone_index)
         );",
+    )
+}
+
+fn migration_11_oauth_scope(conn: &Connection) -> SqlResult<()> {
+    conn.execute_batch(
+        "ALTER TABLE oauth_tokens ADD COLUMN granted_scope TEXT NOT NULL DEFAULT '';",
     )
 }
 

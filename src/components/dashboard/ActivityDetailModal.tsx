@@ -55,23 +55,31 @@ export default function ActivityDetailModal({
     setZones([]);
 
     void Promise.all([
-      invoke<ActivityLap[]>("get_activity_laps", { activityId: activity.activity_id }),
+      invoke<ActivityLap[]>("get_activity_laps", { activityId: activity.activity_id })
+        .catch((err: unknown) => {
+          if (!cancelled) {
+            toast.error(
+              typeof err === "string" ? err : "Failed to load lap data",
+            );
+          }
+          return [] as ActivityLap[];
+        }),
       invoke<ActivityZoneDistribution[]>("get_activity_zone_distribution", {
         activityId: activity.activity_id,
-      }),
+      })
+        .catch((err: unknown) => {
+          if (!cancelled) {
+            toast.error(
+              typeof err === "string" ? err : "Failed to load zone data",
+            );
+          }
+          return [] as ActivityZoneDistribution[];
+        }),
     ])
       .then(([fetchedLaps, fetchedZones]) => {
         if (cancelled) return;
         setLaps(fetchedLaps);
         setZones(fetchedZones);
-      })
-      .catch((err: unknown) => {
-        if (cancelled) return;
-        toast.error(
-          typeof err === "string"
-            ? err
-            : "Failed to load activity details",
-        );
       })
       .finally(() => {
         if (!cancelled) setIsLoading(false);

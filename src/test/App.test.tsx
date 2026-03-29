@@ -10,7 +10,7 @@ function setupDefaultInvokeMock() {
       case "is_first_run":
         return Promise.resolve(false);
       case "get_strava_auth_status":
-        return Promise.resolve({ connected: false, expires_at: null });
+        return Promise.resolve({ connected: false, expires_at: null, needs_reauth: false });
       case "get_strava_credentials_available":
         return Promise.resolve(false);
       case "get_settings":

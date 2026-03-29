@@ -32,6 +32,7 @@ export interface Stats {
 export interface AuthStatus {
   connected: boolean;
   expires_at: number | null;
+  needs_reauth: boolean;
 }
 
 export interface WeeklyVolumeEntry {

@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { useTheme } from "next-themes";
-import { RefreshCw, Plug, Unplug, Globe, Info, Sun, Moon, Monitor } from "lucide-react";
+import { RefreshCw, Plug, Unplug, Globe, Info, Sun, Moon, Monitor, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { useDebouncedCallback } from "use-debounce";
 import { Button } from "@/components/ui/button";
@@ -31,6 +31,7 @@ interface SettingsData {
 interface StravaAuthStatus {
   connected: boolean;
   expires_at: number | null;
+  needs_reauth: boolean;
 }
 
 export default function SettingsPage() {
@@ -46,7 +47,7 @@ export default function SettingsPage() {
   });
   const [models, setModels] = useState<string[]>([]);
   const [fetchingModels, setFetchingModels] = useState(false);
-  const [stravaAuth, setStravaAuth] = useState<StravaAuthStatus>({ connected: false, expires_at: null });
+  const [stravaAuth, setStravaAuth] = useState<StravaAuthStatus>({ connected: false, expires_at: null, needs_reauth: false });
   const [stravaAvailable, setStravaAvailable] = useState(false);
   const [ollamaConnected, setOllamaConnected] = useState<boolean | null>(null);
   const [, setInitialSettings] = useState<SettingsData | null>(null);
@@ -406,34 +407,44 @@ export default function SettingsPage() {
                 </p>
               </div>
             ) : (
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className={cn(
-                    "w-2.5 h-2.5 rounded-full",
-                    stravaAuth.connected ? "bg-green-500" : "bg-muted-foreground"
-                  )} />
-                  <div>
-                    <div className="font-medium text-foreground">
-                      {stravaAuth.connected ? "Connected" : "Not connected"}
-                    </div>
-                    {stravaAuth.connected && stravaAuth.expires_at && (
-                      <div className="text-xs text-muted-foreground">
-                        Token expires: {new Date(stravaAuth.expires_at * 1000).toLocaleString()}
+              <>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className={cn(
+                      "w-2.5 h-2.5 rounded-full",
+                      stravaAuth.connected ? "bg-green-500" : "bg-muted-foreground"
+                    )} />
+                    <div>
+                      <div className="font-medium text-foreground">
+                        {stravaAuth.connected ? "Connected" : "Not connected"}
                       </div>
-                    )}
+                      {stravaAuth.connected && stravaAuth.expires_at && (
+                        <div className="text-xs text-muted-foreground">
+                          Token expires: {new Date(stravaAuth.expires_at * 1000).toLocaleString()}
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
 
-                {stravaAuth.connected ? (
-                  <Button variant="destructive" onClick={() => { disconnectStrava(); }}>
-                    <Unplug size={16} /> Disconnect
-                  </Button>
-                ) : (
-                  <Button onClick={() => void connectStrava()}>
-                    <Plug size={16} /> Connect Strava
-                  </Button>
+                  {stravaAuth.connected ? (
+                    <Button variant="destructive" onClick={() => { disconnectStrava(); }}>
+                      <Unplug size={16} /> Disconnect
+                    </Button>
+                  ) : (
+                    <Button onClick={() => void connectStrava()}>
+                      <Plug size={16} /> Connect Strava
+                    </Button>
+                  )}
+                </div>
+                {stravaAuth.needs_reauth && (
+                  <div className="mt-3 flex items-center gap-2 text-sm bg-amber-500/10 border border-amber-500/30 rounded-md px-3 py-2">
+                    <AlertTriangle size={14} className="text-amber-500 shrink-0" />
+                    <span className="text-foreground">
+                      Permissions need updating for heart rate zone data. Disconnect and reconnect.
+                    </span>
+                  </div>
                 )}
-              </div>
+              </>
             )}
           </CardContent>
         </Card>
