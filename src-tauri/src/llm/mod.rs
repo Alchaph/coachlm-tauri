@@ -95,7 +95,9 @@ pub async fn chat_with_ollama(
     model: &str,
     messages: Vec<OllamaMessage>,
 ) -> Result<String, AppError> {
-    let client = reqwest::Client::new();
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_mins(5))
+        .build()?;
     let url = format!("{}/api/chat", endpoint.trim_end_matches('/'));
 
     let request = OllamaChatRequest {
@@ -128,7 +130,9 @@ pub async fn chat_with_ollama(
 }
 
 pub async fn get_ollama_models(endpoint: &str) -> Result<Vec<String>, AppError> {
-    let client = reqwest::Client::new();
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(10))
+        .build()?;
     let url = format!("{}/api/tags", endpoint.trim_end_matches('/'));
 
     let response = client
@@ -180,7 +184,9 @@ async fn stream_ollama(
     app_handle: &tauri::AppHandle,
     session_id: &str,
 ) -> Result<String, AppError> {
-    let client = reqwest::Client::new();
+    let client = reqwest::Client::builder()
+        .connect_timeout(std::time::Duration::from_secs(10))
+        .build()?;
     let url = format!("{}/api/chat", endpoint.trim_end_matches('/'));
 
     let request = OllamaChatRequest {

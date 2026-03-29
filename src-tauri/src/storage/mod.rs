@@ -664,13 +664,14 @@ impl Database {
         activity_id: &str,
         laps: &[super::models::ActivityLap],
     ) -> SqlResult<()> {
-        let conn = self.conn();
-        conn.execute(
+        let mut conn = self.conn();
+        let tx = conn.transaction()?;
+        tx.execute(
             "DELETE FROM activity_laps WHERE activity_id = ?1",
             params![activity_id],
         )?;
         for lap in laps {
-            conn.execute(
+            tx.execute(
                 "INSERT INTO activity_laps
                  (activity_id, lap_index, distance, elapsed_time, moving_time, average_speed,
                   max_speed, average_heartrate, max_heartrate, average_cadence, total_elevation_gain)
@@ -690,6 +691,7 @@ impl Database {
                 ],
             )?;
         }
+        tx.commit()?;
         Ok(())
     }
 
@@ -737,13 +739,14 @@ impl Database {
         activity_id: &str,
         zones: &[super::models::ActivityZoneDistribution],
     ) -> SqlResult<()> {
-        let conn = self.conn();
-        conn.execute(
+        let mut conn = self.conn();
+        let tx = conn.transaction()?;
+        tx.execute(
             "DELETE FROM activity_zone_distribution WHERE activity_id = ?1",
             params![activity_id],
         )?;
         for zone in zones {
-            conn.execute(
+            tx.execute(
                 "INSERT INTO activity_zone_distribution
                  (activity_id, zone_index, zone_min, zone_max, time_seconds)
                  VALUES (?1, ?2, ?3, ?4, ?5)",
@@ -756,6 +759,7 @@ impl Database {
                 ],
             )?;
         }
+        tx.commit()?;
         Ok(())
     }
 
@@ -995,9 +999,10 @@ impl Database {
     }
 
     pub fn delete_race(&self, id: &str) -> SqlResult<()> {
-        let conn = self.conn();
+        let mut conn = self.conn();
+        let tx = conn.transaction()?;
         // Cascade: delete plan sessions, weeks, plans, then race
-        conn.execute(
+        tx.execute(
             "DELETE FROM plan_sessions WHERE week_id IN (
                 SELECT pw.id FROM plan_weeks pw
                 JOIN training_plans tp ON pw.plan_id = tp.id
@@ -1005,14 +1010,15 @@ impl Database {
             )",
             params![id],
         )?;
-        conn.execute(
+        tx.execute(
             "DELETE FROM plan_weeks WHERE plan_id IN (
                 SELECT id FROM training_plans WHERE race_id = ?1
             )",
             params![id],
         )?;
-        conn.execute("DELETE FROM training_plans WHERE race_id = ?1", params![id])?;
-        conn.execute("DELETE FROM races WHERE id = ?1", params![id])?;
+        tx.execute("DELETE FROM training_plans WHERE race_id = ?1", params![id])?;
+        tx.execute("DELETE FROM races WHERE id = ?1", params![id])?;
+        tx.commit()?;
         Ok(())
     }
 
@@ -1040,9 +1046,11 @@ impl Database {
     }
 
     pub fn set_active_race(&self, id: &str) -> SqlResult<()> {
-        let conn = self.conn();
-        conn.execute("UPDATE races SET is_active = 0", [])?;
-        conn.execute("UPDATE races SET is_active = 1 WHERE id = ?1", params![id])?;
+        let mut conn = self.conn();
+        let tx = conn.transaction()?;
+        tx.execute("UPDATE races SET is_active = 0", [])?;
+        tx.execute("UPDATE races SET is_active = 1 WHERE id = ?1", params![id])?;
+        tx.commit()?;
         Ok(())
     }
 
@@ -1225,12 +1233,14 @@ impl Database {
     }
 
     pub fn set_active_plan(&self, plan_id: &str) -> SqlResult<()> {
-        let conn = self.conn();
-        conn.execute("UPDATE training_plans SET is_active = 0", [])?;
-        conn.execute(
+        let mut conn = self.conn();
+        let tx = conn.transaction()?;
+        tx.execute("UPDATE training_plans SET is_active = 0", [])?;
+        tx.execute(
             "UPDATE training_plans SET is_active = 1 WHERE id = ?1",
             params![plan_id],
         )?;
+        tx.commit()?;
         Ok(())
     }
 
@@ -1241,8 +1251,9 @@ impl Database {
     }
 
     pub fn delete_plans_for_race(&self, race_id: &str) -> SqlResult<()> {
-        let conn = self.conn();
-        conn.execute(
+        let mut conn = self.conn();
+        let tx = conn.transaction()?;
+        tx.execute(
             "DELETE FROM plan_sessions WHERE week_id IN (
                 SELECT pw.id FROM plan_weeks pw
                 JOIN training_plans tp ON pw.plan_id = tp.id
@@ -1250,32 +1261,35 @@ impl Database {
             )",
             params![race_id],
         )?;
-        conn.execute(
+        tx.execute(
             "DELETE FROM plan_weeks WHERE plan_id IN (
                 SELECT id FROM training_plans WHERE race_id = ?1
             )",
             params![race_id],
         )?;
-        conn.execute(
+        tx.execute(
             "DELETE FROM training_plans WHERE race_id = ?1",
             params![race_id],
         )?;
+        tx.commit()?;
         Ok(())
     }
 
     pub fn delete_plan(&self, plan_id: &str) -> SqlResult<()> {
-        let conn = self.conn();
-        conn.execute(
+        let mut conn = self.conn();
+        let tx = conn.transaction()?;
+        tx.execute(
             "DELETE FROM plan_sessions WHERE week_id IN (
                 SELECT id FROM plan_weeks WHERE plan_id = ?1
             )",
             params![plan_id],
         )?;
-        conn.execute(
+        tx.execute(
             "DELETE FROM plan_weeks WHERE plan_id = ?1",
             params![plan_id],
         )?;
-        conn.execute("DELETE FROM training_plans WHERE id = ?1", params![plan_id])?;
+        tx.execute("DELETE FROM training_plans WHERE id = ?1", params![plan_id])?;
+        tx.commit()?;
         Ok(())
     }
 }
