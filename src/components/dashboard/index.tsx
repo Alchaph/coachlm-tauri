@@ -15,7 +15,6 @@ import {
   formatPace,
   formatDuration,
   formatElevation,
-  getISOWeekStart,
 } from "@/components/dashboard/types";
 import type { ActivityItem, Stats, AuthStatus } from "@/components/dashboard/types";
 
@@ -102,6 +101,7 @@ export default function Dashboard() {
 
   const handleSync = async () => {
     if (syncing) return;
+    setSyncing(true);
     setError(null);
     try {
       await invoke("sync_strava_activities");
@@ -125,39 +125,15 @@ export default function Dashboard() {
     return activities.filter((a) => (a.sport_type ?? a.type) === typeFilter);
   }, [activities, typeFilter]);
 
-  const totalElevation = useMemo(() => {
-    let sum = 0;
-    for (const a of activities) {
-      if (a.total_elevation_gain !== null) sum += a.total_elevation_gain;
-    }
-    return sum;
-  }, [activities]);
-
-  const totalTime = useMemo(() => {
-    let sum = 0;
-    for (const a of activities) {
-      if (a.moving_time !== null) sum += a.moving_time;
-    }
-    return sum;
-  }, [activities]);
+  const totalElevation = stats?.total_elevation_m ?? 0;
+  const totalTime = stats?.total_moving_time_s ?? 0;
 
   const avgPace = useMemo(() => {
-    const totalDist = activities.reduce((s, a) => s + (a.distance ?? 0), 0);
-    if (totalDist === 0 || totalTime === 0) return "\u2014";
-    return formatPace(totalDist, totalTime);
-  }, [activities, totalTime]);
+    if (!stats || stats.total_distance_km === 0 || stats.total_moving_time_s === 0) return "\u2014";
+    return formatPace(stats.total_distance_km * 1000, stats.total_moving_time_s);
+  }, [stats]);
 
-  const thisWeekKm = useMemo(() => {
-    const weekStart = getISOWeekStart(new Date());
-    let sum = 0;
-    for (const a of activities) {
-      if (!a.start_date || a.distance === null) continue;
-      if (new Date(a.start_date) >= weekStart) {
-        sum += a.distance;
-      }
-    }
-    return (sum / 1000).toFixed(1);
-  }, [activities]);
+  const thisWeekKm = stats ? stats.this_week_distance_km.toFixed(1) : "0.0";
 
   const weeklyVolume = useMemo(() => computeWeeklyVolume(activities), [activities]);
   const maxWeekKm = useMemo(() => Math.max(...weeklyVolume.map((w) => w.km), 1), [weeklyVolume]);

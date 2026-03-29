@@ -119,6 +119,9 @@ pub struct StatsData {
     pub total_distance_km: f64,
     pub earliest_date: Option<String>,
     pub latest_date: Option<String>,
+    pub total_elevation_m: f64,
+    pub total_moving_time_s: i64,
+    pub this_week_distance_km: f64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

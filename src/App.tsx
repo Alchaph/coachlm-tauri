@@ -52,7 +52,10 @@ export default function App() {
         if (!firstRun) {
           const auth = await invoke<{ connected: boolean; expires_at: number | null }>("get_strava_auth_status");
           if (auth.connected) {
-            invoke("sync_strava_activities").catch(() => undefined);
+            invoke("sync_strava_activities").catch((err: unknown) => {
+              setSyncResult("error");
+              setSyncMessage(String(err));
+            });
           }
         }
       } catch {

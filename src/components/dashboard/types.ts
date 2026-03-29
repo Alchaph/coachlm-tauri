@@ -24,6 +24,9 @@ export interface Stats {
   total_distance_km: number;
   earliest_date: string | null;
   latest_date: string | null;
+  total_elevation_m: number;
+  total_moving_time_s: number;
+  this_week_distance_km: number;
 }
 
 export interface AuthStatus {

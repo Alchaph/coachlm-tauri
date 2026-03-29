@@ -2,6 +2,7 @@ use aes_gcm::aead::Aead;
 use aes_gcm::{Aes256Gcm, KeyInit, Nonce};
 use argon2::Argon2;
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
+use chrono::Datelike;
 use rusqlite::{params, Connection, OptionalExtension, Result as SqlResult};
 use sha2::{Digest, Sha256};
 use std::collections::HashSet;
@@ -451,26 +452,56 @@ impl Database {
 
     pub fn get_activity_stats(&self) -> SqlResult<super::models::StatsData> {
         let conn = self.conn();
-        let count: i64 = conn.query_row("SELECT COUNT(*) FROM activities", [], |row| row.get(0))?;
-        let total_distance: f64 = conn.query_row(
-            "SELECT COALESCE(SUM(distance), 0.0) FROM activities",
+        let (count, total_distance, total_elevation, total_moving_time, earliest, latest): (
+            i64,
+            f64,
+            f64,
+            i64,
+            Option<String>,
+            Option<String>,
+        ) = conn.query_row(
+            "SELECT COUNT(*), COALESCE(SUM(distance), 0.0), \
+             COALESCE(SUM(total_elevation_gain), 0.0), \
+             COALESCE(SUM(moving_time), 0), \
+             MIN(start_date), MAX(start_date) \
+             FROM activities",
             [],
+            |row| {
+                Ok((
+                    row.get(0)?,
+                    row.get(1)?,
+                    row.get(2)?,
+                    row.get(3)?,
+                    row.get(4)?,
+                    row.get(5)?,
+                ))
+            },
+        )?;
+
+        let week_start = Self::iso_week_start();
+        let this_week_distance: f64 = conn.query_row(
+            "SELECT COALESCE(SUM(distance), 0.0) FROM activities WHERE start_date >= ?1",
+            params![week_start],
             |row| row.get(0),
         )?;
-        let earliest: Option<String> =
-            conn.query_row("SELECT MIN(start_date) FROM activities", [], |row| {
-                row.get(0)
-            })?;
-        let latest: Option<String> =
-            conn.query_row("SELECT MAX(start_date) FROM activities", [], |row| {
-                row.get(0)
-            })?;
+
         Ok(super::models::StatsData {
             total_activities: count,
             total_distance_km: total_distance / 1000.0,
             earliest_date: earliest,
             latest_date: latest,
+            total_elevation_m: total_elevation,
+            total_moving_time_s: total_moving_time,
+            this_week_distance_km: this_week_distance / 1000.0,
         })
+    }
+
+    /// Returns the ISO 8601 start of the current week (Monday 00:00:00 UTC).
+    fn iso_week_start() -> String {
+        let now = chrono::Utc::now().date_naive();
+        let weekday = now.weekday().num_days_from_monday();
+        let monday = now - chrono::Duration::days(i64::from(weekday));
+        format!("{monday}T00:00:00Z")
     }
 
     pub fn get_activities_since(&self, since: &str) -> SqlResult<Vec<super::models::ActivityData>> {
@@ -2119,20 +2150,28 @@ mod tests {
         let (db, dir) = temp_db();
         let stats_empty = db.get_activity_stats().expect("stats failed");
         assert_eq!(stats_empty.total_activities, 0);
+        assert!((stats_empty.total_elevation_m).abs() < f64::EPSILON);
+        assert_eq!(stats_empty.total_moving_time_s, 0);
 
         let mut a1 = sample_activity("a1", None);
         a1.distance = Some(10000.0);
+        a1.moving_time = Some(3000);
+        a1.total_elevation_gain = Some(100.0);
         a1.start_date = Some("2025-01-01T00:00:00Z".to_string());
         db.insert_activity(&a1).expect("insert1 failed");
 
         let mut a2 = sample_activity("a2", None);
         a2.distance = Some(5000.0);
+        a2.moving_time = Some(1500);
+        a2.total_elevation_gain = Some(50.0);
         a2.start_date = Some("2025-03-01T00:00:00Z".to_string());
         db.insert_activity(&a2).expect("insert2 failed");
 
         let stats = db.get_activity_stats().expect("stats failed");
         assert_eq!(stats.total_activities, 2);
         assert!((stats.total_distance_km - 15.0).abs() < f64::EPSILON);
+        assert!((stats.total_elevation_m - 150.0).abs() < f64::EPSILON);
+        assert_eq!(stats.total_moving_time_s, 4500);
         assert_eq!(stats.earliest_date.as_deref(), Some("2025-01-01T00:00:00Z"));
         assert_eq!(stats.latest_date.as_deref(), Some("2025-03-01T00:00:00Z"));
         cleanup(&dir);

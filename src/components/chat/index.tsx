@@ -18,7 +18,6 @@ export default function Chat({ onStatusChange }: ChatProps) {
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const currentSessionIdRef = useRef<string | null>(null);
   const shouldAutoScroll = useRef(true);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [promptHistory, setPromptHistory] = useState<string[]>([]);
   const historyIndex = useRef(-1);
   const savedInput = useRef("");
@@ -248,11 +247,12 @@ export default function Chat({ onStatusChange }: ChatProps) {
     try {
       const session = await invoke<Session>("create_chat_session");
       setCurrentSessionId(session.id);
+      currentSessionIdRef.current = session.id;
       setMessages([]);
       setError(null);
       setSessions((prev) => [session, ...prev]);
       setTimeout(() => {
-        textareaRef.current?.focus();
+        document.getElementById("chat-input")?.focus();
       }, 50);
     } catch (e) {
       setError(String(e));
@@ -289,8 +289,9 @@ export default function Chat({ onStatusChange }: ChatProps) {
     historyIndex.current = -1;
     savedInput.current = "";
     setInput("");
-    if (textareaRef.current) {
-      textareaRef.current.style.height = "auto";
+    const chatInput = document.getElementById("chat-input");
+    if (chatInput instanceof HTMLTextAreaElement) {
+      chatInput.style.height = "auto";
     }
     setError(null);
     setLoading(true);
@@ -305,6 +306,7 @@ export default function Chat({ onStatusChange }: ChatProps) {
         const session = await invoke<Session>("create_chat_session");
         activeSessionId = session.id;
         setCurrentSessionId(session.id);
+        currentSessionIdRef.current = session.id;
         setSessions((prev) => [session, ...prev]);
       } catch (e) {
         setError(String(e));
@@ -343,6 +345,7 @@ export default function Chat({ onStatusChange }: ChatProps) {
       onStatusChange?.("replied");
       await refreshSessions();
     } catch (e) {
+      setMessages((prev) => prev.filter((m) => m.id !== -1));
       setError(String(e));
       onStatusChange?.("idle");
     } finally {
@@ -421,6 +424,7 @@ export default function Chat({ onStatusChange }: ChatProps) {
       });
       onStatusChange?.("replied");
     } catch (e) {
+      setMessages((prev) => prev.filter((m) => m.id !== -1));
       setError(String(e));
       onStatusChange?.("idle");
     } finally {
@@ -436,8 +440,8 @@ export default function Chat({ onStatusChange }: ChatProps) {
     }
 
     if (e.key === "ArrowUp" && promptHistory.length > 0) {
-      const el = textareaRef.current;
-      const cursorAtStart = el ? el.selectionStart === 0 && el.selectionEnd === 0 : true;
+      const el = e.currentTarget;
+      const cursorAtStart = el.selectionStart === 0 && el.selectionEnd === 0;
       if (cursorAtStart) {
         e.preventDefault();
         if (historyIndex.current === -1) {
@@ -450,8 +454,8 @@ export default function Chat({ onStatusChange }: ChatProps) {
     }
 
     if (e.key === "ArrowDown") {
-      const el = textareaRef.current;
-      const cursorAtEnd = el ? el.selectionStart === el.value.length : true;
+      const el = e.currentTarget;
+      const cursorAtEnd = el.selectionStart === el.value.length;
       if (cursorAtEnd && historyIndex.current >= 0) {
         e.preventDefault();
         const nextIndex = historyIndex.current - 1;

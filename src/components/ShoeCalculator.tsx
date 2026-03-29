@@ -657,7 +657,7 @@ export default function ShoeCalculator() {
                   <label className="flex items-center gap-2 cursor-pointer text-[13px] text-muted-foreground">
                     <Checkbox
                       checked={customCarbon}
-                      onCheckedChange={(checked) => { setCustomCarbon(checked); }}
+                      onCheckedChange={(checked: boolean | "indeterminate") => { setCustomCarbon(checked !== "indeterminate" && checked); }}
                     />
                     Carbon plate
                   </label>

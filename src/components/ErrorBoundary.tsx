@@ -22,8 +22,9 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
     return { hasError: true, error };
   }
 
-  componentDidCatch(_error: Error, _info: ErrorInfo): void {
-    // intentionally empty: error is captured in state via getDerivedStateFromError
+  componentDidCatch(error: Error, info: ErrorInfo): void {
+    // eslint-disable-next-line no-console -- Error boundary must log unhandled errors for debugging
+    console.error("Unhandled app error", error, info);
   }
 
   handleReload = (): void => {
