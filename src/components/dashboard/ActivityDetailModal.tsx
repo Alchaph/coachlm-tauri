@@ -43,6 +43,9 @@ export default function ActivityDetailModal({
     }
 
     if (!activity.strava_id) {
+      setLaps([]);
+      setZones([]);
+      setIsLoading(false);
       return;
     }
 

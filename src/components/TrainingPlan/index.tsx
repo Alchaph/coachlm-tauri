@@ -14,8 +14,10 @@ export default function TrainingPlanPage() {
   useEffect(() => {
     void (async () => {
       try {
-        await invoke<TrainingPlan>("get_active_plan");
-        setActiveSubTab("schedule");
+        const plan = await invoke<TrainingPlan | null>("get_active_plan");
+        if (plan) {
+          setActiveSubTab("schedule");
+        }
       } catch {
         // no active plan — stay on default "plans" tab
       }

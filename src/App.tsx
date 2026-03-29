@@ -147,6 +147,7 @@ export default function App() {
           setSyncActive(false);
           setSyncResult("error");
           setSyncMessage(e.payload.message);
+          setTimeout(() => { setSyncResult(null); }, 8000);
         }),
       ]);
       if (state.cancelled) {
@@ -374,6 +375,7 @@ export default function App() {
               variant="ghost"
               size="icon-xs"
               className="shrink-0"
+              aria-label="Dismiss plan notification"
               onClick={() => { setPlanResult(null); setPlanError(""); }}
             >
               <X size={14} />
@@ -407,6 +409,7 @@ export default function App() {
               variant="ghost"
               size="icon-xs"
               className="shrink-0"
+              aria-label="Dismiss sync notification"
               onClick={() => { setSyncResult(null); setSyncMessage(""); }}
             >
               <X size={14} />
@@ -456,6 +459,7 @@ export default function App() {
                 variant="ghost"
                 size="icon-xs"
                 className="shrink-0"
+                aria-label="Dismiss update notification"
                 onClick={() => { setUpdateAvailable(false); }}
               >
                 <X size={14} />

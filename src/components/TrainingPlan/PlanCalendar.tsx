@@ -33,10 +33,15 @@ export default function PlanCalendar({ onPlanGenerated }: { onPlanGenerated: () 
       setRaces(loadedRaces);
 
       try {
-        const loadedPlan = await invoke<TrainingPlan>("get_active_plan");
-        setPlan(loadedPlan);
-        const weeks = await invoke<PlanWeekWithSessions[]>("get_plan_weeks", { planId: loadedPlan.id });
-        setPlanWeeks(weeks);
+        const loadedPlan = await invoke<TrainingPlan | null>("get_active_plan");
+        if (loadedPlan) {
+          setPlan(loadedPlan);
+          const weeks = await invoke<PlanWeekWithSessions[]>("get_plan_weeks", { planId: loadedPlan.id });
+          setPlanWeeks(weeks);
+        } else {
+          setPlan(null);
+          setPlanWeeks([]);
+        }
       } catch {
         setPlan(null);
         setPlanWeeks([]);

@@ -68,10 +68,15 @@ export default function Chat({ onStatusChange }: ChatProps) {
       const s = await refreshSessions();
       if (s.length > 0) {
         const firstId = s[0].id;
-        const msgs = await invoke<Message[]>("get_chat_messages", { sessionId: firstId });
-        setMessages(msgs);
-        setCurrentSessionId(firstId);
-        shouldAutoScroll.current = true;
+        try {
+          const msgs = await invoke<Message[]>("get_chat_messages", { sessionId: firstId });
+          setMessages(msgs);
+          setCurrentSessionId(firstId);
+          shouldAutoScroll.current = true;
+        } catch (e: unknown) {
+          setError(String(e));
+          setCurrentSessionId(firstId);
+        }
       }
       try {
         const settings = await invoke<ChatSettingsData>("get_settings");
@@ -230,6 +235,7 @@ export default function Chat({ onStatusChange }: ChatProps) {
       const msgs = await invoke<Message[]>("get_chat_messages", { sessionId });
       setMessages(msgs);
       setCurrentSessionId(sessionId);
+      setError(null);
       shouldAutoScroll.current = true;
     } catch (e) {
       setError(String(e));
@@ -241,6 +247,7 @@ export default function Chat({ onStatusChange }: ChatProps) {
       const session = await invoke<Session>("create_chat_session");
       setCurrentSessionId(session.id);
       setMessages([]);
+      setError(null);
       setSessions((prev) => [session, ...prev]);
       setTimeout(() => {
         textareaRef.current?.focus();

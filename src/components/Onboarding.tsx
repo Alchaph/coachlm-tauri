@@ -70,6 +70,7 @@ export default function Onboarding({ onComplete }: { onComplete: () => void }) {
           custom_system_prompt: "",
           cloud_api_key: cloudApiKey || null,
           cloud_model: cloudModel || null,
+          web_augmentation_mode: "off",
         }
       });
       onComplete();

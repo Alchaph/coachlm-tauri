@@ -93,7 +93,7 @@ export default function ChatSessionList({
                 role="button"
                 tabIndex={0}
                 onClick={(e) => { e.stopPropagation(); onCloseSession(s.id); }}
-                onKeyDown={(e) => { if (e.key === "Enter") { e.stopPropagation(); onCloseSession(s.id); } }}
+                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); onCloseSession(s.id); } }}
               >
                 <X size={10} />
               </span>

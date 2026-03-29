@@ -119,13 +119,17 @@ export default function PlanCreator({ onPlanGenerated }: { onPlanGenerated: () =
     }
 
     if (!editingRaceId) {
-      const dateObj = new Date(raceDate);
-      if (dateObj < new Date()) {
+      const [year, month, day] = raceDate.split("-").map(Number);
+      const dateObj = new Date(year, month - 1, day);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      if (dateObj < today) {
         setError("Race date must be in the future");
         return;
       }
       const twelveMonthsOut = new Date();
       twelveMonthsOut.setMonth(twelveMonthsOut.getMonth() + 12);
+      twelveMonthsOut.setHours(0, 0, 0, 0);
       if (dateObj > twelveMonthsOut) {
         setError("Race date is more than 12 months away. The plan will be capped at 26 weeks of training.");
         return;
