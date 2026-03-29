@@ -79,17 +79,19 @@ export default function Chat({ onStatusChange }: ChatProps) {
         }
       }
       try {
-        const settings = await invoke<ChatSettingsData>("get_settings");
-        setWebAugmentationMode(settings.web_augmentation_mode);
-        setActiveLlm(settings.active_llm);
-        setOllamaEndpoint(settings.ollama_endpoint || "http://localhost:11434");
+        const settings = await invoke<ChatSettingsData | null>("get_settings");
+        if (settings) {
+          setWebAugmentationMode(settings.web_augmentation_mode);
+          setActiveLlm(settings.active_llm);
+          setOllamaEndpoint(settings.ollama_endpoint || "http://localhost:11434");
 
-        const isOllama = settings.active_llm === "ollama" || settings.active_llm === "local" || !settings.active_llm;
-        if (isOllama) {
-          const connected = await invoke<boolean>("check_ollama_status", {
-            endpoint: settings.ollama_endpoint || "http://localhost:11434",
-          });
-          setOllamaOffline(!connected);
+          const isOllama = settings.active_llm === "ollama" || settings.active_llm === "local" || !settings.active_llm;
+          if (isOllama) {
+            const connected = await invoke<boolean>("check_ollama_status", {
+              endpoint: settings.ollama_endpoint || "http://localhost:11434",
+            });
+            setOllamaOffline(!connected);
+          }
         }
       } catch {
         // Settings may not exist yet on first run

@@ -93,25 +93,28 @@ export default function SettingsPage() {
 
   const loadData = useCallback(async () => {
     try {
-      const [s, auth, available] = await Promise.all([
-        invoke<SettingsData>("get_settings"),
+      const [rawSettings, auth, available] = await Promise.all([
+        invoke<SettingsData | null>("get_settings"),
         invoke<StravaAuthStatus>("get_strava_auth_status"),
         invoke<boolean>("get_strava_credentials_available"),
       ]);
-      setSettings({
-        ...s,
-        active_llm: s.active_llm || "local",
-        ollama_endpoint: s.ollama_endpoint || "http://localhost:11434",
-      });
-      setInitialSettings({
-        ...s,
-        active_llm: s.active_llm || "local",
-        ollama_endpoint: s.ollama_endpoint || "http://localhost:11434",
-      });
+      const rawLlm = rawSettings?.active_llm ?? "";
+      const rawEndpoint = rawSettings?.ollama_endpoint ?? "";
+      const s: SettingsData = {
+        active_llm: rawLlm === "" ? "local" : rawLlm,
+        ollama_endpoint: rawEndpoint === "" ? "http://localhost:11434" : rawEndpoint,
+        ollama_model: rawSettings?.ollama_model ?? "",
+        custom_system_prompt: rawSettings?.custom_system_prompt ?? "",
+        cloud_api_key: rawSettings?.cloud_api_key ?? null,
+        cloud_model: rawSettings?.cloud_model ?? null,
+        web_augmentation_mode: rawSettings?.web_augmentation_mode ?? "off",
+      };
+      setSettings(s);
+      setInitialSettings(s);
       setStravaAuth(auth);
       setStravaAvailable(available);
-      if (s.active_llm === "ollama" || s.active_llm === "local" || !s.active_llm) {
-        void checkOllamaConnection(s.ollama_endpoint || "http://localhost:11434");
+      if (s.active_llm === "ollama" || s.active_llm === "local") {
+        void checkOllamaConnection(s.ollama_endpoint);
       }
     } catch {
       toast.error("Failed to load settings");

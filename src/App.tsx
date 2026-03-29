@@ -117,6 +117,7 @@ export default function App() {
   useEffect(() => {
     const state = { cancelled: false };
     const unlisteners: (() => void)[] = [];
+    const timers: ReturnType<typeof setTimeout>[] = [];
 
     void (async () => {
       const fns = await Promise.all([
@@ -140,14 +141,14 @@ export default function App() {
               ? `Synced ${String(e.payload.new_count)} new activities (${String(e.payload.total_count)} total)`
               : `Up to date (${String(e.payload.total_count)} activities)`,
           );
-          setTimeout(() => { setSyncResult(null); }, 3000);
+          timers.push(setTimeout(() => { if (!state.cancelled) setSyncResult(null); }, 3000));
         }),
         listen<{ message: string }>("strava:sync:error", (e) => {
           if (state.cancelled) return;
           setSyncActive(false);
           setSyncResult("error");
           setSyncMessage(e.payload.message);
-          setTimeout(() => { setSyncResult(null); }, 8000);
+          timers.push(setTimeout(() => { if (!state.cancelled) setSyncResult(null); }, 8000));
         }),
       ]);
       if (state.cancelled) {
@@ -157,12 +158,13 @@ export default function App() {
       }
     })();
 
-    return () => { state.cancelled = true; for (const u of unlisteners) u(); };
+    return () => { state.cancelled = true; for (const t of timers) clearTimeout(t); for (const u of unlisteners) u(); };
   }, []);
 
   useEffect(() => {
     const state = { cancelled: false };
     const unlisteners: (() => void)[] = [];
+    const timers: ReturnType<typeof setTimeout>[] = [];
 
     void (async () => {
       const fns = await Promise.all([
@@ -182,7 +184,7 @@ export default function App() {
           setPlanGenerating(false);
           setPlanResult("success");
           setPlanProgress("Plan generated!");
-          setTimeout(() => { setPlanResult(null); }, 3000);
+          timers.push(setTimeout(() => { if (!state.cancelled) setPlanResult(null); }, 3000));
         }),
         listen<{ message: string }>("plan:generate:error", (event) => {
           if (state.cancelled) return;
@@ -199,7 +201,7 @@ export default function App() {
       }
     })();
 
-    return () => { state.cancelled = true; for (const u of unlisteners) u(); };
+    return () => { state.cancelled = true; for (const t of timers) clearTimeout(t); for (const u of unlisteners) u(); };
   }, []);
 
   useEffect(() => {
@@ -224,11 +226,12 @@ export default function App() {
   };
 
   useEffect(() => {
+    let focusTimer: ReturnType<typeof setTimeout> | undefined;
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === "k") {
         e.preventDefault();
         setActiveTab("chat");
-        setTimeout(() => {
+        focusTimer = setTimeout(() => {
           document.getElementById("chat-input")?.focus();
         }, 50);
       }
@@ -238,7 +241,7 @@ export default function App() {
       }
     };
     window.addEventListener("keydown", handleGlobalKeyDown);
-    return () => { window.removeEventListener("keydown", handleGlobalKeyDown); };
+    return () => { window.removeEventListener("keydown", handleGlobalKeyDown); if (focusTimer !== undefined) clearTimeout(focusTimer); };
   }, []);
 
   if (loading) {
