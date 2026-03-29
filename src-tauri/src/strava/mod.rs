@@ -304,6 +304,12 @@ pub async fn fetch_athlete_zones(db: &Database) -> Result<(), AppError> {
     if response.status().is_success() {
         let data: serde_json::Value = response.json().await?;
         db.save_athlete_zones(&data.to_string())?;
+    } else {
+        let status = response.status();
+        let body = response.text().await.unwrap_or_default();
+        return Err(AppError::Strava(format!(
+            "Failed to fetch athlete zones: HTTP {status} — {body}"
+        )));
     }
     Ok(())
 }
@@ -316,6 +322,12 @@ pub async fn fetch_athlete_stats(db: &Database, athlete_id: &str) -> Result<(), 
     if response.status().is_success() {
         let data: serde_json::Value = response.json().await?;
         db.save_athlete_stats(&data.to_string())?;
+    } else {
+        let status = response.status();
+        let body = response.text().await.unwrap_or_default();
+        return Err(AppError::Strava(format!(
+            "Failed to fetch athlete stats: HTTP {status} — {body}"
+        )));
     }
     Ok(())
 }
@@ -518,8 +530,7 @@ async fn backfill_activity_zones(db: &std::sync::Arc<crate::storage::Database>, 
         match fetch_activity_zones(db, strava_id, activity_id, token).await {
             Ok(_) => {}
             Err(AppError::Strava(msg)) if msg.contains("Premium") => {
-                log::info!("Zone data requires Strava Premium — skipping backfill");
-                break;
+                log::info!("Zone data requires Strava Premium — skipping activity {activity_id}");
             }
             Err(e) => {
                 log::warn!("Failed to fetch zones for activity {activity_id}: {e}");

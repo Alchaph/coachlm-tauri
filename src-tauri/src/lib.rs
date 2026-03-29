@@ -792,7 +792,7 @@ fn get_athlete_zones_data(state: tauri::State<'_, AppState>) -> Result<Option<se
 async fn get_activity_laps(
     state: tauri::State<'_, AppState>,
     activity_id: String,
-) -> Result<Vec<ActivityLap>, String> {
+) -> Result<Vec<ActivityLap>, AppError> {
     let db = state.db.clone();
 
     let activity_opt = tokio::task::spawn_blocking({
@@ -801,26 +801,22 @@ async fn get_activity_laps(
         move || db.get_activity_by_id(&id)
     })
     .await
-    .map_err(|e| e.to_string())?
-    .map_err(|e: rusqlite::Error| e.to_string())?;
+    .map_err(|e| AppError::Internal(e.to_string()))?
+    .map_err(AppError::Database)?;
 
     let Some(strava_id) = activity_opt.and_then(|a| a.strava_id) else {
         return Ok(vec![]);
     };
 
-    let token = strava::get_valid_token(&db)
-        .await
-        .map_err(|e| e.to_string())?;
-    strava::fetch_activity_laps(&db, &strava_id, &activity_id, &token)
-        .await
-        .map_err(|e| e.to_string())
+    let token = strava::get_valid_token(&db).await?;
+    strava::fetch_activity_laps(&db, &strava_id, &activity_id, &token).await
 }
 
 #[tauri::command]
 async fn get_activity_zone_distribution(
     state: tauri::State<'_, AppState>,
     activity_id: String,
-) -> Result<Vec<ActivityZoneDistribution>, String> {
+) -> Result<Vec<ActivityZoneDistribution>, AppError> {
     let db = state.db.clone();
 
     let activity_opt = tokio::task::spawn_blocking({
@@ -829,19 +825,15 @@ async fn get_activity_zone_distribution(
         move || db.get_activity_by_id(&id)
     })
     .await
-    .map_err(|e| e.to_string())?
-    .map_err(|e: rusqlite::Error| e.to_string())?;
+    .map_err(|e| AppError::Internal(e.to_string()))?
+    .map_err(AppError::Database)?;
 
     let Some(strava_id) = activity_opt.and_then(|a| a.strava_id) else {
         return Ok(vec![]);
     };
 
-    let token = strava::get_valid_token(&db)
-        .await
-        .map_err(|e| e.to_string())?;
-    strava::fetch_activity_zones(&db, &strava_id, &activity_id, &token)
-        .await
-        .map_err(|e| e.to_string())
+    let token = strava::get_valid_token(&db).await?;
+    strava::fetch_activity_zones(&db, &strava_id, &activity_id, &token).await
 }
 
 #[tauri::command]
@@ -849,11 +841,11 @@ async fn get_activity_zone_distribution(
 fn get_aggregated_zone_distribution(
     state: tauri::State<'_, AppState>,
     days: Option<u32>,
-) -> Result<Vec<ActivityZoneSummary>, String> {
+) -> Result<Vec<ActivityZoneSummary>, AppError> {
     state
         .db
         .get_aggregated_zone_distribution(days)
-        .map_err(|e| e.to_string())
+        .map_err(AppError::Database)
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
