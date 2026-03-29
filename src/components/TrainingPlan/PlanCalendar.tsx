@@ -26,6 +26,7 @@ export default function PlanCalendar({ onPlanGenerated }: { onPlanGenerated: () 
   const [selectedSession, setSelectedSession] = useState<PlanSession | null>(null);
   const [actualDuration, setActualDuration] = useState("");
   const [actualDistance, setActualDistance] = useState("");
+  const [updatingSession, setUpdatingSession] = useState(false);
 
   const loadData = useCallback(async () => {
     try {
@@ -75,6 +76,7 @@ export default function PlanCalendar({ onPlanGenerated }: { onPlanGenerated: () 
 
   const handleUpdateSession = async (status: string) => {
     if (!selectedSession) return;
+    setUpdatingSession(true);
     try {
       await invoke("update_session_status", {
         sessionId: selectedSession.id,
@@ -91,6 +93,8 @@ export default function PlanCalendar({ onPlanGenerated }: { onPlanGenerated: () 
       }
     } catch (e) {
       setError(String(e));
+    } finally {
+      setUpdatingSession(false);
     }
   };
 
@@ -307,6 +311,7 @@ export default function PlanCalendar({ onPlanGenerated }: { onPlanGenerated: () 
                       <div
                         role="button"
                         tabIndex={0}
+                        aria-label={`${session.session_type.replace("_", " ")}${session.distance_km ? ` ${String(session.distance_km)} km` : ""}${session.status !== "planned" ? ` (${session.status})` : ""}`}
                         onClick={() => {
                           setSelectedSession(session);
                           setActualDuration(session.actual_duration_min?.toString() ?? "");
@@ -404,6 +409,7 @@ export default function PlanCalendar({ onPlanGenerated }: { onPlanGenerated: () 
                 key={day}
                 role="button"
                 tabIndex={0}
+                aria-label={`${DAY_NAMES[day - 1]} ${session.session_type.replace("_", " ")}${session.distance_km ? ` ${String(session.distance_km)} km` : ""}${session.status !== "planned" ? ` (${session.status})` : ""}`}
                 onClick={() => {
                   setSelectedSession(session);
                   setActualDuration(session.actual_duration_min?.toString() ?? "");
@@ -643,12 +649,14 @@ export default function PlanCalendar({ onPlanGenerated }: { onPlanGenerated: () 
                 <Button
                   variant="secondary"
                   className="flex-1"
+                  disabled={updatingSession}
                   onClick={() => { void handleUpdateSession("skipped"); }}
                 >
                   Mark Skipped
                 </Button>
                 <Button
                   className="flex-[2] bg-success hover:bg-success/90"
+                  disabled={updatingSession}
                   onClick={() => { void handleUpdateSession("completed"); }}
                 >
                   Mark Completed

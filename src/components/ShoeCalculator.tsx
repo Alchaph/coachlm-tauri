@@ -366,29 +366,29 @@ export default function ShoeCalculator() {
               {allBrands.map((brand) => {
                 const isActive = selectedBrands.has(brand);
                 return (
-                  <button
+                  <Button
                     key={brand}
                     type="button"
+                    variant={isActive ? "default" : "secondary"}
+                    size="xs"
                     onClick={() => { toggleBrand(brand); }}
-                    className={cn(
-                      "text-xs px-2.5 py-0.5 rounded-full border cursor-pointer font-semibold",
-                      isActive
-                        ? "border-primary bg-primary/10 text-primary"
-                        : "border-border bg-secondary text-muted-foreground"
-                    )}
+                    aria-pressed={isActive}
+                    className="rounded-full"
                   >
                     {brand}
-                  </button>
+                  </Button>
                 );
               })}
               {selectedBrands.size > 0 && (
-                <button
+                <Button
                   type="button"
+                  variant="ghost"
+                  size="xs"
                   onClick={() => { setSelectedBrands(new Set()); }}
-                  className="text-xs px-2.5 py-0.5 rounded-full border cursor-pointer border-border bg-transparent text-muted-foreground"
+                  className="rounded-full"
                 >
                   Clear
-                </button>
+                </Button>
               )}
             </div>
           </CardContent>
@@ -552,8 +552,9 @@ export default function ShoeCalculator() {
                                   return prev;
                                 });
                               }}
+                              aria-pressed={isSelectedForCompare}
                             >
-                              {isSelectedForCompare ? "Remove" : "Add"}
+                              Compare
                             </Button>
                           </TableCell>
                         )}

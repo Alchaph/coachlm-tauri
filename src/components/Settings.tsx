@@ -274,9 +274,11 @@ export default function SettingsPage() {
                   {models.length > 0 && (
                     <div className="flex flex-wrap gap-2 mt-2">
                       {models.map((model) => (
-                        <button
+                        <Button
                           key={model}
                           type="button"
+                          variant={settings.ollama_model === model ? "default" : "secondary"}
+                          size="sm"
                           onClick={() => {
                             const updated = { ...settings, ollama_model: model };
                             setSettings(updated);
@@ -285,15 +287,9 @@ export default function SettingsPage() {
                               () => { toast.error("Failed to save settings"); },
                             );
                           }}
-                          className={cn(
-                            "inline-flex items-center rounded-md border px-3 py-1 text-xs font-medium transition-colors cursor-pointer",
-                            settings.ollama_model === model
-                              ? "bg-primary text-primary-foreground border-transparent"
-                              : "bg-secondary text-foreground border-border hover:bg-secondary/80"
-                          )}
                         >
                           {model}
-                        </button>
+                        </Button>
                       ))}
                     </div>
                   )}
@@ -483,20 +479,16 @@ export default function SettingsPage() {
                 { value: "dark", label: "Dark", icon: <Moon size={16} /> },
                 { value: "system", label: "System", icon: <Monitor size={16} /> },
               ] as const).map((option) => (
-                <button
+                <Button
                   key={option.value}
                   type="button"
+                  variant={theme === option.value ? "default" : "secondary"}
+                  className="flex flex-1 items-center justify-center gap-2"
                   onClick={() => { setTheme(option.value); }}
-                  className={cn(
-                    "flex flex-1 items-center justify-center gap-2 rounded-md border px-4 py-2.5 text-sm font-medium transition-colors",
-                    theme === option.value
-                      ? "bg-primary text-primary-foreground border-transparent"
-                      : "bg-secondary text-foreground border-border hover:bg-secondary/80"
-                  )}
                 >
                   {option.icon}
                   {option.label}
-                </button>
+                </Button>
               ))}
             </div>
           </CardContent>

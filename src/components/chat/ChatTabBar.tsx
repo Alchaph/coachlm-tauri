@@ -73,30 +73,34 @@ export default function ChatSessionList({
       <ScrollArea className="flex-1">
         <div className="flex flex-col gap-0.5">
           {sessions.map((s) => (
-            <button
+            <Button
               key={s.id}
               type="button"
+              variant="ghost"
               className={cn(
-                "flex w-full items-center gap-1.5 px-2.5 py-2 rounded-md text-[13px] text-left transition-colors duration-150 group",
+                "flex w-full items-center gap-1.5 px-2.5 py-2 h-auto justify-start text-[13px] text-left group",
                 s.id === currentSessionId
                   ? "bg-accent text-foreground font-medium"
                   : "text-muted-foreground hover:bg-secondary hover:text-foreground"
               )}
+              aria-current={s.id === currentSessionId ? "true" : undefined}
               onClick={() => { onLoadSession(s.id); }}
             >
               <MessageSquare size={14} className="shrink-0" />
               <span className="flex-1 overflow-hidden">
                 <SessionLabel label={getSessionLabel(s)} />
               </span>
-              <button
-                type="button"
+              <span
+                role="button"
+                tabIndex={0}
                 className="flex items-center justify-center rounded-sm p-0.5 opacity-0 group-hover:opacity-100 transition-opacity duration-150 hover:text-destructive"
                 aria-label="Close session"
                 onClick={(e) => { e.stopPropagation(); onCloseSession(s.id); }}
+                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); onCloseSession(s.id); } }}
               >
                 <X size={10} />
-              </button>
-            </button>
+              </span>
+            </Button>
           ))}
         </div>
       </ScrollArea>

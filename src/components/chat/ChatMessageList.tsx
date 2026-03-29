@@ -90,14 +90,15 @@ export default function ChatMessageList({
               <p>Start a conversation with your AI running coach.</p>
               <div className="flex flex-wrap gap-2 justify-center mt-3">
                 {["Review my last week of training", "Help me plan a tempo run", "What should my easy pace be?"].map((prompt) => (
-                  <button
+                  <Button
                     key={prompt}
                     type="button"
+                    variant="secondary"
+                    size="sm"
                     onClick={() => { onSetInput(prompt); }}
-                    className="px-3.5 py-2 text-xs bg-secondary border border-border rounded-md text-muted-foreground cursor-pointer transition-colors duration-150 hover:border-muted-foreground hover:text-foreground"
                   >
                     {prompt}
-                  </button>
+                  </Button>
                 ))}
               </div>
               <p className="text-[11px] mt-3 text-muted-foreground/60">
@@ -168,7 +169,7 @@ export default function ChatMessageList({
                   aria-label="Setup guide"
                   className="flex items-center gap-1 text-muted-foreground"
                 >
-                  <HelpCircle size={14} /> {showSetupGuide ? "Hide Guide" : "Setup Guide"}
+                  <HelpCircle size={14} /> Setup Guide
                 </Button>
               )}
               {!loading && (

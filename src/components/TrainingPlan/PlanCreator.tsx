@@ -32,6 +32,7 @@ export default function PlanCreator({ onPlanGenerated }: { onPlanGenerated: () =
   const [racePriority, setRacePriority] = useState("A");
   const [deleteRaceId, setDeleteRaceId] = useState<string | null>(null);
   const [deletePlanId, setDeletePlanId] = useState<string | null>(null);
+  const [savingRace, setSavingRace] = useState(false);
 
   const loadData = useCallback(async () => {
     try {
@@ -158,6 +159,7 @@ export default function PlanCreator({ onPlanGenerated }: { onPlanGenerated: () =
       }
     }
 
+    setSavingRace(true);
     try {
       if (editingRaceId) {
         const existingRace = races.find(r => r.id === editingRaceId);
@@ -195,6 +197,8 @@ export default function PlanCreator({ onPlanGenerated }: { onPlanGenerated: () =
       void loadData();
     } catch (e) {
       setError(String(e));
+    } finally {
+      setSavingRace(false);
     }
   };
 
@@ -325,7 +329,7 @@ export default function PlanCreator({ onPlanGenerated }: { onPlanGenerated: () =
             </div>
             <div className="flex justify-end gap-2">
               <Button variant="ghost" onClick={() => { resetRaceForm(); }}>Cancel</Button>
-              <Button onClick={() => { void handleSaveRace(); }}>{editingRaceId ? "Update Race" : "Save Race"}</Button>
+              <Button onClick={() => { void handleSaveRace(); }} disabled={savingRace}>Save Race</Button>
             </div>
           </CardContent>
         </Card>

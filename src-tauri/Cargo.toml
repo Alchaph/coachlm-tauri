@@ -1,6 +1,6 @@
 [package]
 name = "coachlm-tauri"
-version = "1.26.6"
+version = "1.26.7"
 description = "CoachLM — Your personal AI running coach"
 authors = ["CoachLM"]
 edition = "2021"
