@@ -88,15 +88,14 @@ export default function ChatSessionList({
               <span className="flex-1 overflow-hidden">
                 <SessionLabel label={getSessionLabel(s)} />
               </span>
-              <span
+              <button
+                type="button"
                 className="flex items-center justify-center rounded-sm p-0.5 opacity-0 group-hover:opacity-100 transition-opacity duration-150 hover:text-destructive"
-                role="button"
-                tabIndex={0}
+                aria-label="Close session"
                 onClick={(e) => { e.stopPropagation(); onCloseSession(s.id); }}
-                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); onCloseSession(s.id); } }}
               >
                 <X size={10} />
-              </span>
+              </button>
             </button>
           ))}
         </div>

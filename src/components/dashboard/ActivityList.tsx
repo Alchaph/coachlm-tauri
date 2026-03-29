@@ -143,7 +143,7 @@ export default function ActivityList({
                 return (
                   <>
                     {virtualItems.length > 0 && (
-                      <TableRow style={{ height: `${String(topHeight)}px` }} />
+                      <TableRow aria-hidden="true"><TableCell colSpan={9} style={{ height: `${String(topHeight)}px`, padding: 0 }} /></TableRow>
                     )}
                     {virtualItems.map((virtualRow) => {
                       const a = filteredActivities[virtualRow.index];
@@ -172,7 +172,7 @@ export default function ActivityList({
                       );
                     })}
                     {virtualItems.length > 0 && (
-                      <TableRow style={{ height: `${String(bottomHeight)}px` }} />
+                      <TableRow aria-hidden="true"><TableCell colSpan={9} style={{ height: `${String(bottomHeight)}px`, padding: 0 }} /></TableRow>
                     )}
                   </>
                 );
